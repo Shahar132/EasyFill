@@ -50,7 +50,7 @@ fun AuthScreen() {
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))//adding space
+        Spacer(modifier = Modifier.height(24.dp))//adding spacing
 
         Button(
             onClick = {
