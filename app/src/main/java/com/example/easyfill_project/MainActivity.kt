@@ -49,37 +49,13 @@ class MainActivity : ComponentActivity() {
 
             // Applies your app theme: colors, typography, Material style
             EasyFill_ProjectTheme {
-                AppNavigation()
+                AppNavigation()// call the main function that contains navigations to all screens
 
             }
         }
     }
 }
 
-
-@Composable
-fun AppNavigation() {
-
-    // NavController = manages screen navigation
-    val navController = rememberNavController()
-
-    // NavHost = defines all screens
-    NavHost(
-        navController = navController,
-        startDestination = "main" // first screen
-    ) {
-
-        //Calls our main opening screen
-        composable("main") {
-            EasyFillMainScreen(navController)
-        }
-
-        // Second screen (Firebase auth placeholder for now)
-        composable("auth") {
-            AuthScreen()
-        }
-    }
-}
 
 // @Composable means this function creates UI
 @Composable
