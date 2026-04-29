@@ -8,9 +8,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 
 @Composable
-fun AuthScreen() {
+fun AuthScreen(navController: NavHostController) {
 
     // Stores the email text
     var email by remember { mutableStateOf("") }
@@ -54,7 +55,9 @@ fun AuthScreen() {
 
         Button(
             onClick = {
-                // Firebase login later
+                // Navigate to home screen after user press login
+                //later will be connection to firebase auth
+                navController.navigate("app")//navigate to home screen
             },
             modifier = Modifier.fillMaxWidth()
         ) {
