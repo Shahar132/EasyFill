@@ -29,6 +29,7 @@ import androidx.navigation.compose.*
 
 // Your screens
 import com.example.easyfill_project.screen.AuthScreen
+import com.example.easyfill_project.screen.EasyFillMainScreen
 import com.example.easyfill_project.screen.GuidanceScreen
 import com.example.easyfill_project.screen.HomeScreen
 import com.example.easyfill_project.screen.PersonalSettingScreen
