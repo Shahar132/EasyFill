@@ -1,0 +1,10 @@
+git checkout main
+git pull origin main
+git checkout -b feature/branch-name
+git status
+git add .
+git commit -m "Your commit message"
+git push origin feature/branch-name
+
+Open Pull Request → Review → Merge pull request → Confirm merge → Delete branch
+Important: replace `main` with `master` only if your repository uses `master`.
