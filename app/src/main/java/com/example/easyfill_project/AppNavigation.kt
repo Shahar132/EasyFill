@@ -29,7 +29,10 @@ import androidx.navigation.compose.*
 
 // Your screens
 import com.example.easyfill_project.screen.AuthScreen
+import com.example.easyfill_project.screen.BackgroundSoundsScreen
+import com.example.easyfill_project.screen.ContrastSettingsScreen
 import com.example.easyfill_project.screen.EasyFillMainScreen
+import com.example.easyfill_project.screen.FontSizeSettingsScreen
 import com.example.easyfill_project.screen.GuidanceScreen
 import com.example.easyfill_project.screen.HomeScreen
 import com.example.easyfill_project.screen.PersonalSettingScreen
@@ -232,7 +235,17 @@ fun AppWithDrawer() {
                             GuidanceScreen()
                         }
                         composable ("Personal Settings"){
-                            PersonalSettingScreen() }
+                            PersonalSettingScreen(innerNavController) }
+
+                        composable("backgroundSounds") {
+                            BackgroundSoundsScreen()
+                        }
+                        composable("contrastSettings") {
+                            ContrastSettingsScreen()
+                        }
+                        composable("fontSizeSettings") {
+                            FontSizeSettingsScreen()
+                        }
                     }
                 }
             }
