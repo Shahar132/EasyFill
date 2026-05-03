@@ -13,6 +13,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import androidx.compose.foundation.Image
+//make it scrollable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import com.example.easyfill_project.R
@@ -23,6 +26,7 @@ fun GuidanceScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 5.dp)
     ) {
 
@@ -34,7 +38,7 @@ fun GuidanceScreen() {
             contentDescription = "Guidance header",
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp),
+                .height(230.dp),
             contentScale = ContentScale.Crop
         )
 
@@ -42,16 +46,18 @@ fun GuidanceScreen() {
 
         ExpandableItem(
             title = "מהי מטרת האפליקציה?",
-            content = "האפליקציה נועדה לעזור לך למלא טפסים בצורה פשוטה וברורה."
+            content = "האפליקציה נועדה לעזור לך להתמודד עם תהליכים בירוקרטיים בצורה פשוטה וברורה,\n" +
+                    "היא מלווה אותך שלב אחר שלב במילוי טפסים, מסבירה כל חלק בצורה קלה להבנה, ועוזרת לך להתקדם בקצב שלך."
+
         )
         ExpandableItem(
-            title = "איך מתחילים תהליך?",
-            content = "בחרי במסך הבית את האפשרות 'התחלת תהליך' ופעלי לפי ההנחיות."
+            title = "איך מתחילים להשתמש באפליקציה?",
+            content = "לאחר התחברות, בחר/י במסך הבית את האפשרות 'התחלת תהליך' והמשיך/י לפי ההנחיות הבאות."
         )
 
         ExpandableItem(
-            title = "איך שומרים נתונים?",
-            content = "המידע נשמר באופן אוטומטי במהלך השימוש באפליקציה."
+            title = "כיצד האפליקציה עוזרת לי במילוי הטפסים במצב של לחץ?",
+            content = "האפליקציה מאפשרת לך להתאים את הממשק למה שנוח לך – כמו שינוי גודל הטקסט והצגת הסברים נוספים לכל שלב. בנוסף, היא מאפשרת מילוי שדות מידע אוטומטי,ומזהה מתי התהליך מרגיש מלחיץ, ומתאימה את עצמה כדי להקל עליך ולעזור לך להמשיך בקצב רגוע."
         )
     }
 }
