@@ -121,7 +121,7 @@ fun PersonalSettingCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(55.dp)
-                    .background(Color.White)
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {

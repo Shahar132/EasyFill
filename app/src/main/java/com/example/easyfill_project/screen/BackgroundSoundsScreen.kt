@@ -51,14 +51,14 @@ fun BackgroundSoundsScreen() {
         )
 
         SoundOption(
-            title = "צלילי טבע",
+            title = "צלילי טבע מרגיעים",
             selected = selectedSound == "nature",
             onClick = { selectedSound = "nature"
                 SoundManager.play(context, "nature", R.raw.nature_sound)            }
         )
 
         SoundOption(
-            title = "מוזיקה רגועה",
+            title = "מוזיקה למדיטציה",
             selected = selectedSound == "calm",
             onClick = { selectedSound = "calm"
                 SoundManager.play(context,"calm", R.raw.calm_music)
@@ -66,7 +66,7 @@ fun BackgroundSoundsScreen() {
         )
 
         SoundOption(
-            title = "כלי נגינה עדינים",
+            title = "צלילי נגינה מרגיעים",
             selected = selectedSound == "instruments",
             onClick = { selectedSound = "instruments"
                 SoundManager.play(context,"instruments",R.raw.violin_sound)

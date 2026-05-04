@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 //make it scrollable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -83,6 +84,8 @@ fun ExpandableItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+
                     .clickable {
                         expanded = !expanded // toggle open/close
                     }
@@ -110,11 +113,18 @@ fun ExpandableItem(
             if (expanded) {
                 Divider()
 
-                Text(
-                    text = content,
-                    modifier = Modifier.padding(16.dp),
-                    fontSize = 14.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface) // background from theme
+                ) {
+                    Text(
+                        text = content,
+                        modifier = Modifier.padding(16.dp),
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface //  text color from theme
+                    )
+                }
             }
         }
     }

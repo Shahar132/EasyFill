@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import com.example.easyfill_project.R
@@ -74,12 +75,13 @@ fun HomeScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(60.dp)
-                        .background(Color(0xFFE3F2FD)),
+                        .background(MaterialTheme.colorScheme.surface),
                     contentAlignment = Alignment.Center
-                ) {
+                ) {//0xFFE3F2FD
                     Text(
                         text = "התחלת תהליך מיצוי הזכויות",
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -125,16 +127,18 @@ fun HomeScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(60.dp)
-                        .background(Color(0xFFE3F2FD)),
+                        .background(MaterialTheme.colorScheme.surface),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "מעקב אחר ההתקדמות שלי",
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface //text color in card
                     )
                 }
             }
         }
+
 
     }
 }
