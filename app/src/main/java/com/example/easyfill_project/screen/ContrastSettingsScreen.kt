@@ -30,7 +30,7 @@ fun ContrastSettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             ContrastOption(
-                title = " צבעים רגילים גווני כחול",
+                title = " גווני כחול רגילים",
                 selected = selectedMode == ContrastMode.DEFAULT,
                 onClick = { onModeSelected(ContrastMode.DEFAULT) }
             )

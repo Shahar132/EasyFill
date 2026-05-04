@@ -85,7 +85,10 @@ fun SoundOption(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        onClick = onClick
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // color for card - > surface
+        )
     ) {
         Row(
             modifier = Modifier
@@ -102,7 +105,8 @@ fun SoundOption(
 
             Text(
                 text = title,
-                fontSize = 18.sp
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

@@ -126,9 +126,7 @@ fun AppWithDrawer() {
 
                         // Home item in menu
                         NavigationDrawerItem(
-                            label = { Text("דף הבית",
-                                color = MaterialTheme.colorScheme.onSurface
-                                ) },
+                            label = { Text("דף הבית") },
                             selected = currentRoute == "home",
                             icon = {
                                 Icon(
@@ -136,6 +134,17 @@ fun AppWithDrawer() {
                                     contentDescription = "Home"
                                 )
                             },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
                             onClick = {
                                 // Navigate to home screen
                                 innerNavController.navigate("home")
@@ -147,8 +156,7 @@ fun AppWithDrawer() {
 
                         // additional item of profile
                         NavigationDrawerItem(
-                            label = { Text("ניהול חשבון",
-                                color = MaterialTheme.colorScheme.onSurface) },
+                            label = { Text("ניהול חשבון")},
                             selected = currentRoute == "profile",
                             // it means mark down only if this is the current route
                             icon = {
@@ -157,6 +165,17 @@ fun AppWithDrawer() {
                                     contentDescription = "Profile"
                                 )
                             },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
                             onClick = {
                                 innerNavController.navigate("profile")
                                 scope.launch { drawerState.close() }
@@ -164,8 +183,7 @@ fun AppWithDrawer() {
                         )
 
                         NavigationDrawerItem(
-                            label = { Text("מדריך למשתמש",
-                                color = MaterialTheme.colorScheme.onSurface) },
+                            label = { Text("מדריך למשתמש") },
                             selected = currentRoute == "Guidance",
                             // mark only if current route is Guidance
                             icon = {
@@ -174,6 +192,17 @@ fun AppWithDrawer() {
                                     contentDescription = "User guide"
                                 )
                             },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
                             onClick = {
                                 innerNavController.navigate("Guidance")
                                 scope.launch { drawerState.close() }
@@ -181,8 +210,7 @@ fun AppWithDrawer() {
                         )
 
                         NavigationDrawerItem(
-                            label = { Text("התאמה אישית",
-                                color = MaterialTheme.colorScheme.onSurface) },
+                            label = { Text("התאמה אישית")},
                             selected = currentRoute == "Personal Settings",
                             icon = {
                                 Icon(
@@ -190,6 +218,18 @@ fun AppWithDrawer() {
                                     contentDescription = "Personal Settings"
                                 )
                             },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
+
                             onClick = {
                                 innerNavController.navigate("Personal Settings")
                                 scope.launch { drawerState.close() }
