@@ -42,6 +42,8 @@ import com.example.easyfill_project.screen.ProfileScreen
 import kotlinx.coroutines.launch
 import com.example.easyfill_project.screen.ContrastMode
 import com.example.easyfill_project.screen.getContrastColorScheme
+import com.example.easyfill_project.screen.FontSizeMode
+import com.example.easyfill_project.screen.getAppTypography
 
 // Main navigation function
 @Composable
@@ -91,6 +93,8 @@ fun AppWithDrawer() {
     val innerNavController = rememberNavController()
 
     var contrastMode by remember { mutableStateOf(ContrastMode.DEFAULT) }
+    //for font size
+    var fontSizeMode by remember { mutableStateOf(FontSizeMode.NORMAL) }
 
     // for marking the current screen
     val currentBackStackEntry by innerNavController.currentBackStackEntryAsState()
@@ -102,7 +106,8 @@ fun AppWithDrawer() {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
 
         MaterialTheme(//theme here
-            colorScheme = getContrastColorScheme(contrastMode)
+            colorScheme = getContrastColorScheme(contrastMode) ,
+                    typography = getAppTypography(fontSizeMode)
         ) {
 
             // Main drawer component
@@ -305,7 +310,10 @@ fun AppWithDrawer() {
                             }
 
                             composable("fontSizeSettings") {
-                                FontSizeSettingsScreen()
+                                FontSizeSettingsScreen(
+                                    selectedMode = fontSizeMode,
+                                    onModeSelected = { fontSizeMode = it }
+                                )
                             }
                         }
                     }

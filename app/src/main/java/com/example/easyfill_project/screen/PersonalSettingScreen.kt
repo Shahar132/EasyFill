@@ -28,7 +28,7 @@ fun PersonalSettingScreen(navController: NavHostController) {
 
         Text(
             text = "הגדרות התאמה אישית",
-            fontSize = 28.sp
+            style = MaterialTheme.typography.headlineLarge
         )
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -127,7 +127,7 @@ fun PersonalSettingCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 14.sp
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
 

@@ -96,7 +96,7 @@ fun ExpandableItem(
                 Text(
                     text = title,
                     modifier = Modifier.weight(1f),
-                    fontSize = 16.sp
+                    style = MaterialTheme.typography.bodyLarge
                 )
 
                 // Arrow icon changes direction
@@ -121,7 +121,7 @@ fun ExpandableItem(
                     Text(
                         text = content,
                         modifier = Modifier.padding(16.dp),
-                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface //  text color from theme
                     )
                 }
