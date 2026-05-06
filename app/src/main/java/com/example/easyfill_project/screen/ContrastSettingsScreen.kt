@@ -23,7 +23,7 @@ fun ContrastSettingsScreen(
 
             Text(
                 text = "בחירת ניגודיות",
-                fontSize = 28.sp,
+                style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground//text on background color
             )
 
@@ -83,7 +83,7 @@ fun ContrastOption(
 
             Text(
                 text = title,
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface//text color on card
             )
         }

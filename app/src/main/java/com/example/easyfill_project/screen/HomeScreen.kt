@@ -32,7 +32,7 @@ fun HomeScreen() {
         // Page headline
         Text(
             text = "מילוי קל",
-            fontSize = 32.sp
+            style = MaterialTheme.typography.headlineLarge
         )
 
         Spacer(modifier = Modifier.height(36.dp))
@@ -80,7 +80,7 @@ fun HomeScreen() {
                 ) {//0xFFE3F2FD
                     Text(
                         text = "התחלת תהליך מיצוי הזכויות",
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -89,7 +89,7 @@ fun HomeScreen() {
 
         Spacer(modifier = Modifier.height(36.dp))
 
-        // First card
+        // second card
         Card(
             modifier = Modifier
                 .width(230.dp)
@@ -132,7 +132,7 @@ fun HomeScreen() {
                 ) {
                     Text(
                         text = "מעקב אחר ההתקדמות שלי",
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface //text color in card
                     )
                 }

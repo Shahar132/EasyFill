@@ -30,14 +30,14 @@ fun BackgroundSoundsScreen() {
 
         Text(
             text = "בחירת צלילי רקע",
-            fontSize = 28.sp
+            style = MaterialTheme.typography.headlineLarge
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = "בחר/י צליל רקע אחד שיעזור לך בזמן השימוש באפליקציה",
-            fontSize = 16.sp
+            style = MaterialTheme.typography.bodyLarge
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -105,7 +105,7 @@ fun SoundOption(
 
             Text(
                 text = title,
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
