@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import com.example.easyfill_project.screen.ContrastMode
 import com.example.easyfill_project.screen.getContrastColorScheme
 import com.example.easyfill_project.screen.FontSizeMode
+import com.example.easyfill_project.screen.UploadPdfScreen
 import com.example.easyfill_project.screen.getAppTypography
 
 // Main navigation function
@@ -283,7 +284,7 @@ fun AppWithDrawer() {
                             modifier = Modifier.padding(innerPadding)
                         ) {
                             composable("home") {
-                                HomeScreen()
+                                HomeScreen(innerNavController)
                             }
 
                             composable("profile") {
@@ -314,6 +315,10 @@ fun AppWithDrawer() {
                                     selectedMode = fontSizeMode,
                                     onModeSelected = { fontSizeMode = it }
                                 )
+                            }
+
+                            composable("uploadPdf") {
+                                UploadPdfScreen()
                             }
                         }
                     }

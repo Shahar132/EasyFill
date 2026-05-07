@@ -16,11 +16,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import com.example.easyfill_project.R
 import androidx.compose.ui.res.painterResource
+import androidx.navigation.NavHostController
 
 
 // This is a simple Composable function that represents your Home screen
 @Composable
-fun HomeScreen() {
+fun HomeScreen(navController: NavHostController) {
 
     Column(
         modifier = Modifier
@@ -43,8 +44,8 @@ fun HomeScreen() {
                 .width(230.dp)
                 .height(180.dp)
                 .clickable {
-                    // Later: navigate to the relevant screen
-                    // innerNavController.navigate("rightsProcess")
+                    // navigate to the relevant screen
+                    navController.navigate("uploadPdf")
                 },
             elevation = CardDefaults.cardElevation(6.dp)
         ) {
