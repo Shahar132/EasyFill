@@ -14,6 +14,7 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             onBackground = Color.Black,//text color that appears ON the background
             onSurface = Color.Black,//text will be black
             onPrimary = Color.Black
+
         )
 
         ContrastMode.HIGH -> lightColorScheme(//black and white
