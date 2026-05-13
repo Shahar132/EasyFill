@@ -115,7 +115,7 @@ fun AuthScreen(navController: NavHostController) {
                         navController.navigate("app")
                     }
                     .addOnFailureListener {
-                        passwordError = "אימייל או סיסמה לא נכונים"
+                        passwordError = " אימייל או סיסמה לא נכונים \n(במידה ועדכנת כתובת מייל אנא וודא שאישרת במייל שנשלח)"
                     }
 
             },

@@ -22,6 +22,10 @@ fun RegisterScreen(navController: NavHostController) {
     var status by remember { mutableStateOf("") }
 
 
+    var fullName by remember { mutableStateOf("") }
+    var fullNameError by remember { mutableStateOf("") }
+
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -37,6 +41,24 @@ fun RegisterScreen(navController: NavHostController) {
 
 
         Spacer(modifier = Modifier.height(22.dp))
+
+        OutlinedTextField(
+            value = fullName,
+            onValueChange = { fullName = it },
+            label = { Text("שם פרטי ושם משפחה") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (fullNameError.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = fullNameError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
 
         OutlinedTextField(
@@ -60,6 +82,14 @@ fun RegisterScreen(navController: NavHostController) {
 
         Button(
             onClick = {
+                fullNameError = ""
+                status = ""
+
+                if (fullName.isBlank()) {
+                    fullNameError = "הכנס שם פרטי ושם משפחה"
+                    return@Button
+                }
+
                 FirebaseAuth.getInstance()
                     //create in  firebase auth new email and password -> with unique uid
                     .createUserWithEmailAndPassword(email, password)
@@ -73,6 +103,7 @@ fun RegisterScreen(navController: NavHostController) {
                         //Firestore → uses SAME UID and save the details (collection)
                         val userData = hashMapOf(
                             "email" to email,
+                            "fullName" to fullName,
                             "createdAt" to System.currentTimeMillis()
                         )
 
