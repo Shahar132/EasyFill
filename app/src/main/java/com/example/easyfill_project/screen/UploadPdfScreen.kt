@@ -1,6 +1,5 @@
 package com.example.easyfill_project.screen
 
-import android.R
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import com.google.firebase.firestore.FirebaseFirestore
 import android.provider.OpenableColumns
 import androidx.compose.ui.graphics.Color
+
+
 
 @Composable
 fun UploadPdfScreen() {
@@ -235,8 +236,13 @@ fun uploadPdfToFirebaseStorage(
     onSuccess: () -> Unit,
     onError: (String) -> Unit
 ) {
-    // current user id, or demo user for now
-    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: "demoUser"
+    // current user id for the uid the key
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    //in case user not logged in then cant upload files
+    if (userId == null) {
+        onError("המשתמש לא מחובר")
+        return
+    }
 
     // Firestore = saves data about the file
     val firestore = FirebaseFirestore.getInstance()

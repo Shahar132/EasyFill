@@ -10,6 +10,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 
+//import
+import com.google.firebase.auth.FirebaseAuth
+
+//check email pattern
+import android.util.Patterns
+
+
+
 @Composable
 fun AuthScreen(navController: NavHostController) {
 
@@ -19,10 +27,14 @@ fun AuthScreen(navController: NavHostController) {
     // Stores the password text
     var password by remember { mutableStateOf("") }
 
+    var emailError by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf("") }
+
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(23.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -32,7 +44,7 @@ fun AuthScreen(navController: NavHostController) {
             fontSize = 32.sp
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(22.dp))
 
         OutlinedTextField(
             value = email,
@@ -40,6 +52,16 @@ fun AuthScreen(navController: NavHostController) {
             label = { Text("אימייל") },
             modifier = Modifier.fillMaxWidth()
         )
+
+        if (emailError.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = emailError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -51,13 +73,51 @@ fun AuthScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))//adding spacing
+        if (passwordError.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = passwordError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))//adding spacing
+
 
         Button(
             onClick = {
-                // Navigate to home screen after user press login
-                //later will be connection to firebase auth
-                navController.navigate("app")//navigate to home screen
+                emailError = ""
+                passwordError = ""
+
+                var hasError = false
+
+                if (email.isBlank()) {
+                    emailError = "הכנס אימייל"
+                    hasError = true
+                } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    emailError = "אימייל לא תקין"
+                    hasError = true
+                }
+
+                if (password.isBlank()) {
+                    passwordError = "הכנס סיסמה"
+                    hasError = true
+                }
+
+
+                if (hasError) return@Button
+
+                FirebaseAuth.getInstance()
+                    .signInWithEmailAndPassword(email, password)
+                    .addOnSuccessListener {
+                        navController.navigate("app")
+                    }
+                    .addOnFailureListener {
+                        passwordError = "אימייל או סיסמה לא נכונים"
+                    }
+
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -68,7 +128,8 @@ fun AuthScreen(navController: NavHostController) {
 
         TextButton(
             onClick = {
-                // Firebase sign up later
+                // Firebase sign up
+                navController.navigate("register")
             }
         ) {
             Text("אין לך חשבון? הרשמה")

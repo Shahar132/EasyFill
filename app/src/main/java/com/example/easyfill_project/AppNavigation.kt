@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import com.example.easyfill_project.screen.ContrastMode
 import com.example.easyfill_project.screen.getContrastColorScheme
 import com.example.easyfill_project.screen.FontSizeMode
+import com.example.easyfill_project.screen.RegisterScreen
 import com.example.easyfill_project.screen.UploadPdfScreen
 import com.example.easyfill_project.screen.getAppTypography
 
@@ -67,6 +68,10 @@ fun AppNavigation() {
         // Auth screen (NO drawer here as well)
         composable("auth") {
             AuthScreen(navController)
+        }
+
+        composable("register") {
+            RegisterScreen(navController)
         }
 
         // From here → screens with drawer
