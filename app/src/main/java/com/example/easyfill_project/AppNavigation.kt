@@ -1,6 +1,7 @@
 package com.example.easyfill_project
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -46,6 +47,8 @@ import com.example.easyfill_project.screen.FontSizeMode
 import com.example.easyfill_project.screen.RegisterScreen
 import com.example.easyfill_project.screen.UploadPdfScreen
 import com.example.easyfill_project.screen.getAppTypography
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 // Main navigation function
 @Composable
@@ -253,6 +256,23 @@ fun AppWithDrawer() {
                 // Return layout direction to normal (LTR) for content
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
 
+                    //this part is taking the current uid and extract full name
+                    var userName by remember { mutableStateOf("") }
+
+                    LaunchedEffect(Unit) {
+                        val userId = FirebaseAuth.getInstance().currentUser?.uid
+
+                        if (userId != null) {
+                            FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(userId)
+                                .get()
+                                .addOnSuccessListener { document ->
+                                    userName = document.getString("fullName") ?: ""
+                                }
+                        }
+                    }
+
                     // Scaffold = basic screen layout (top bar, content, etc.)
                     Scaffold(
                         // about the colors - > scaffold automatically check background color
@@ -262,9 +282,19 @@ fun AppWithDrawer() {
                             TopAppBar(
                                 // automatic colors as well takes surface
 
-                                // App title
-                                title = { Text("EasyFill") },
+                                // App title at the upper bar and name for user
+                                title = {
+                                    Column {
+                                        Text("EasyFill")
 
+                                        if (userName.isNotEmpty()) {
+                                            Text(
+                                                text = "שלום, $userName",
+                                                fontSize = 20.sp
+                                            )
+                                        }
+                                    }
+                                },
                                 // Menu button (top-left visually, but opens RIGHT drawer)
                                 navigationIcon = {
                                     IconButton(
@@ -293,7 +323,7 @@ fun AppWithDrawer() {
                             }
 
                             composable("profile") {
-                                ProfileScreen()
+                                ProfileScreen(innerNavController)
                             }
 
                             composable("Guidance") {
