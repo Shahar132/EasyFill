@@ -81,7 +81,7 @@ fun AppNavigation() {
         composable("app") {
             //when user login then go to route app that opens the home screen as first destination +side menu(inner navHost)
             //"app" = opens the layout with drawer
-            AppWithDrawer()
+            AppWithDrawer(navController)
         }
     }
 }
@@ -90,7 +90,7 @@ fun AppNavigation() {
 // This function wraps screens WITH the side drawer
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppWithDrawer() {
+fun AppWithDrawer(mainNavController: NavHostController) {
 
     // Controls whether drawer is open or closed
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -323,7 +323,12 @@ fun AppWithDrawer() {
                             }
 
                             composable("profile") {
-                                ProfileScreen(innerNavController)
+                                ProfileScreen(
+                                    navController = mainNavController,
+                                    onNameUpdated = { updatedName ->
+                                        userName = updatedName
+                                    }
+                                )
                             }
 
                             composable("Guidance") {
