@@ -16,8 +16,14 @@ import androidx.navigation.NavHostController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+import com.google.firebase.storage.FirebaseStorage
+import com.google.android.gms.tasks.Tasks
+
 @Composable
-fun ProfileScreen(navController: NavHostController) {
+fun ProfileScreen(
+    navController: NavHostController,
+    onNameUpdated: (String) -> Unit
+) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
 
@@ -72,7 +78,7 @@ fun ProfileScreen(navController: NavHostController) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        ProfileSectionCard(title = "ניהול חשבון") {
+        ProfileSectionCard(title = "עריכת פרטי חשבון") {
 
             ProfileActionButton(
                 icon = Icons.Default.Person,
@@ -100,6 +106,7 @@ fun ProfileScreen(navController: NavHostController) {
                                         fullName = newName
                                         showNameField = false
                                         nameStatus = "השם עודכן בהצלחה"
+                                        onNameUpdated(newName) // updates top bar immediately callback
                                     }
                             } else {
                                 nameStatus = "הכנס שם מלא"
@@ -230,14 +237,87 @@ fun ProfileScreen(navController: NavHostController) {
                 text = "התנתקות",
                 onClick = {
                     auth.signOut()
-                    navController.navigate("auth")
+
+                    navController.navigate("auth") {
+                        popUpTo("app") {
+                            inclusive = true
+                        }
+                    }
                 }
             )
 
-            ProfileDangerButton(
+            ProfileDeleteButton(
                 icon = Icons.Default.Delete,
                 text = "מחיקת חשבון",
-                onClick = {}
+                onClick = {
+                    val currentUser = auth.currentUser
+                    val currentUserId = currentUser?.uid
+
+                    if (currentUser != null && currentUserId != null) {
+
+                        val storage = FirebaseStorage.getInstance()
+                        val uploadsRef = storage.reference
+                            .child("users/$currentUserId/uploads")
+
+                        uploadsRef.listAll()
+                            .addOnSuccessListener { storageResult ->
+
+                                val deleteStorageTasks = storageResult.items.map { fileRef ->
+                                    fileRef.delete()
+                                }
+
+                                val allStorageDeletedTask =
+                                    if (deleteStorageTasks.isNotEmpty()) {
+                                        Tasks.whenAll(deleteStorageTasks)
+                                    } else {
+                                        Tasks.forResult(null)
+                                    }
+
+                                allStorageDeletedTask.addOnSuccessListener {
+
+                                    val userDocRef = firestore.collection("users")
+                                        .document(currentUserId)
+
+                                    userDocRef.collection("uploadedFiles")
+                                        .get()
+                                        .addOnSuccessListener { snapshot ->
+
+                                            val deleteUploadedFilesTasks =
+                                                snapshot.documents.map { document ->
+                                                    document.reference.delete()
+                                                }
+
+                                            val allUploadedFilesDeletedTask =
+                                                if (deleteUploadedFilesTasks.isNotEmpty()) {
+                                                    Tasks.whenAll(deleteUploadedFilesTasks)
+                                                } else {
+                                                    Tasks.forResult(null)
+                                                }
+
+                                            allUploadedFilesDeletedTask.addOnSuccessListener {
+
+                                                userDocRef.delete()
+                                                    .addOnSuccessListener {
+
+                                                        currentUser.delete()
+                                                            .addOnSuccessListener {
+                                                                navController.navigate("register") {
+                                                                    popUpTo(0)
+                                                                }
+                                                            }
+                                                            .addOnFailureListener { e ->
+                                                                println("Error deleting auth user: ${e.message}")
+                                                            }
+                                                    }
+                                                    .addOnFailureListener { e ->
+                                                        println("Error deleting user document: ${e.message}")
+                                                    }
+                                            }
+                                        }
+                                }
+                            }
+                    }
+                }
             )
         }
     }
@@ -254,7 +334,7 @@ fun ProfileSectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(6.dp)
+        elevation = CardDefaults.cardElevation(14.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
@@ -340,7 +420,7 @@ fun ProfileActionButton(
 }
 
 @Composable
-fun ProfileDangerButton(
+fun ProfileDeleteButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     onClick: () -> Unit
