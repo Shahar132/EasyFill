@@ -21,7 +21,10 @@ import com.google.firebase.auth.FirebaseAuth
 //check email pattern
 import android.util.Patterns
 
-
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 
 @Composable
 fun AuthScreen(navController: NavHostController) {
@@ -34,6 +37,12 @@ fun AuthScreen(navController: NavHostController) {
 
     var emailError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
+
+    // General login error shown under the login button
+    var loginError by remember { mutableStateOf("") }
+
+    // Loading state while Firebase checks login
+    var isLoading by remember { mutableStateOf(false) }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
@@ -60,7 +69,6 @@ fun AuthScreen(navController: NavHostController) {
 
             if (emailError.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-
                 Text(
                     text = emailError,
                     color = MaterialTheme.colorScheme.error,
@@ -80,7 +88,6 @@ fun AuthScreen(navController: NavHostController) {
 
             if (passwordError.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-
                 Text(
                     text = passwordError,
                     color = MaterialTheme.colorScheme.error,
@@ -88,20 +95,23 @@ fun AuthScreen(navController: NavHostController) {
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))//adding spacing
+            Spacer(modifier = Modifier.height(20.dp))
 
-
+            //adding spacing
             Button(
+                enabled = !isLoading,
                 onClick = {
                     emailError = ""
                     passwordError = ""
+                    loginError = ""
 
+                    val trimmedEmail = email.trim()
                     var hasError = false
 
-                    if (email.isBlank()) {
+                    if (trimmedEmail.isBlank()) {
                         emailError = "הכנס אימייל"
                         hasError = true
-                    } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    } else if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
                         emailError = "אימייל לא תקין"
                         hasError = true
                     }
@@ -111,34 +121,49 @@ fun AuthScreen(navController: NavHostController) {
                         hasError = true
                     }
 
-
                     if (hasError) return@Button
 
+                    isLoading = true
+
                     FirebaseAuth.getInstance()
-                        .signInWithEmailAndPassword(email, password)
+                        .signInWithEmailAndPassword(trimmedEmail, password)
                         .addOnSuccessListener {
+                            isLoading = false
                             navController.navigate("app")
                         }
                         .addOnFailureListener {
-                            passwordError =
-                                " אימייל או סיסמה לא נכונים \n(במידה ועדכנת כתובת מייל אנא וודא שאישרת במייל שנשלח)"
+                            isLoading = false
+                            loginError =
+                                "אימייל או סיסמה לא נכונים\nאם עדיין לא נרשמת, עבור למסך הרשמה,(אם עדכנת אימייל לאחרונה, ודא שאישרת את המייל שנשלח)"
                         }
-
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("התחבר")
+                Text(if (isLoading) "מתחבר..." else "התחבר")
+            }
+
+            if (loginError.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = loginError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            TextButton(
-                onClick = {
-                    // Firebase sign up
-                    navController.navigate("register")
-                }
-            ) {
-                Text("אין לך חשבון? הרשמה")
+            TextButton(onClick = {
+                navController.navigate("register")
+            }) {
+                Text(
+                    buildAnnotatedString {
+                        append("אין לך חשבון? ")
+                        pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+                        append("הרשמה")
+                        pop()
+                    }
+                )
             }
         }
     }

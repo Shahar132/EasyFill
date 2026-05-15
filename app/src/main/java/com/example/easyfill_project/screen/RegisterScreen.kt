@@ -1,34 +1,39 @@
 package com.example.easyfill_project.screen
 
+import android.util.Patterns
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FirebaseFirestore
 
-//force right to left
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 
-
-//screen of register for new user
 @Composable
 fun RegisterScreen(navController: NavHostController) {
 
+    var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+
+    var fullNameError by remember { mutableStateOf("") }
+    var emailError by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
 
-
-    var fullName by remember { mutableStateOf("") }
-    var fullNameError by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
@@ -38,12 +43,7 @@ fun RegisterScreen(navController: NavHostController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-
-            Text(
-                text = "הרשמה",
-                fontSize = 32.sp
-            )
-
+            Text("הרשמה", fontSize = 32.sp)
 
             Spacer(modifier = Modifier.height(22.dp))
 
@@ -55,7 +55,6 @@ fun RegisterScreen(navController: NavHostController) {
             )
 
             if (fullNameError.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = fullNameError,
                     color = MaterialTheme.colorScheme.error,
@@ -65,13 +64,20 @@ fun RegisterScreen(navController: NavHostController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
                 label = { Text("אימייל") },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (emailError.isNotEmpty()) {
+                Text(
+                    text = emailError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -83,32 +89,69 @@ fun RegisterScreen(navController: NavHostController) {
                 modifier = Modifier.fillMaxWidth()
             )
 
+            if (passwordError.isNotEmpty()) {
+                Text(
+                    text = passwordError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
 
             Button(
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     fullNameError = ""
+                    emailError = ""
+                    passwordError = ""
                     status = ""
 
-                    if (fullName.isBlank()) {
+                    val trimmedFullName = fullName.trim()
+                    val trimmedEmail = email.trim()
+
+                    var hasError = false
+
+                    if (trimmedFullName.isBlank()) {
                         fullNameError = "הכנס שם פרטי ושם משפחה"
-                        return@Button
+                        hasError = true
                     }
 
+                    if (trimmedEmail.isBlank()) {
+                        emailError = "הכנס אימייל"
+                        hasError = true
+                    } else if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+                        emailError = "האימייל שהוזן אינו תקין"
+                        hasError = true
+                    }
+
+                    if (password.isBlank()) {
+                        passwordError = "הכנס סיסמה"
+                        hasError = true
+                    } else if (password.length < 6) {
+                        passwordError = "הסיסמה חייבת להכיל לפחות 6 תווים"
+                        hasError = true
+                    }
+
+                    if (hasError) return@Button
+
+                    isLoading = true
+
                     FirebaseAuth.getInstance()
-                        //create in  firebase auth new email and password -> with unique uid
-                        .createUserWithEmailAndPassword(email, password)
+                        .createUserWithEmailAndPassword(trimmedEmail, password)
                         .addOnSuccessListener { result ->
+                            val uid = result.user?.uid
 
-                            // Firebase created uid for user
-                            val uid = result.user?.uid ?: return@addOnSuccessListener
+                            if (uid == null) {
+                                isLoading = false
+                                status = "שגיאה ביצירת משתמש"
+                                return@addOnSuccessListener
+                            }
 
-                            // Save only extra user info  - email and time , NOT password
-                            //Auth → gives UID (document)
-                            //Firestore → uses SAME UID and save the details (collection)
                             val userData = hashMapOf(
-                                "email" to email,
-                                "fullName" to fullName,
+                                "email" to trimmedEmail,
+                                "fullName" to trimmedFullName,
                                 "createdAt" to System.currentTimeMillis()
                             )
 
@@ -117,25 +160,49 @@ fun RegisterScreen(navController: NavHostController) {
                                 .document(uid)
                                 .set(userData)
                                 .addOnSuccessListener {
+                                    isLoading = false
                                     navController.navigate("app")
                                 }
                                 .addOnFailureListener { e ->
+                                    isLoading = false
                                     status = "שגיאה בשמירת משתמש: ${e.message}"
                                 }
                         }
                         .addOnFailureListener { e ->
-                            status = "שגיאה בהרשמה: הסיסמה חייבת להכיל לפחות 6 תווים "
-                        }
+                            isLoading = false
 
-                },
-                modifier = Modifier.fillMaxWidth()
+                            if (e is FirebaseAuthUserCollisionException) {
+                                emailError = "אימייל זה כבר קיים במערכת,\nיש לך חשבון קיים חזור/י לדף ההתחברות"
+                            } else {
+                                status = "שגיאה בהרשמה: ${e.message}"
+                            }
+                        }
+                }
             ) {
-                Text("הרשמה")
+                Text(if (isLoading) "נרשם..." else "הרשמה")
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Text(status)
+            TextButton(onClick = { navController.navigate("auth") }) {
+                Text(
+                    buildAnnotatedString {
+                        append("כבר יש לך חשבון? ")
+                        pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+                        append("התחברות")
+                        pop()
+                    }
+                )
+            }
+
+            if (status.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = status,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }
