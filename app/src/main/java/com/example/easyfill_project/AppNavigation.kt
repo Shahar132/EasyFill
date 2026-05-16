@@ -175,7 +175,7 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             // it means mark down only if this is the current route
                             icon = {
                                 Icon(
-                                    imageVector = Icons.Default.Settings,
+                                    imageVector = Icons.Default.Person,
                                     contentDescription = "Profile"
                                 )
                             },
@@ -228,7 +228,7 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             selected = currentRoute == "Personal Settings",
                             icon = {
                                 Icon(
-                                    imageVector = Icons.Default.Person,
+                                    imageVector = Icons.Default.Settings,
                                     contentDescription = "Personal Settings"
                                 )
                             },
@@ -340,20 +340,22 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
 
                             composable("backgroundSounds") {
-                                BackgroundSoundsScreen()
+                                BackgroundSoundsScreen(innerNavController)
                             }
 
                             composable("contrastSettings") {
                                 ContrastSettingsScreen(
                                     selectedMode = contrastMode,
-                                    onModeSelected = { contrastMode = it }
+                                    onModeSelected = { contrastMode = it },
+                                    navController = innerNavController
                                 )
                             }
 
                             composable("fontSizeSettings") {
                                 FontSizeSettingsScreen(
                                     selectedMode = fontSizeMode,
-                                    onModeSelected = { fontSizeMode = it }
+                                    onModeSelected = { fontSizeMode = it },
+                                    navController = innerNavController
                                 )
                             }
 

@@ -1,18 +1,23 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 
 @Composable
 fun ContrastSettingsScreen(
     selectedMode: ContrastMode,
-    onModeSelected: (ContrastMode) -> Unit
+    onModeSelected: (ContrastMode) -> Unit,
+    navController: NavHostController
 ) {
 
         Column(
@@ -46,6 +51,36 @@ fun ContrastSettingsScreen(
                 selected = selectedMode == ContrastMode.LOW,
                 onClick = { onModeSelected(ContrastMode.LOW) }
             )
+
+            Spacer(modifier = Modifier.height(140.dp))
+
+            OutlinedButton(
+                onClick = { navController.navigate("Personal Settings") },
+                modifier = Modifier
+                    .wrapContentWidth(Alignment.End)
+                    .padding(top = 24.dp),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surface,  // background
+                    contentColor = MaterialTheme.colorScheme.onSurface   // text + icon
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = "Back"
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "חזרה למסך הקודם",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
         }
     }
 

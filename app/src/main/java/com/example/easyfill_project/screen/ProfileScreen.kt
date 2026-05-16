@@ -111,7 +111,11 @@ fun ProfileScreen(
                             } else {
                                 nameStatus = "הכנס שם מלא"
                             }
-                        }) {
+                        },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
                             Text("שמור")
                         }
                     }
@@ -157,7 +161,11 @@ fun ProfileScreen(
                             } else {
                                 emailStatus = "הכנס אימייל חדש"
                             }
-                        }) {
+                        },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
                             Text("שמור")
                         }
                     }
@@ -203,7 +211,11 @@ fun ProfileScreen(
                             } else {
                                 passwordStatus = "הסיסמה חייבת להכיל לפחות 6 תווים"
                             }
-                        }) {
+                        },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
                             Text("שמור")
                         }
                     }
@@ -365,7 +377,7 @@ fun ProfileInfoRow(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.onSurface//for the icons
         )
 
         Spacer(modifier = Modifier.width(14.dp))
@@ -400,14 +412,15 @@ fun ProfileActionButton(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.onBackground
+            containerColor = MaterialTheme.colorScheme.primary,//the background of the button
+            contentColor = MaterialTheme.colorScheme.onPrimary
         ),
         elevation = ButtonDefaults.buttonElevation(3.dp)
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = text
+            contentDescription = text ,
+            tint = MaterialTheme.colorScheme.onPrimary
         )
 
         Spacer(modifier = Modifier.width(10.dp))
