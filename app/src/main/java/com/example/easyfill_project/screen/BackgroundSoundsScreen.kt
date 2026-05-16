@@ -1,7 +1,11 @@
 package com.example.easyfill_project.screen
 
 import android.media.MediaPlayer
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,9 +15,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.easyfill_project.R
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.navigation.NavHostController
 
 @Composable
-fun BackgroundSoundsScreen() {
+fun BackgroundSoundsScreen(navController: NavHostController) {
 
     val context = LocalContext.current
 
@@ -72,6 +78,35 @@ fun BackgroundSoundsScreen() {
                 SoundManager.play(context,"instruments",R.raw.violin_sound)
             }
         )
+
+        Spacer(modifier = Modifier.height(3.dp))
+
+        OutlinedButton(
+            onClick = { navController.navigate("Personal Settings") },
+            modifier = Modifier
+                .wrapContentWidth(Alignment.End)
+                .padding(top = 24.dp),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface,  // background
+                contentColor = MaterialTheme.colorScheme.onSurface   // text + icon
+            )
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = "Back"
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "חזרה למסך הקודם",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
     }
 }
 
