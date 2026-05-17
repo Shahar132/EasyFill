@@ -50,6 +50,13 @@ import com.example.easyfill_project.screen.getAppTypography
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+//imports regarding the TTS
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.VolumeUp
+import com.example.easyfill_project.texttospeech.TextToSpeechManager
+import com.example.easyfill_project.texttospeech.TtsTexts
+
+
 // Main navigation function
 @Composable
 fun AppNavigation() {
@@ -110,6 +117,18 @@ fun AppWithDrawer(mainNavController: NavHostController) {
     val currentRoute = currentBackStackEntry?.destination?.route
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+
+    //regarding tts
+    val context = LocalContext.current
+    val ttsManager = remember { TextToSpeechManager(context) }
+
+    var screenTextToRead by remember { mutableStateOf("") }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
 
     // This forces the drawer to open from RIGHT side
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -308,7 +327,19 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                             contentDescription = "Open menu"
                                         )
                                     }
+
+                                },
+                                actions = {//for displaying the speaker icon for reading
+                                    IconButton(onClick = {
+                                        ttsManager.speak(screenTextToRead)
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Default.VolumeUp,
+                                            contentDescription = "הקראת טקסט"
+                                        )
+                                    }
                                 }
+
                             )
                         }
                     ) { innerPadding ->
@@ -319,10 +350,13 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             modifier = Modifier.padding(innerPadding)
                         ) {
                             composable("home") {
+                                screenTextToRead =TtsTexts.HOME
+
                                 HomeScreen(innerNavController)
                             }
 
                             composable("profile") {
+                                screenTextToRead =TtsTexts.PROFILE
                                 ProfileScreen(
                                     navController = mainNavController,
                                     onNameUpdated = { updatedName ->
