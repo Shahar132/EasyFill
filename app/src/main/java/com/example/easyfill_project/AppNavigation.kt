@@ -1,5 +1,7 @@
 package com.example.easyfill_project
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -29,12 +31,24 @@ import androidx.navigation.compose.*
 
 // Your screens
 import com.example.easyfill_project.screen.AuthScreen
+import com.example.easyfill_project.screen.BackgroundSoundsScreen
+import com.example.easyfill_project.screen.ContrastSettingsScreen
+import com.example.easyfill_project.screen.EasyFillMainScreen
+import com.example.easyfill_project.screen.FontSizeSettingsScreen
 import com.example.easyfill_project.screen.GuidanceScreen
 import com.example.easyfill_project.screen.HomeScreen
 import com.example.easyfill_project.screen.PersonalSettingScreen
 import com.example.easyfill_project.screen.ProfileScreen
 
 import kotlinx.coroutines.launch
+import com.example.easyfill_project.screen.ContrastMode
+import com.example.easyfill_project.screen.getContrastColorScheme
+import com.example.easyfill_project.screen.FontSizeMode
+import com.example.easyfill_project.screen.RegisterScreen
+import com.example.easyfill_project.screen.UploadPdfScreen
+import com.example.easyfill_project.screen.getAppTypography
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 // Main navigation function
 @Composable
@@ -59,11 +73,15 @@ fun AppNavigation() {
             AuthScreen(navController)
         }
 
+        composable("register") {
+            RegisterScreen(navController)
+        }
+
         // From here → screens with drawer
         composable("app") {
             //when user login then go to route app that opens the home screen as first destination +side menu(inner navHost)
             //"app" = opens the layout with drawer
-            AppWithDrawer()
+            AppWithDrawer(navController)
         }
     }
 }
@@ -72,7 +90,7 @@ fun AppNavigation() {
 // This function wraps screens WITH the side drawer
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppWithDrawer() {
+fun AppWithDrawer(mainNavController: NavHostController) {
 
     // Controls whether drawer is open or closed
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -83,155 +101,268 @@ fun AppWithDrawer() {
     // This controls only screens INSIDE the app area
     val innerNavController = rememberNavController()
 
-    //for marking the current screen
+    var contrastMode by remember { mutableStateOf(ContrastMode.DEFAULT) }
+    //for font size
+    var fontSizeMode by remember { mutableStateOf(FontSizeMode.NORMAL) }
+
+    // for marking the current screen
     val currentBackStackEntry by innerNavController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
-
     // This forces the drawer to open from RIGHT side
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
 
-        // Main drawer component
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-
-            // Content of the side menu
-            drawerContent = {
-                ModalDrawerSheet(
-                    modifier = Modifier.width(screenWidth*0.6f)
-                ) {
-
-                    // Menu title
-                    Text(
-                        text = "תפריט ראשי",
-                        modifier = Modifier.padding(16.dp)
-                    )
-
-                    // Home item in menu
-                    NavigationDrawerItem(
-                        label = { Text("דף הבית") },
-                        selected = currentRoute == "home",
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Home"
-                            )
-                        },
-                        onClick = {
-                            // Navigate to home screen
-                            innerNavController.navigate("home")
-
-                            // Close drawer after click
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-
-                    // additional item of profile
-                    NavigationDrawerItem(
-                        label = { Text("ניהול חשבון") },
-                        selected = currentRoute == "profile",//it means mark down only if this is the current route
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Profile"
-                            )
-                        },
-                        onClick = {
-                            innerNavController.navigate("profile")
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-
-                    NavigationDrawerItem(
-                        label = { Text("מדריך למשתמש") },
-                        selected = currentRoute == "Guidance", // mark only if current route is Guidance
-
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "User guide"
-                            )
-                        },
-
-                        onClick = {
-                            innerNavController.navigate("Guidance")
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-
-                    NavigationDrawerItem(
-                        label = { Text("התאמה אישית") },
-                        selected = currentRoute == "Personal Settings",
-
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Personal Settings"
-                            )
-                        },
-
-                        onClick = {
-                            innerNavController.navigate("Personal Settings")
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-
-                }
-            }
+        MaterialTheme(//theme here
+            colorScheme = getContrastColorScheme(contrastMode) ,
+                    typography = getAppTypography(fontSizeMode)
         ) {
 
-            // Return layout direction to normal (LTR) for content
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            // Main drawer component
+            ModalNavigationDrawer(
+                drawerState = drawerState,
 
-                // Scaffold = basic screen layout (top bar, content, etc.)
-                Scaffold(
+                // Content of the side menu
+                drawerContent = {
+                    ModalDrawerSheet(
+                        modifier = Modifier.width(screenWidth * 0.6f),
+                        drawerContainerColor = MaterialTheme.colorScheme.surface,
+                        drawerContentColor = MaterialTheme.colorScheme.onSurface
+                    ) {
 
-                    // Top bar that appears on ALL drawer screens
-                    topBar = {
-                        TopAppBar(
+                        // Menu title
+                        Text(
+                            text = "תפריט ראשי",
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
 
-                            // App title
-                            title = { Text("EasyFill") },
+                        // Home item in menu
+                        NavigationDrawerItem(
+                            label = { Text("דף הבית") },
+                            selected = currentRoute == "home",
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Home"
+                                )
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
 
-                            // Menu button (top-left visually, but opens RIGHT drawer)
-                            navigationIcon = {
-                                IconButton(
-                                    onClick = {
-                                        // Open the drawer
-                                        scope.launch {
-                                            drawerState.open()
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = "Open menu"
-                                    )
-                                }
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            onClick = {
+                                // Navigate to home screen
+                                innerNavController.navigate("home")
+
+                                // Close drawer after click
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+
+                        // additional item of profile
+                        NavigationDrawerItem(
+                            label = { Text("ניהול חשבון")},
+                            selected = currentRoute == "profile",
+                            // it means mark down only if this is the current route
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile"
+                                )
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            onClick = {
+                                innerNavController.navigate("profile")
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+
+                        NavigationDrawerItem(
+                            label = { Text("מדריך למשתמש") },
+                            selected = currentRoute == "Guidance",
+                            // mark only if current route is Guidance
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "User guide"
+                                )
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            onClick = {
+                                innerNavController.navigate("Guidance")
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+
+                        NavigationDrawerItem(
+                            label = { Text("התאמה אישית")},
+                            selected = currentRoute == "Personal Settings",
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Personal Settings"
+                                )
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
+                                // Selected (when pressed)
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
+                            ),
+
+                            onClick = {
+                                innerNavController.navigate("Personal Settings")
+                                scope.launch { drawerState.close() }
                             }
                         )
                     }
-                ) { innerPadding ->
+                }
+            ) {
 
-                    NavHost(
-                        navController = innerNavController,
-                        startDestination = "home",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("home") {
-                            HomeScreen()
-                        }
+                // Return layout direction to normal (LTR) for content
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
 
-                        composable("profile") {
-                            ProfileScreen()
+                    //this part is taking the current uid and extract full name
+                    var userName by remember { mutableStateOf("") }
+
+                    LaunchedEffect(Unit) {
+                        val userId = FirebaseAuth.getInstance().currentUser?.uid
+
+                        if (userId != null) {
+                            FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(userId)
+                                .get()
+                                .addOnSuccessListener { document ->
+                                    userName = document.getString("fullName") ?: ""
+                                }
                         }
-                        composable ("Guidance") {
-                            GuidanceScreen()
+                    }
+
+                    // Scaffold = basic screen layout (top bar, content, etc.)
+                    Scaffold(
+                        // about the colors - > scaffold automatically check background color
+
+                        // Top bar that appears on ALL drawer screens
+                        topBar = {
+                            TopAppBar(
+                                // automatic colors as well takes surface
+
+                                // App title at the upper bar and name for user
+                                title = {
+                                    Column {
+                                        Text("EasyFill")
+
+                                        if (userName.isNotEmpty()) {
+                                            Text(
+                                                text = "שלום, $userName",
+                                                fontSize = 20.sp
+                                            )
+                                        }
+                                    }
+                                },
+                                // Menu button (top-left visually, but opens RIGHT drawer)
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            // Open the drawer
+                                            scope.launch { drawerState.open() }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Menu,
+                                            contentDescription = "Open menu"
+                                        )
+                                    }
+                                }
+                            )
                         }
-                        composable ("Personal Settings"){
-                            PersonalSettingScreen() }
+                    ) { innerPadding ->
+
+                        NavHost(
+                            navController = innerNavController,
+                            startDestination = "home",
+                            modifier = Modifier.padding(innerPadding)
+                        ) {
+                            composable("home") {
+                                HomeScreen(innerNavController)
+                            }
+
+                            composable("profile") {
+                                ProfileScreen(
+                                    navController = mainNavController,
+                                    onNameUpdated = { updatedName ->
+                                        userName = updatedName
+                                    }
+                                )
+                            }
+
+                            composable("Guidance") {
+                                GuidanceScreen()
+                            }
+
+                            composable("Personal Settings") {
+                                PersonalSettingScreen(innerNavController)
+                            }
+
+                            composable("backgroundSounds") {
+                                BackgroundSoundsScreen(innerNavController)
+                            }
+
+                            composable("contrastSettings") {
+                                ContrastSettingsScreen(
+                                    selectedMode = contrastMode,
+                                    onModeSelected = { contrastMode = it },
+                                    navController = innerNavController
+                                )
+                            }
+
+                            composable("fontSizeSettings") {
+                                FontSizeSettingsScreen(
+                                    selectedMode = fontSizeMode,
+                                    onModeSelected = { fontSizeMode = it },
+                                    navController = innerNavController
+                                )
+                            }
+
+                            composable("uploadPdf") {
+                                UploadPdfScreen()
+                            }
+                        }
                     }
                 }
             }
