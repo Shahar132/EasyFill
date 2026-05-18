@@ -22,12 +22,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import com.google.firebase.firestore.FirebaseFirestore
 import android.provider.OpenableColumns
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.ui.graphics.Color
-
+import androidx.navigation.NavHostController
 
 
 @Composable
-fun UploadPdfScreen() {
+fun UploadPdfScreen(navController: NavHostController) {
 
     var selectedPdfUri by remember { mutableStateOf<Uri?>(null) }
     var uploadStatus by remember { mutableStateOf("לא נבחר קובץ") }
@@ -222,7 +224,34 @@ fun UploadPdfScreen() {
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(50.dp))
+
+        OutlinedButton(
+            onClick = { navController.navigate("speechDemo") }, // navigate to demo screen
+            modifier = Modifier
+                .wrapContentWidth(Alignment.End)
+                .padding(top = 24.dp),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = "מעבר"
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Text(
+                    text = "מעבר למילוי הטופס", // updated text
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
 
     }
 }
