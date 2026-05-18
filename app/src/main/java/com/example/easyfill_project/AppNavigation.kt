@@ -56,6 +56,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 //imports regarding the TTS
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.VolumeUp
+import com.example.easyfill_project.screen.SpeechToTextDemoScreen
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
 //for delay
@@ -466,7 +467,11 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             composable("uploadPdf") {
                                 LaunchedEffect(Unit) {
                                 updateScreenText(TtsTexts.UPLOAD_PDF)}
-                                UploadPdfScreen()
+                                UploadPdfScreen(navController = innerNavController)
+                            }
+
+                            composable("speechDemo") {
+                                SpeechToTextDemoScreen()
                             }
 
 
