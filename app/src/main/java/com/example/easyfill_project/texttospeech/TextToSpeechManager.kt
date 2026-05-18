@@ -71,4 +71,8 @@ class TextToSpeechManager(private val context: Context) {
         tts?.stop()
         tts?.shutdown()
     }
+
+    fun stop() {
+        tts?.stop()
+    }
 }
