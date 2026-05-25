@@ -66,4 +66,6 @@ dependencies {
     implementation(libs.firebase.storage)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.okhttp)
+
 }
