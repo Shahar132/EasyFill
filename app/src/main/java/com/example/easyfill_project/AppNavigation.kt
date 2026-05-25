@@ -1,15 +1,18 @@
 package com.example.easyfill_project
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.*
 
 // Compose state & runtime
@@ -49,6 +52,15 @@ import com.example.easyfill_project.screen.UploadPdfScreen
 import com.example.easyfill_project.screen.getAppTypography
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+
+//imports regarding the TTS
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.VolumeUp
+import com.example.easyfill_project.screen.SpeechToTextDemoScreen
+import com.example.easyfill_project.texttospeech.TextToSpeechManager
+import com.example.easyfill_project.texttospeech.TtsTexts
+//for delay
+import kotlinx.coroutines.delay
 
 // Main navigation function
 @Composable
@@ -110,6 +122,27 @@ fun AppWithDrawer(mainNavController: NavHostController) {
     val currentRoute = currentBackStackEntry?.destination?.route
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+
+    //regarding tts
+    val context = LocalContext.current
+    val ttsManager = remember { TextToSpeechManager(context) }
+
+    var screenTextToRead by remember { mutableStateOf("") }
+    var isTtsSpeaking by remember { mutableStateOf(false) }
+
+
+    //for automatic reading if user pick ON toggle+shared prefernce
+    val prefs = context.getSharedPreferences("user_settings", Context.MODE_PRIVATE)
+
+    var autoReadEnabled by remember {
+        mutableStateOf(prefs.getBoolean("auto_read_enabled", false))
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
 
     // This forces the drawer to open from RIGHT side
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -308,10 +341,46 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                             contentDescription = "Open menu"
                                         )
                                     }
+
+                                },
+                                actions = {
+                                    IconButton(
+                                        onClick = {
+                                            if (isTtsSpeaking) {
+                                                ttsManager.stop()
+                                                isTtsSpeaking = false
+                                            } else {
+                                                ttsManager.speak(screenTextToRead)
+                                                isTtsSpeaking = true
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isTtsSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                            contentDescription = if (isTtsSpeaking) "עצירת הקראה" else "הקראת טקסט"
+                                        )
+                                    }
                                 }
+
                             )
                         }
                     ) { innerPadding ->
+
+                        //helper function for ether manual or auto
+                        fun updateScreenText(text: String) {
+                            ttsManager.stop()
+                            isTtsSpeaking = false
+
+                            screenTextToRead = text
+
+                            if (autoReadEnabled) {//for auto reading
+                                scope.launch {
+                                    delay(400)//delay
+                                    ttsManager.speak(text)
+                                    isTtsSpeaking = true
+                                }
+                            }
+                        }
 
                         NavHost(
                             navController = innerNavController,
@@ -319,10 +388,17 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             modifier = Modifier.padding(innerPadding)
                         ) {
                             composable("home") {
+                                LaunchedEffect(Unit) {
+                                    updateScreenText(TtsTexts.HOME)
+                                }
+
+
                                 HomeScreen(innerNavController)
                             }
 
                             composable("profile") {
+                                LaunchedEffect(Unit) {
+                                updateScreenText(TtsTexts.PROFILE)}
                                 ProfileScreen(
                                     navController = mainNavController,
                                     onNameUpdated = { updatedName ->
@@ -332,18 +408,45 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
 
                             composable("Guidance") {
+                                LaunchedEffect(Unit) {
+                                updateScreenText(TtsTexts.GUIDANCE)}
                                 GuidanceScreen()
                             }
 
                             composable("Personal Settings") {
-                                PersonalSettingScreen(innerNavController)
+                                LaunchedEffect(Unit) {
+                                    updateScreenText(TtsTexts.PERSONAL_SETTINGS)
+                                }
+
+                                PersonalSettingScreen(
+                                    innerNavController,
+                                    autoReadEnabled = autoReadEnabled,
+                                    onAutoReadChange = { enabled ->
+                                        autoReadEnabled = enabled
+
+                                        if (enabled) {
+                                            scope.launch {
+                                                delay(400)
+                                                ttsManager.speak(screenTextToRead)
+                                                isTtsSpeaking = true
+                                            }
+                                        } else {
+                                            ttsManager.stop()
+                                            isTtsSpeaking = false
+                                        }
+                                    }
+                                )
                             }
 
                             composable("backgroundSounds") {
+                                LaunchedEffect(Unit) {
+                                updateScreenText(TtsTexts.SOUND)}
                                 BackgroundSoundsScreen(innerNavController)
                             }
 
                             composable("contrastSettings") {
+                                LaunchedEffect(Unit) {
+                                updateScreenText(TtsTexts.CONTRAST)}
                                 ContrastSettingsScreen(
                                     selectedMode = contrastMode,
                                     onModeSelected = { contrastMode = it },
@@ -352,6 +455,8 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
 
                             composable("fontSizeSettings") {
+                                LaunchedEffect(Unit) {
+                                updateScreenText(TtsTexts.FONT_SIZE)}
                                 FontSizeSettingsScreen(
                                     selectedMode = fontSizeMode,
                                     onModeSelected = { fontSizeMode = it },
@@ -360,12 +465,22 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
 
                             composable("uploadPdf") {
-                                UploadPdfScreen()
+                                LaunchedEffect(Unit) {
+                                updateScreenText(TtsTexts.UPLOAD_PDF)}
+                                UploadPdfScreen(navController = innerNavController)
                             }
+
+                            composable("speechDemo") {
+                                SpeechToTextDemoScreen()
+                            }
+
+
                         }
                     }
                 }
             }
         }
     }
+
 }
+
