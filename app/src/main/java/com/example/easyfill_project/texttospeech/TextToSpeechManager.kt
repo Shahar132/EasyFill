@@ -34,7 +34,7 @@ class TextToSpeechManager(private val context: Context) {
                             Toast.LENGTH_LONG
                         ).show()
                     } else {
-                        Log.d("TTS", "Hebrew supported ✅")
+                        Log.d("TTS", "Hebrew supported ")
                     }
 
                 } else {
@@ -47,7 +47,7 @@ class TextToSpeechManager(private val context: Context) {
                     ).show()
                 }
             },
-            "com.google.android.tts" // 👈 force Google engine
+            "com.google.android.tts" // force Google engine
         )
     }
 
