@@ -1,23 +1,35 @@
 package com.example.easyfill_project.screen
 
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.easyfill_project.R
+import androidx.core.content.edit
+
 
 @Composable
-fun PersonalSettingScreen(navController: NavHostController) {
+fun PersonalSettingScreen(navController: NavHostController,
+                          autoReadEnabled: Boolean,
+                          onAutoReadChange: (Boolean) -> Unit) {
+
 
     Column(
         modifier = Modifier
@@ -48,7 +60,7 @@ fun PersonalSettingScreen(navController: NavHostController) {
             )
 
             PersonalSettingCard(
-                title = "בחירת ניגודיות",
+                title = "בחירת צבעים",
                 imageRes = R.drawable.contrastcolors,
                 modifier = Modifier.weight(1f),
                 onClick = {
@@ -81,9 +93,59 @@ fun PersonalSettingScreen(navController: NavHostController) {
            Spacer(modifier = Modifier.weight(0.3f))
         }
 
+        val context = LocalContext.current
+        val prefs = context.getSharedPreferences("user_settings", Context.MODE_PRIVATE)
+
+        Spacer(modifier = Modifier.height(25.dp))
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(6.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "הקראה אוטומטית של טקסט",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Switch(
+                    checked = autoReadEnabled,
+                    onCheckedChange = { enabled ->
+                        onAutoReadChange(enabled)
+
+                        prefs.edit {
+                            putBoolean("auto_read_enabled", enabled)
+                        }
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.primary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSurface,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                )
+            }
         }
 
-    }
+        }
+
+        }
+
+
 
 
 @Composable
