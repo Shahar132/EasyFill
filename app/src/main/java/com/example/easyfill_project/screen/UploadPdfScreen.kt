@@ -27,6 +27,12 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavHostController
 
+//import for azure
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
 
 @Composable
 fun UploadPdfScreen(navController: NavHostController) {
@@ -164,52 +170,74 @@ fun UploadPdfScreen(navController: NavHostController) {
 
 
         Button(
-
             modifier = Modifier
                 .fillMaxWidth()
                 .height(80.dp),
+
             enabled = selectedPdfUri != null && !isUploading,
+
             onClick = {
                 isUploading = true
                 uploadProgress = 0
                 uploadStatus = "מעלה קובץ..."
+
                 selectedPdfUri?.let { uri ->
+
                     uploadPdfToFirebaseStorage(
                         pdfUri = uri,
                         fileName = fileName,
                         fileSize = fileSize,
+
                         onProgress = { progress ->
                             uploadProgress = progress
                             uploadStatus = "מעלה קובץ... $progress%"
                         },
-                        onSuccess = {
-                            uploadStatus = "הקובץ הועלה בהצלחה"
-                            isUploading = false
-                            uploadProgress = 0
-                            selectedPdfUri = null
-                            fileName = null
-                            fileSize = null
+
+                        //  UPDATED SUCCESS (WITH AZURE CALL)
+                        onSuccess = { uploadedFileId ->
+
+                            uploadStatus = "הקובץ הועלה בהצלחה, מתחיל חילוץ נתונים..."
+
+                            callAzureExtraction(
+                                fileId = uploadedFileId,
+
+                                onSuccess = {
+                                    uploadStatus = "החילוץ הסתיים בהצלחה"
+                                    isUploading = false
+                                    uploadProgress = 0
+
+                                    selectedPdfUri = null
+                                    fileName = null
+                                    fileSize = null
+                                },
+
+                                onError = { error ->
+                                    uploadStatus = "שגיאה בחילוץ: $error"
+                                    isUploading = false
+                                    uploadProgress = 0
+                                }
+                            )
                         },
+
                         onError = { error ->
-                            uploadStatus = " $error"
+                            uploadStatus = "שגיאה: $error"
                             isUploading = false
                             uploadProgress = 0
                         }
                     )
-
                 }
             },
+
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (selectedPdfUri != null)
-                    MaterialTheme.colorScheme.surface   // after selecting file
+                    MaterialTheme.colorScheme.surface
                 else
-                    Color.LightGray,                   // before selecting
+                    Color.LightGray,
 
                 contentColor = MaterialTheme.colorScheme.onSurface
             )
-
-
-        ) {
+        )
+        {
             Icon(
                 imageVector = Icons.Default.Upload,
                 contentDescription = "Upload file"
@@ -226,7 +254,9 @@ fun UploadPdfScreen(navController: NavHostController) {
 
         Spacer(modifier = Modifier.height(50.dp))
 
+
         OutlinedButton(
+            enabled = !isUploading,//not shown button until finished extracting
             onClick = { navController.navigate("speechDemo") }, // navigate to demo screen
             modifier = Modifier
                 .wrapContentWidth(Alignment.End)
@@ -262,7 +292,7 @@ fun uploadPdfToFirebaseStorage(
     fileName: String?,    // original file name, like "טופס.pdf"
     fileSize: Long?,      // file size in bytes
     onProgress: (Int) -> Unit,
-    onSuccess: () -> Unit,
+    onSuccess: (String) -> Unit,
     onError: (String) -> Unit
 ) {
     // current user id for the uid the key
@@ -335,7 +365,7 @@ fun uploadPdfToFirebaseStorage(
                         .document(fileId)
                         .set(fileData)
                         .addOnSuccessListener {
-                            onSuccess()
+                            onSuccess(fileId)
                         }
                         .addOnFailureListener { exception ->
                             onError("שגיאה בשמירת פרטי הקובץ: ${exception.message}")
@@ -347,5 +377,60 @@ fun uploadPdfToFirebaseStorage(
         }
         .addOnFailureListener { exception ->
             onError("שגיאה בבדיקת כפילות: ${exception.message}")
+        }
+}
+
+fun callAzureExtraction(
+    fileId: String,
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit
+) {
+    val user = FirebaseAuth.getInstance().currentUser
+
+    if (user == null) {
+        onError("המשתמש לא מחובר")
+        return
+    }
+
+    user.getIdToken(true)
+        .addOnSuccessListener { result ->
+            val idToken = result.token
+
+            if (idToken == null) {
+                onError("לא נמצא טוקן משתמש")
+                return@addOnSuccessListener
+            }
+            //call the Cloud Run function
+            val url =
+                "https://process-pdf-azure-968227768801.europe-west1.run.app?fileId=$fileId"
+
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $idToken")
+                .get()
+                .build()
+
+            val client = OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(180, TimeUnit.SECONDS)
+                .writeTimeout(180, TimeUnit.SECONDS)
+                .build()
+
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: IOException) {
+                    onError("שגיאה בחילוץ Azure: ${e.message}")
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    if (response.isSuccessful) {
+                        onSuccess()
+                    } else {
+                        onError("Azure failed: ${response.code}")
+                    }
+                }
+            })
+        }
+        .addOnFailureListener {
+            onError("שגיאה בקבלת טוקן משתמש: ${it.message}")
         }
 }
