@@ -57,6 +57,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.VolumeUp
 import com.example.easyfill_project.forms_screens.DemoFormsOptions
+import com.example.easyfill_project.forms_screens.HousingAssistanceFormScreen
 import com.example.easyfill_project.screen.SpeechToTextDemoScreen
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
@@ -478,7 +479,7 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
                             //navigate to first form
                             composable("housingAssistanceForm") {
-                                // HousingAssistanceFormScreen(navController)
+                                HousingAssistanceFormScreen(navController = innerNavController)
                             }
                             //navigate to second form
                             composable("bankDetailsForm") {

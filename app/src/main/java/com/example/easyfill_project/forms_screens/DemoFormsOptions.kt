@@ -41,7 +41,7 @@ fun DemoFormsOptions(navController: NavHostController) {
             title = "טופס בקשה לסיוע בדיור",
             description = "טופס זה מיועד למימוש הזכאות למענקים והלוואות בתחום הדיור בנושאים האלה: סיוע בשכר דירה, התאמת דירה לנכות ועוד." ,
 
-            onClick = { navController.navigate("housingAssistanceForm") }
+            onClick = { navController.navigate("housgAssistanceForm") }
         )
 
         Spacer(modifier = Modifier.height(35.dp))
