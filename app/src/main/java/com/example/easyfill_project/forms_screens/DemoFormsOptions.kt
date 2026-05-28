@@ -70,10 +70,10 @@ fun DemoFormCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Description,
+                imageVector = Icons.Default.Description,//icon form
                 contentDescription = null,
                 modifier = Modifier.size(42.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -90,7 +90,8 @@ fun DemoFormCard(
             IconButton(onClick = { showInfo = true }) {
                 Icon(
                     imageVector = Icons.Default.HelpOutline,
-                    contentDescription = "מידע"
+                    contentDescription = "מידע" ,
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -101,11 +102,24 @@ fun DemoFormCard(
             onDismissRequest = { showInfo = false },
             confirmButton = {
                 TextButton(onClick = { showInfo = false }) {
-                    Text("הבנתי")
+                    Text(
+                        text = "הבנתי",
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             },
-            title = { Text(title) },
-            text = { Text(description) }
+            title = {
+                Text(
+                    text = title,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            },
+            text = {
+                Text(
+                    text = description,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
         )
     }
 }
