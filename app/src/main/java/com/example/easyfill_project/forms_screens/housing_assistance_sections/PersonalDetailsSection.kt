@@ -12,6 +12,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+
 @Composable
 fun PersonalDetailsSection(
     autofill: Map<String, String?> = emptyMap()
@@ -92,12 +99,25 @@ fun SmartTextField(
     var value by remember { mutableStateOf("") }
     var showSuggestion by remember { mutableStateOf(false) }
 
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+
     Column {
         OutlinedTextField(
             value = value,
             onValueChange = { value = it },
             label = { Text(label) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .onFocusChanged { focusState ->
+                    if (focusState.isFocused) {
+                        scope.launch {
+                            delay(300)
+                            bringIntoViewRequester.bringIntoView()
+                        }
+                    }
+                }
         )
 
         Row(
