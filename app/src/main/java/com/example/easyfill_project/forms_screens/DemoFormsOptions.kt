@@ -15,6 +15,12 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.runtime.*
 
+//text to speech imports
+import android.speech.tts.TextToSpeech
+import java.util.Locale
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 fun DemoFormsOptions(navController: NavHostController) {
     Column(
@@ -32,7 +38,7 @@ fun DemoFormsOptions(navController: NavHostController) {
 
         DemoFormCard(
             title = "טופס בקשה לסיוע בדיור",
-            description = "טופס זה מיועד למימוש הזכאות למענקים והלוואות בתחום הדיור בנושאים האלה: סיוע בשכר דירה, התאמת דירה לנכות ועוד" ,
+            description = "טופס זה מיועד למימוש הזכאות למענקים והלוואות בתחום הדיור בנושאים האלה: סיוע בשכר דירה, התאמת דירה לנכות ועוד." ,
 
             onClick = { navController.navigate("housingAssistanceForm") }
         )
@@ -55,9 +61,22 @@ fun DemoFormCard(
 ) {
     var showInfo by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
+    val tts = remember {
+        TextToSpeech(context) { }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            tts.stop()
+            tts.shutdown()
+        }
+    }
+
     Card(
         modifier = Modifier
-            .width(320.dp)
+            .width(340.dp)
             .height(100.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(6.dp)
@@ -109,10 +128,33 @@ fun DemoFormCard(
                 }
             },
             title = {
-                Text(
-                    text = title,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+
+                    IconButton(
+                        onClick = {
+                            tts.language = Locale("he", "IL")
+                            tts.speak(
+                                description,
+                                TextToSpeech.QUEUE_FLUSH,
+                                null,
+                                "description_tts"
+                            )
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = "השמעה",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             },
             text = {
                 Text(
@@ -122,4 +164,5 @@ fun DemoFormCard(
             }
         )
     }
+
 }
