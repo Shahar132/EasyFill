@@ -257,7 +257,7 @@ fun UploadPdfScreen(navController: NavHostController) {
 
         OutlinedButton(
             enabled = !isUploading,//not shown button until finished extracting
-            onClick = { navController.navigate("speechDemo") }, // navigate to demo screen
+            onClick = { navController.navigate("demoFormOptions") }, // navigate to demo screen
             modifier = Modifier
                 .wrapContentWidth(Alignment.End)
                 .padding(top = 24.dp),
@@ -277,7 +277,7 @@ fun UploadPdfScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
-                    text = "מעבר למילוי הטופס", // updated text
+                    text = "מעבר לבחירת טופס", // updated text
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
