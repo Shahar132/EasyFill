@@ -97,23 +97,25 @@ fun SmartTextField(
             value = value,
             onValueChange = { value = it },
             label = { Text(label) },
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                Row {
-                    IconButton(onClick = { ttsManager.speak(label) }) {
-                        Icon(Icons.Default.VolumeUp, contentDescription = "השמעה")
-                    }
-
-                    IconButton(onClick = { /* later: speech to text */ }) {
-                        Icon(Icons.Default.Mic, contentDescription = "הקלטה")
-                    }
-
-                    IconButton(onClick = { showSuggestion = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "מילוי אוטומטי")
-                    }
-                }
-            }
+            modifier = Modifier.fillMaxWidth()
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            IconButton(onClick = { ttsManager.speak(label) }) {
+                Icon(Icons.Default.VolumeUp, contentDescription = "השמעה")
+            }
+
+            IconButton(onClick = { /* speech to text later */ }) {
+                Icon(Icons.Default.Mic, contentDescription = "הקלטה")
+            }
+
+            IconButton(onClick = { showSuggestion = true }) {
+                Icon(Icons.Default.Edit, contentDescription = "מילוי אוטומטי")
+            }
+        }
 
         if (showSuggestion && !valueFromAzure.isNullOrBlank()) {
             AssistChip(
