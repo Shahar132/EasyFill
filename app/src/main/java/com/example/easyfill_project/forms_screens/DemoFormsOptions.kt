@@ -35,7 +35,7 @@ fun DemoFormsOptions(navController: NavHostController) {
             style = MaterialTheme.typography.headlineLarge
         )
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(50.dp))
 
         DemoFormCard(
             title = "טופס בקשה לסיוע בדיור",
@@ -44,7 +44,7 @@ fun DemoFormsOptions(navController: NavHostController) {
             onClick = { navController.navigate("housingAssistanceForm") }
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(35.dp))
 
         DemoFormCard(
             title = "טופס עדכון פרטי חשבון בנק",
