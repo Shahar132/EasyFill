@@ -58,7 +58,7 @@ fun DemoFormCard(
     Card(
         modifier = Modifier
             .width(320.dp)
-            .height(170.dp)
+            .height(100.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(6.dp)
     ) {
@@ -85,12 +85,6 @@ fun DemoFormCard(
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
             }
 
             IconButton(onClick = { showInfo = true }) {
