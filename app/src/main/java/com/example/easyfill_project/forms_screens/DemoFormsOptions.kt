@@ -20,6 +20,7 @@ import android.speech.tts.TextToSpeech
 import java.util.Locale
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.ui.platform.LocalContext
+import com.example.easyfill_project.texttospeech.TextToSpeechManager
 
 @Composable
 fun DemoFormsOptions(navController: NavHostController) {
@@ -62,15 +63,11 @@ fun DemoFormCard(
     var showInfo by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-
-    val tts = remember {
-        TextToSpeech(context) { }
-    }
+    val ttsManager = remember { TextToSpeechManager(context) }
 
     DisposableEffect(Unit) {
         onDispose {
-            tts.stop()
-            tts.shutdown()
+            ttsManager.shutdown()
         }
     }
 
@@ -118,9 +115,17 @@ fun DemoFormCard(
 
     if (showInfo) {
         AlertDialog(
-            onDismissRequest = { showInfo = false },
+            onDismissRequest = {
+                ttsManager.stop()
+                showInfo = false
+            },
             confirmButton = {
-                TextButton(onClick = { showInfo = false }) {
+                TextButton(
+                    onClick = {
+                        ttsManager.stop()
+                        showInfo = false
+                    }
+                ) {
                     Text(
                         text = "הבנתי",
                         color = MaterialTheme.colorScheme.onSurface
@@ -129,23 +134,19 @@ fun DemoFormCard(
             },
             title = {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = title,
                         modifier = Modifier.weight(1f),
+                        maxLines = 1,
                         color = MaterialTheme.colorScheme.onBackground
                     )
 
                     IconButton(
                         onClick = {
-                            tts.language = Locale("he", "IL")
-                            tts.speak(
-                                description,
-                                TextToSpeech.QUEUE_FLUSH,
-                                null,
-                                "description_tts"
-                            )
+                            ttsManager.speak(description)
                         }
                     ) {
                         Icon(
