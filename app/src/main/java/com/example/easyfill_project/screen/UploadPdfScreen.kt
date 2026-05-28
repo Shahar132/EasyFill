@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import androidx.core.content.edit
 
 
 @Composable
@@ -184,6 +186,7 @@ fun UploadPdfScreen(navController: NavHostController) {
                 selectedPdfUri?.let { uri ->
 
                     uploadPdfToFirebaseStorage(
+                        context = context,
                         pdfUri = uri,
                         fileName = fileName,
                         fileSize = fileSize,
@@ -288,6 +291,7 @@ fun UploadPdfScreen(navController: NavHostController) {
 
 // This function uploads the selected PDF to Firebase Storage
 fun uploadPdfToFirebaseStorage(
+    context: Context,
     pdfUri: Uri,          // the selected PDF file from the phone
     fileName: String?,    // original file name, like "טופס.pdf"
     fileSize: Long?,      // file size in bytes
@@ -365,6 +369,13 @@ fun uploadPdfToFirebaseStorage(
                         .document(fileId)
                         .set(fileData)
                         .addOnSuccessListener {
+
+                            // SAVE latest fileId HERE
+                            val prefs = context.getSharedPreferences("upload_prefs", 0)
+                            prefs.edit {
+                                putString("latestFileId", fileId)
+                            }
+
                             onSuccess(fileId)
                         }
                         .addOnFailureListener { exception ->

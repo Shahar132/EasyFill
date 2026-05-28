@@ -35,6 +35,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
+
+//firestore imports
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun HousingAssistanceFormScreen(navController: NavHostController) {
@@ -51,6 +57,50 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
         "סיכום"
     )
 
+    var personalDetailsMap by remember {
+        mutableStateOf<Map<String, String?>>(emptyMap())
+    }
+
+
+
+    val context = LocalContext.current
+    val db = FirebaseFirestore.getInstance()
+    val uid = FirebaseAuth.getInstance().currentUser?.uid
+
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("upload_prefs", 0)
+        val fileId = prefs.getString("latestFileId", null)
+
+        if (uid != null && fileId != null) {
+            db.collection("users")
+                .document(uid)
+                .collection("uploadedFiles")
+                .document(fileId)
+                .collection("autofillSuggestions")
+                .document("latest")
+                .get()
+                .addOnSuccessListener { doc ->
+                    val suggestions = doc.get("suggestions") as? Map<*, *>
+                    val personal = suggestions?.get("personalDetails") as? Map<*, *>
+                    val address = suggestions?.get("address") as? Map<*, *>
+                    val contact = suggestions?.get("contactDetails") as? Map<*, *>
+
+                    personalDetailsMap = mapOf(
+                        "firstName" to personal?.get("firstName") as? String,
+                        "lastName" to personal?.get("lastName") as? String,
+                        "idNumber" to personal?.get("idNumber") as? String,
+
+                        "street" to address?.get("street") as? String,
+                        "houseNumber" to address?.get("houseNumber") as? String,
+                        "city" to address?.get("city") as? String,
+                        "zipCode" to address?.get("zipCode") as? String,
+
+                        "phone" to contact?.get("phone") as? String,
+                        "email" to contact?.get("email") as? String
+                    )
+                }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -71,7 +121,7 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
         // Section content
         when (currentStep) {
 
-            0 -> PersonalDetailsSection()
+            0 -> PersonalDetailsSection(autofill = personalDetailsMap)
             1 -> MailingAddressSection()
             2 -> FamilyStatusSection()
             3 -> IncomeDetailsSection()
@@ -81,7 +131,8 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
 
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Navigation buttons
         Row(
@@ -101,7 +152,7 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                     Text("חזור")
                 }
             } else {
-                Spacer(modifier = Modifier.width(90.dp))
+                Spacer(modifier = Modifier.width(120.dp))
             }
 
             OutlinedButton(
