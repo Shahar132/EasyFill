@@ -112,8 +112,12 @@ fun SmartTextField(
     speechManager: SpeechToTextManager
 ) {
 
-    var value by remember(valueFromAzure) {
-        mutableStateOf(valueFromAzure ?: "")
+    var value by remember { mutableStateOf("") }
+
+    LaunchedEffect(valueFromAzure) {
+        if (!valueFromAzure.isNullOrBlank()) {
+            value = valueFromAzure
+        }
     }
 
     val bringIntoViewRequester = remember { BringIntoViewRequester() }

@@ -86,9 +86,9 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                     val contact = suggestions?.get("contactDetails") as? Map<*, *>
 
                     personalDetailsMap = mapOf(
-                        "firstName" to personal?.get("firstName")?.toString(),
-                        "lastName" to personal?.get("lastName")?.toString(),
-                        "idNumber" to personal?.get("idNumber")?.toString(),
+                        "firstName" to personal?.get("firstName") as? String,
+                        "lastName" to personal?.get("lastName") as? String,
+                        "idNumber" to personal?.get("idNumber") as? String,
 
                         "street" to address?.get("street") as? String,
                         "houseNumber" to address?.get("houseNumber") as? String,
