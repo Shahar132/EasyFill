@@ -62,57 +62,67 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
     val uid = FirebaseAuth.getInstance().currentUser?.uid
 
     LaunchedEffect(Unit) {
-
-        val prefs = context.getSharedPreferences("upload_prefs", 0)
-        val fileId = prefs.getString("latestFileId", null)
-
-        // LOGS
         Log.d("AUTOFILL", "uid = $uid")
-        Log.d("AUTOFILL", "fileId = $fileId")
 
-        if (uid != null && fileId != null) {
-
+        if (uid != null) {
             db.collection("users")
                 .document(uid)
                 .collection("uploadedFiles")
-                .document(fileId)
-                .collection("autofillSuggestions")
-                .document("latest")
+                .orderBy(
+                    "uploadedAt",
+                    com.google.firebase.firestore.Query.Direction.DESCENDING
+                )
+                .limit(1)
                 .get()
+                .addOnSuccessListener { files ->
 
-                .addOnSuccessListener { doc ->
+                    val latestFileId = files.documents.firstOrNull()?.id
 
-                    Log.d("AUTOFILL", "doc exists = ${doc.exists()}")
-                    Log.d("AUTOFILL", "doc data = ${doc.data}")
+                    Log.d("AUTOFILL", "latestFileId from uploadedAt = $latestFileId")
 
-                    val suggestions = doc.get("suggestions") as? Map<*, *>
-                    Log.d("AUTOFILL", "suggestions = $suggestions")
+                    if (latestFileId != null) {
+                        db.collection("users")
+                            .document(uid)
+                            .collection("uploadedFiles")
+                            .document(latestFileId)
+                            .collection("autofillSuggestions")
+                            .document("latest")
+                            .get()
+                            .addOnSuccessListener { doc ->
 
-                    val personal = suggestions?.get("personalDetails") as? Map<*, *>
-                    val address = suggestions?.get("address") as? Map<*, *>
-                    val contact = suggestions?.get("contactDetails") as? Map<*, *>
+                                Log.d("AUTOFILL", "doc exists = ${doc.exists()}")
+                                Log.d("AUTOFILL", "doc data = ${doc.data}")
 
-                    Log.d("AUTOFILL", "personal = $personal")
-                    Log.d("AUTOFILL", "address = $address")
-                    Log.d("AUTOFILL", "contact = $contact")
+                                val suggestions = doc.get("suggestions") as? Map<*, *>
+                                Log.d("AUTOFILL", "suggestions = $suggestions")
 
-                    personalDetailsMap = mapOf(
-                        "firstName" to personal?.get("firstName") as? String,
-                        "lastName" to personal?.get("lastName") as? String,
-                        "idNumber" to personal?.get("idNumber") as? String,
-                        "street" to address?.get("street") as? String,
-                        "houseNumber" to address?.get("houseNumber") as? String,
-                        "city" to address?.get("city") as? String,
-                        "zipCode" to address?.get("zipCode") as? String,
-                        "phone" to contact?.get("phone") as? String,
-                        "email" to contact?.get("email") as? String
-                    )
+                                val personal = suggestions?.get("personalDetails") as? Map<*, *>
+                                val address = suggestions?.get("address") as? Map<*, *>
+                                val contact = suggestions?.get("contactDetails") as? Map<*, *>
 
-                    Log.d("AUTOFILL", "personalDetailsMap = $personalDetailsMap")
+                                personalDetailsMap = mapOf(
+                                    "firstName" to personal?.get("firstName")?.toString(),
+                                    "lastName" to personal?.get("lastName")?.toString(),
+                                    "idNumber" to personal?.get("idNumber")?.toString(),
+
+                                    "street" to address?.get("street")?.toString(),
+                                    "houseNumber" to address?.get("houseNumber")?.toString(),
+                                    "city" to address?.get("city")?.toString(),
+                                    "zipCode" to address?.get("zipCode")?.toString(),
+
+                                    "phone" to contact?.get("phone")?.toString(),
+                                    "email" to contact?.get("email")?.toString()
+                                )
+
+                                Log.d("AUTOFILL", "personalDetailsMap = $personalDetailsMap")
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e("AUTOFILL", "latest suggestions error", e)
+                            }
+                    }
                 }
-
                 .addOnFailureListener { e ->
-                    Log.e("AUTOFILL", "Firestore error", e)
+                    Log.e("AUTOFILL", "latest file query error", e)
                 }
         }
     }

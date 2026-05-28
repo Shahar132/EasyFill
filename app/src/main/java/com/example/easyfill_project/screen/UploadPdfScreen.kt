@@ -323,14 +323,7 @@ fun uploadPdfToFirebaseStorage(
 
             // If Firestore found a match, block upload
             if (!documents.isEmpty) {
-                val existingFileId = documents.documents.first().id
-
-                context.getSharedPreferences("upload_prefs", 0)
-                    .edit {
-                        putString("latestFileId", existingFileId)
-                    }
-
-                onSuccess(existingFileId)
+                onError("הקובץ הזה כבר הועלה בעבר")
                 return@addOnSuccessListener
             }
 
@@ -376,14 +369,6 @@ fun uploadPdfToFirebaseStorage(
                         .document(fileId)
                         .set(fileData)
                         .addOnSuccessListener {
-
-                            // SAVE latest fileId HERE
-                            val prefs = context.getSharedPreferences("upload_prefs", 0)
-                            prefs.edit {
-                                putString("latestFileId", fileId)
-
-                            }
-
                             onSuccess(fileId)
                         }
                         .addOnFailureListener { exception ->
