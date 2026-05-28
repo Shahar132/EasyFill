@@ -72,57 +72,76 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                     "uploadedAt",
                     com.google.firebase.firestore.Query.Direction.DESCENDING
                 )
-                .limit(1)
                 .get()
                 .addOnSuccessListener { files ->
 
-                    val latestFileId = files.documents.firstOrNull()?.id
+                    val mergedMap = mutableMapOf<String, String?>()
+                    var remaining = files.documents.size
 
-                    Log.d("AUTOFILL", "latestFileId from uploadedAt = $latestFileId")
+                    Log.d("AUTOFILL", "files count = $remaining")
 
-                    if (latestFileId != null) {
+                    if (remaining == 0) {
+                        personalDetailsMap = emptyMap()
+                        return@addOnSuccessListener
+                    }
+
+                    fun putIfMissing(key: String, value: String?) {
+                        if (mergedMap[key].isNullOrBlank() && !value.isNullOrBlank()) {
+                            mergedMap[key] = value
+                        }
+                    }
+
+                    files.documents.forEach { fileDoc ->
+                        val fileId = fileDoc.id
+                        Log.d("AUTOFILL", "checking fileId = $fileId")
+
                         db.collection("users")
                             .document(uid)
                             .collection("uploadedFiles")
-                            .document(latestFileId)
+                            .document(fileId)
                             .collection("autofillSuggestions")
                             .document("latest")
                             .get()
                             .addOnSuccessListener { doc ->
 
-                                Log.d("AUTOFILL", "doc exists = ${doc.exists()}")
-                                Log.d("AUTOFILL", "doc data = ${doc.data}")
-
                                 val suggestions = doc.get("suggestions") as? Map<*, *>
-                                Log.d("AUTOFILL", "suggestions = $suggestions")
-
                                 val personal = suggestions?.get("personalDetails") as? Map<*, *>
                                 val address = suggestions?.get("address") as? Map<*, *>
                                 val contact = suggestions?.get("contactDetails") as? Map<*, *>
 
-                                personalDetailsMap = mapOf(
-                                    "firstName" to personal?.get("firstName")?.toString(),
-                                    "lastName" to personal?.get("lastName")?.toString(),
-                                    "idNumber" to personal?.get("idNumber")?.toString(),
+                                putIfMissing("firstName", personal?.get("firstName")?.toString())
+                                putIfMissing("lastName", personal?.get("lastName")?.toString())
+                                putIfMissing("idNumber", personal?.get("idNumber")?.toString())
 
-                                    "street" to address?.get("street")?.toString(),
-                                    "houseNumber" to address?.get("houseNumber")?.toString(),
-                                    "city" to address?.get("city")?.toString(),
-                                    "zipCode" to address?.get("zipCode")?.toString(),
+                                putIfMissing("street", address?.get("street")?.toString())
+                                putIfMissing("houseNumber", address?.get("houseNumber")?.toString())
+                                putIfMissing("city", address?.get("city")?.toString())
+                                putIfMissing("zipCode", address?.get("zipCode")?.toString())
 
-                                    "phone" to contact?.get("phone")?.toString(),
-                                    "email" to contact?.get("email")?.toString()
-                                )
+                                putIfMissing("phone", contact?.get("phone")?.toString())
+                                putIfMissing("email", contact?.get("email")?.toString())
 
-                                Log.d("AUTOFILL", "personalDetailsMap = $personalDetailsMap")
+                                remaining--
+
+                                if (remaining == 0) {
+                                    personalDetailsMap = mergedMap
+                                    Log.d("AUTOFILL", "FINAL mergedMap = $mergedMap")
+                                }
                             }
                             .addOnFailureListener { e ->
-                                Log.e("AUTOFILL", "latest suggestions error", e)
+                                Log.e("AUTOFILL", "suggestions error for fileId=$fileId", e)
+
+                                remaining--
+
+                                if (remaining == 0) {
+                                    personalDetailsMap = mergedMap
+                                    Log.d("AUTOFILL", "FINAL mergedMap = $mergedMap")
+                                }
                             }
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.e("AUTOFILL", "latest file query error", e)
+                    Log.e("AUTOFILL", "uploadedFiles query error", e)
                 }
         }
     }
