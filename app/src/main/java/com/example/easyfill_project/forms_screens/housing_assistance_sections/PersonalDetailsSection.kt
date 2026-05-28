@@ -1,8 +1,10 @@
 package com.example.easyfill_project.forms_screens.housing_assistance_sections
 
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
@@ -15,8 +17,10 @@ import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.focus.onFocusChanged
+import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 
 
 @Composable
@@ -25,6 +29,7 @@ fun PersonalDetailsSection(
 ) {
     val context = LocalContext.current
     val ttsManager = remember { TextToSpeechManager(context) }
+    val speechManager = remember { SpeechToTextManager(context) }
 
     DisposableEffect(Unit) {
         onDispose { ttsManager.shutdown() }
@@ -37,55 +42,64 @@ fun PersonalDetailsSection(
         SmartTextField(
             label = "שם משפחה",
             valueFromAzure = autofill["lastName"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "שם פרטי",
             valueFromAzure = autofill["firstName"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "מספר תעודת זהות",
             valueFromAzure = autofill["idNumber"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "רחוב",
             valueFromAzure = autofill["street"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "מספר בית",
             valueFromAzure = autofill["houseNumber"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "יישוב",
             valueFromAzure = autofill["city"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "מיקוד",
             valueFromAzure = autofill["zipCode"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "טלפון נייד",
             valueFromAzure = autofill["phone"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
 
         SmartTextField(
             label = "דואר אלקטרוני",
             valueFromAzure = autofill["email"],
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            speechManager = speechManager
         )
     }
 }
@@ -94,13 +108,29 @@ fun PersonalDetailsSection(
 fun SmartTextField(
     label: String,
     valueFromAzure: String?,
-    ttsManager: TextToSpeechManager
+    ttsManager: TextToSpeechManager,
+    speechManager: SpeechToTextManager
 ) {
-    var value by remember { mutableStateOf("") }
-    var showSuggestion by remember { mutableStateOf(false) }
+
+    var value by remember(valueFromAzure) {
+        mutableStateOf(valueFromAzure ?: "")
+    }
 
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spokenText =
+            result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+
+        if (!spokenText.isNullOrBlank()) {
+            value = spokenText
+        }
+    }
 
     Column {
         OutlinedTextField(
@@ -122,7 +152,17 @@ fun SmartTextField(
             // Icons INSIDE the TextField
             trailingIcon = {
                 Row {
-                    IconButton(onClick = { ttsManager.speak(label) }) {
+                    IconButton(
+                        onClick = {
+                            val textToRead = if (value.isBlank()) {
+                                "נא למלא $label"
+                            } else {
+                                "$label, $value"
+                            }
+
+                            ttsManager.speak(textToRead)
+                        }
+                    ) {
                         Icon(
                             Icons.Default.VolumeUp,
                             contentDescription = "השמעה",
@@ -130,18 +170,14 @@ fun SmartTextField(
                         )
                     }
 
-                    IconButton(onClick = { /* speech to text later */ }) {
+                    IconButton(
+                        onClick = {
+                            speechManager.startSpeechRecognition(speechLauncher)
+                            }
+                    ) {
                         Icon(
                             Icons.Default.Mic,
                             contentDescription = "הקלטה",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    IconButton(onClick = { showSuggestion = true }) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "מילוי אוטומטי",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -162,17 +198,5 @@ fun SmartTextField(
             )
         )
 
-        //  Autofill chip (fixed)
-        if (showSuggestion && !valueFromAzure.isNullOrBlank()) {
-            AssistChip(
-                onClick = {
-                    value = valueFromAzure
-                    showSuggestion = false
-                },
-                label = {
-                    Text("מילוי אוטומטי: $valueFromAzure")
-                }
-            )
-        }
     }
 }
