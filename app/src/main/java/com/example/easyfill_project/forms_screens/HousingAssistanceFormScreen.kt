@@ -1,5 +1,6 @@
 package com.example.easyfill_project.forms_screens
 
+import android.util.Log // ✅ ADDED
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,14 +31,11 @@ import com.example.easyfill_project.forms_screens.housing_assistance_sections.Ma
 import com.example.easyfill_project.forms_screens.housing_assistance_sections.PersonalDetailsSection
 import com.example.easyfill_project.forms_screens.housing_assistance_sections.RentAssistanceSection
 import com.example.easyfill_project.forms_screens.housing_assistance_sections.SummarySection
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
-
-//firestore imports
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -57,21 +55,23 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
         "סיכום"
     )
 
-    var personalDetailsMap by remember {
-        mutableStateOf<Map<String, String?>>(emptyMap())
-    }
-
-
+    var personalDetailsMap by remember { mutableStateOf<Map<String, String?>>(emptyMap()) }
 
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
     val uid = FirebaseAuth.getInstance().currentUser?.uid
 
     LaunchedEffect(Unit) {
+
         val prefs = context.getSharedPreferences("upload_prefs", 0)
         val fileId = prefs.getString("latestFileId", null)
 
+        // LOGS
+        Log.d("AUTOFILL", "uid = $uid")
+        Log.d("AUTOFILL", "fileId = $fileId")
+
         if (uid != null && fileId != null) {
+
             db.collection("users")
                 .document(uid)
                 .collection("uploadedFiles")
@@ -79,25 +79,40 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                 .collection("autofillSuggestions")
                 .document("latest")
                 .get()
+
                 .addOnSuccessListener { doc ->
+
+                    Log.d("AUTOFILL", "doc exists = ${doc.exists()}")
+                    Log.d("AUTOFILL", "doc data = ${doc.data}")
+
                     val suggestions = doc.get("suggestions") as? Map<*, *>
+                    Log.d("AUTOFILL", "suggestions = $suggestions")
+
                     val personal = suggestions?.get("personalDetails") as? Map<*, *>
                     val address = suggestions?.get("address") as? Map<*, *>
                     val contact = suggestions?.get("contactDetails") as? Map<*, *>
+
+                    Log.d("AUTOFILL", "personal = $personal")
+                    Log.d("AUTOFILL", "address = $address")
+                    Log.d("AUTOFILL", "contact = $contact")
 
                     personalDetailsMap = mapOf(
                         "firstName" to personal?.get("firstName") as? String,
                         "lastName" to personal?.get("lastName") as? String,
                         "idNumber" to personal?.get("idNumber") as? String,
-
                         "street" to address?.get("street") as? String,
                         "houseNumber" to address?.get("houseNumber") as? String,
                         "city" to address?.get("city") as? String,
                         "zipCode" to address?.get("zipCode") as? String,
-
                         "phone" to contact?.get("phone") as? String,
                         "email" to contact?.get("email") as? String
                     )
+
+                    Log.d("AUTOFILL", "personalDetailsMap = $personalDetailsMap")
+                }
+
+                .addOnFailureListener { e ->
+                    Log.e("AUTOFILL", "Firestore error", e)
                 }
         }
     }
@@ -110,17 +125,11 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
             .verticalScroll(rememberScrollState())
     ) {
 
-        // Progress bar
-        FormProgressBar(
-            currentStep = currentStep,
-            sections = sections
-        )
+        FormProgressBar(currentStep = currentStep, sections = sections)
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Section content
         when (currentStep) {
-
             0 -> PersonalDetailsSection(autofill = personalDetailsMap)
             1 -> MailingAddressSection()
             2 -> FamilyStatusSection()
@@ -128,17 +137,15 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
             4 -> AssistanceSelectionSection()
             5 -> RentAssistanceSection()
             6 -> SummarySection(navController)
-
         }
-
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Navigation buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+
             if (currentStep > 0) {
                 OutlinedButton(
                     onClick = { currentStep-- },
