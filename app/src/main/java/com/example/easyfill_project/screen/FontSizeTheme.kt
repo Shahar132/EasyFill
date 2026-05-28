@@ -17,6 +17,7 @@ fun getAppTypography(mode: FontSizeMode): Typography {//creating a customized ve
             headlineLarge = androidx.compose.ui.text.TextStyle(fontSize = 31.sp),
             bodyLarge = androidx.compose.ui.text.TextStyle(fontSize = 16.4.sp),
             bodyMedium = androidx.compose.ui.text.TextStyle(fontSize = 13.2.sp)
+
         )
 
         FontSizeMode.LARGE -> Typography(
