@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+
 
 @Composable
 fun FormProgressBar(
@@ -23,17 +25,27 @@ fun FormProgressBar(
 
         Text(
             text = "שלב ${currentStep + 1} מתוך $totalSteps",
-            style = MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodyMedium
         )
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        LinearProgressIndicator(
+        val progressColor = when (currentStep) {
+            0 -> Color(0xFFE57373) // red
+            1 -> Color(0xFFFFB74D) // orange
+            2 -> Color(0xFFFFD54F) // yellow
+            3 -> Color(0xFF81C784) // green
+            4 -> Color(0xFF4DB6AC) // teal
+            5 -> Color(0xFF64B5F6) // blue
+            else -> Color(0xFF9575CD) // purple
+        }
+
+            LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(10.dp),
-            color = MaterialTheme.colorScheme.primary,
+            color = progressColor,
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
 
