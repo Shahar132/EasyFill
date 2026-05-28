@@ -118,6 +118,37 @@ fun SmartTextField(
                         }
                     }
                 },
+
+            // Icons INSIDE the TextField
+            trailingIcon = {
+                Row {
+                    IconButton(onClick = { ttsManager.speak(label) }) {
+                        Icon(
+                            Icons.Default.VolumeUp,
+                            contentDescription = "השמעה",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    IconButton(onClick = { /* speech to text later */ }) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = "הקלטה",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    IconButton(onClick = { showSuggestion = true }) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "מילוי אוטומטי",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            },
+
+            //  Colors for text feilds
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -131,23 +162,7 @@ fun SmartTextField(
             )
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start
-        ) {
-            IconButton(onClick = { ttsManager.speak(label) }) {
-                Icon(Icons.Default.VolumeUp, contentDescription = "השמעה")
-            }
-
-            IconButton(onClick = { /* speech to text later */ }) {
-                Icon(Icons.Default.Mic, contentDescription = "הקלטה")
-            }
-
-            IconButton(onClick = { showSuggestion = true }) {
-                Icon(Icons.Default.Edit, contentDescription = "מילוי אוטומטי")
-            }
-        }
-
+        //  Autofill chip (fixed)
         if (showSuggestion && !valueFromAzure.isNullOrBlank()) {
             AssistChip(
                 onClick = {
