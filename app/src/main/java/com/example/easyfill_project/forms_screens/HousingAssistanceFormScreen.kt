@@ -51,7 +51,7 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
             .verticalScroll(rememberScrollState())
     ) {
 
-        // 🔹 Progress bar
+        // Progress bar
         FormProgressBar(
             currentStep = currentStep,
             sections = sections
