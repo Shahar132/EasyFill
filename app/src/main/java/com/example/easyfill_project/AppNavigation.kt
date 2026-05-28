@@ -56,6 +56,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 //imports regarding the TTS
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.VolumeUp
+import com.example.easyfill_project.forms_screens.DemoFormsOptions
 import com.example.easyfill_project.screen.SpeechToTextDemoScreen
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
@@ -463,15 +464,25 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                     navController = innerNavController
                                 )
                             }
-
+                            //navigate to screen upload file to extract data from it
                             composable("uploadPdf") {
                                 LaunchedEffect(Unit) {
                                 updateScreenText(TtsTexts.UPLOAD_PDF)}
                                 UploadPdfScreen(navController = innerNavController)
                             }
-
-                            composable("speechDemo") {
-                                SpeechToTextDemoScreen()
+                            //navigate to form options screen
+                            composable("demoFormOptions") {
+                                DemoFormsOptions(navController = innerNavController)
+                                LaunchedEffect(Unit) {
+                                    updateScreenText(TtsTexts.FORM_OPTIONS)}
+                            }
+                            //navigate to first form
+                            composable("housingAssistanceForm") {
+                                // HousingAssistanceFormScreen(navController)
+                            }
+                            //navigate to second form
+                            composable("bankDetailsForm") {
+                                // BankDetailsFormScreen(navController)
                             }
 
 
