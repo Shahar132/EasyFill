@@ -132,7 +132,11 @@ fun SmartTextField(
                 ?.firstOrNull()
 
         if (!spokenText.isNullOrBlank()) {
-            value = spokenText
+
+            // Normalize numbers here
+            val normalizedText = speechManager.normalizeHebrewNumbers(spokenText)
+
+            value = normalizedText
         }
     }
 
