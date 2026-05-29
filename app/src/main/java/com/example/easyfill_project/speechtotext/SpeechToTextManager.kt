@@ -30,4 +30,28 @@ class SpeechToTextManager(private val context: Context) {
             ).show()
         }
     }
+
+
+
+    fun normalizeHebrewNumbers(text: String): String {
+        val map = mapOf(
+            "אפס" to "0",
+            "אחד" to "1", "אחת" to "1",
+            "שתיים" to "2", "שניים" to "2",
+            "שלוש" to "3", "שלושה" to "3",
+            "ארבע" to "4", "ארבעה" to "4",
+            "חמש" to "5", "חמישה" to "5",
+            "שש" to "6", "שישה" to "6",
+            "שבע" to "7", "שבעה" to "7",
+            "שמונה" to "8",
+            "תשע" to "9", "תשעה" to "9",
+            "עשר" to "10", "עשרה" to "10"
+        )
+
+        return text
+            .split(" ")
+            .joinToString("") { word ->
+                map[word.trim()] ?: word
+            }
+    }
 }
