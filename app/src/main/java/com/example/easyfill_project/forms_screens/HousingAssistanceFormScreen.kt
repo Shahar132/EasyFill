@@ -104,22 +104,50 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                             .get()
                             .addOnSuccessListener { doc ->
 
+                                //what needs to pull for this housing assistance form
                                 val suggestions = doc.get("suggestions") as? Map<*, *>
                                 val personal = suggestions?.get("personalDetails") as? Map<*, *>
                                 val address = suggestions?.get("address") as? Map<*, *>
                                 val contact = suggestions?.get("contactDetails") as? Map<*, *>
+                                val income = suggestions?.get("incomeDetails") as? Map<*, *>
+                                val assistance = suggestions?.get("assistanceSelection") as? Map<*, *>
+
+
 
                                 putIfMissing("firstName", personal?.get("firstName")?.toString())
                                 putIfMissing("lastName", personal?.get("lastName")?.toString())
                                 putIfMissing("idNumber", personal?.get("idNumber")?.toString())
+                                putIfMissing("maritalStatus", personal?.get("maritalStatus")?.toString())
+                                putIfMissing("birthDate", personal?.get("birthDate")?.toString())
+                                putIfMissing("birthCountry", personal?.get("birthCountry")?.toString())
+                                putIfMissing("fatherName", personal?.get("fatherName")?.toString())
 
                                 putIfMissing("street", address?.get("street")?.toString())
                                 putIfMissing("houseNumber", address?.get("houseNumber")?.toString())
                                 putIfMissing("city", address?.get("city")?.toString())
                                 putIfMissing("zipCode", address?.get("zipCode")?.toString())
+                                putIfMissing("entrance", address?.get("entrance")?.toString())
+                                putIfMissing("apartment", address?.get("apartment")?.toString())
+                                putIfMissing("roomsCount", address?.get("roomsCount")?.toString())
+                                putIfMissing("floor", address?.get("floor")?.toString())
+                                putIfMissing("hasElevator", address?.get("hasElevator")?.toString())
 
                                 putIfMissing("phone", contact?.get("phone")?.toString())
                                 putIfMissing("email", contact?.get("email")?.toString())
+
+                                putIfMissing("workPlace", income?.get("workPlace")?.toString())
+                                putIfMissing("salaryNet", income?.get("salaryNet")?.toString())
+                                putIfMissing("partnerWorkPlace", income?.get("partnerWorkPlace")?.toString())
+                                putIfMissing("partnerSalaryNet", income?.get("partnerSalaryNet")?.toString())
+                                putIfMissing("additionalIncomeDetails", income?.get("additionalIncomeDetails")?.toString())
+
+                                putIfMissing("rentAssistance", assistance?.get("סיוע בשכר דירה")?.toString())
+                                putIfMissing("apartmentAdaptation", assistance?.get("התאמת דירה לנכות")?.toString())
+                                putIfMissing("apartmentExchange", assistance?.get("החלפת דירה")?.toString())
+                                putIfMissing("houseBuilding", assistance?.get("בניית בית")?.toString())
+                                putIfMissing("firstApartmentPurchase", assistance?.get("רכישת דירה ראשונה")?.toString())
+                                putIfMissing("apartmentRenovationLoan", assistance?.get("הלוואה לשיפוץ דירה")?.toString())
+                                putIfMissing("firstMortgageAid", assistance?.get("הלוואה לסידור ראשון")?.toString())
 
                                 remaining--
 
@@ -160,11 +188,11 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
 
         when (currentStep) {
             0 -> PersonalDetailsSection(autofill = personalDetailsMap)
-            1 -> MailingAddressSection()
-            2 -> FamilyStatusSection()
-            3 -> IncomeDetailsSection()
-            4 -> AssistanceSelectionSection()
-            5 -> RentAssistanceSection()
+            1 -> MailingAddressSection(autofill = personalDetailsMap)
+            2 -> FamilyStatusSection(autofill = personalDetailsMap)
+            3 -> IncomeDetailsSection(autofill = personalDetailsMap)
+            4 -> AssistanceSelectionSection(autofill = personalDetailsMap)
+            5 -> RentAssistanceSection(autofill = personalDetailsMap)
             6 -> SummarySection(navController)
         }
 
@@ -193,7 +221,11 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
 
             OutlinedButton(
                 onClick = {
-                    if (currentStep < sections.size - 1) currentStep++
+                    if (currentStep < sections.size - 1) {
+                        currentStep++
+                    } else {
+                        navController.navigate("demoFormOptions")//last section navigate to demo oprions
+                    }
                 },
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
@@ -202,7 +234,13 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                     contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
-                Text("המשך")
+                Text(
+                    if (currentStep == sections.size - 1) {
+                        "בחירת טופס נוסף"
+                    } else {
+                        "המשך"
+                    }
+                )
             }
         }
     }
