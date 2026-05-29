@@ -14,12 +14,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.ui.focus.onFocusChanged
+
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.example.easyfill_project.forms_screens.components.SmartTextField
 
 
 
@@ -39,6 +36,15 @@ fun PersonalDetailsSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+
+        Text(
+            text = "פרטים אישיים",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         SmartTextField(
             label = "שם משפחה",
             valueFromAzure = autofill["lastName"],
@@ -101,110 +107,5 @@ fun PersonalDetailsSection(
             ttsManager = ttsManager,
             speechManager = speechManager
         )
-    }
-}
-
-@Composable
-fun SmartTextField(
-    label: String,
-    valueFromAzure: String?,
-    ttsManager: TextToSpeechManager,
-    speechManager: SpeechToTextManager
-) {
-
-    var value by remember { mutableStateOf("") }
-
-    LaunchedEffect(valueFromAzure) {
-        if (!valueFromAzure.isNullOrBlank()) {
-            value = valueFromAzure
-        }
-    }
-
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val scope = rememberCoroutineScope()
-
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val spokenText =
-            result.data
-                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                ?.firstOrNull()
-
-        if (!spokenText.isNullOrBlank()) {
-
-            // Normalize numbers here
-            val normalizedText = speechManager.normalizeHebrewNumbers(spokenText)
-
-            value = normalizedText
-        }
-    }
-
-    Column {
-        OutlinedTextField(
-            value = value,
-            onValueChange = { value = it },
-            label = { Text(label) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .bringIntoViewRequester(bringIntoViewRequester)
-                .onFocusChanged { focusState ->
-                    if (focusState.isFocused) {
-                        scope.launch {
-                            delay(300)
-                            bringIntoViewRequester.bringIntoView()
-                        }
-                    }
-                },
-
-            // Icons INSIDE the TextField
-            trailingIcon = {
-                Row {
-                    IconButton(
-                        onClick = {
-                            val textToRead = if (value.isBlank()) {
-                                "נא למלא $label"
-                            } else {
-                                "$label, $value"
-                            }
-
-                            ttsManager.speak(textToRead)
-                        }
-                    ) {
-                        Icon(
-                            Icons.Default.VolumeUp,
-                            contentDescription = "השמעה",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            speechManager.startSpeechRecognition(speechLauncher)
-                            }
-                    ) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = "הקלטה",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            },
-
-            //  Colors for text feilds
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                focusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                cursorColor = MaterialTheme.colorScheme.onSurface,
-                focusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface
-            )
-        )
-
     }
 }
