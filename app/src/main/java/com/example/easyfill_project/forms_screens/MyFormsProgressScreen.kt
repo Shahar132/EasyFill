@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -290,14 +291,23 @@ fun FormStatusChip(status: FormStatus) {
         FormStatus.COMPLETED -> "הושלם"
     }
 
+
+    val chipColor = when (status) {
+        FormStatus.NOT_STARTED -> Color(0xFFE53935)   // Red
+        FormStatus.IN_PROGRESS -> Color(0xFFFFC107)   // Yellow
+        FormStatus.COMPLETED -> Color(0xFF4CAF50)     // Green
+    }
+
     AssistChip(
         onClick = {},
         label = {
-            Text(statusText)
+            Text(
+                text = statusText,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
         },
         colors = AssistChipDefaults.assistChipColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+            containerColor = chipColor
         )
     )
 }
