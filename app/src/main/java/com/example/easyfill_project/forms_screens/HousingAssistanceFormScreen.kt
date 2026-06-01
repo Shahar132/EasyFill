@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.easyfill_project.forms_screens.housing_assistance_sections.*
@@ -18,18 +19,18 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 
 @Composable
-fun HousingAssistanceFormScreen(navController: NavHostController) {
-    var currentStep by remember { mutableStateOf(0) }
+fun HousingAssistanceFormScreen(
+    navController: NavHostController,
+    startStep: Int = 0
+) {
+    val context = LocalContext.current
+    val formId = "housing_assistance"
 
-    val sections = listOf(
-        "פרטים אישיים",
-        "כתובת למשלוח דואר",
-        "מצב משפחתי",
-        "פירוט הכנסות",
-        "בחירת הסיוע בדיור",
-        "סיוע בשכר דירה",
-        "סיכום"
-    )
+    val sections = FormsRegistry.getFormById(formId).sections
+
+    var currentStep by remember {
+        mutableStateOf(startStep.coerceIn(0, sections.lastIndex))
+    }
 
     var formData by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var dataLoaded by remember { mutableStateOf(false) }
@@ -45,7 +46,6 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
 
         fun syncIfNotChanged(targetKey: String) {
             val currentTargetValue = formData[targetKey].orEmpty()
-
             if (currentTargetValue.isBlank() || currentTargetValue == oldValue) {
                 updated[targetKey] = value
             }
@@ -102,6 +102,14 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
             }
     }
 
+    fun saveStep(step: Int) {
+        FormProgressStorage.saveCurrentStep(
+            context = context,
+            formId = formId,
+            currentStep = step.coerceIn(0, sections.lastIndex)
+        )
+    }
+
     LaunchedEffect(formData, dataLoaded) {
         if (dataLoaded && formData.isNotEmpty()) {
             delay(2000)
@@ -110,16 +118,13 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
     }
 
     LaunchedEffect(Unit) {
-        Log.d("AUTOFILL", "uid = $uid")
-
         if (uid == null) return@LaunchedEffect
 
-        val savedDocRef = db.collection("users")
+        db.collection("users")
             .document(uid)
             .collection("savedUpdatedData")
             .document("allFields")
-
-        savedDocRef.get()
+            .get()
             .addOnSuccessListener { savedDoc ->
 
                 val savedData = savedDoc.data
@@ -151,13 +156,24 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                             }
                         }
 
-                        files.documents.forEach { fileDoc ->
-                            val fileId = fileDoc.id
+                        fun finishOneFile() {
+                            remaining--
 
+                            if (remaining == 0) {
+                                val azureData = mergedMap
+                                    .filterValues { !it.isNullOrBlank() }
+                                    .mapValues { it.value.orEmpty() }
+
+                                formData = azureData + savedData
+                                dataLoaded = true
+                            }
+                        }
+
+                        files.documents.forEach { fileDoc ->
                             db.collection("users")
                                 .document(uid)
                                 .collection("uploadedFiles")
-                                .document(fileId)
+                                .document(fileDoc.id)
                                 .collection("autofillSuggestions")
                                 .document("latest")
                                 .get()
@@ -220,17 +236,10 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                                     putIfMissing("apartmentRenovationLoan", assistance?.get("הלוואה לשיפוץ דירה")?.toString())
                                     putIfMissing("firstMortgageAid", assistance?.get("הלוואה לסידור ראשון")?.toString())
 
-                                    remaining--
-
-                                    if (remaining == 0) {
-                                        val azureData = mergedMap
-                                            .filterValues { !it.isNullOrBlank() }
-                                            .mapValues { it.value.orEmpty() }
-
-                                        formData = azureData + savedData
-                                        dataLoaded = true
-                                        Log.d("AUTOFILL", "FINAL formData = $formData")
-                                    }
+                                    finishOneFile()
+                                }
+                                .addOnFailureListener {
+                                    finishOneFile()
                                 }
                         }
                     }
@@ -268,7 +277,10 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                 OutlinedButton(
                     onClick = {
                         saveFormData()
-                        currentStep--
+
+                        val previousStep = currentStep - 1
+                        saveStep(previousStep)
+                        currentStep = previousStep
                     },
                     shape = RoundedCornerShape(20.dp),
                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
@@ -288,8 +300,11 @@ fun HousingAssistanceFormScreen(navController: NavHostController) {
                     saveFormData()
 
                     if (currentStep < sections.size - 1) {
-                        currentStep++
+                        val nextStep = currentStep + 1
+                        saveStep(nextStep)
+                        currentStep = nextStep
                     } else {
+                        FormProgressStorage.markCompleted(context, formId)
                         navController.navigate("demoFormOptions")
                     }
                 },

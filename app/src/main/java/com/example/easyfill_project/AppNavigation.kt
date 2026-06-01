@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.VolumeUp
 import com.example.easyfill_project.forms_screens.DemoFormsOptions
 import com.example.easyfill_project.forms_screens.HousingAssistanceFormScreen
+import com.example.easyfill_project.screen.MyFormsProgressScreen
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
 //for delay
@@ -478,8 +479,28 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
                             //navigate to first form
                             composable("housingAssistanceForm") {
-                                HousingAssistanceFormScreen(navController = innerNavController)
+                                HousingAssistanceFormScreen(
+                                    navController = innerNavController,
+                                    startStep = 0
+                                )
                             }
+
+                            composable("housingAssistanceForm/{startStep}") { backStackEntry ->
+                                val startStep = backStackEntry.arguments
+                                    ?.getString("startStep")
+                                    ?.toIntOrNull()
+                                    ?: 0
+
+                                HousingAssistanceFormScreen(
+                                    navController = innerNavController,
+                                    startStep = startStep
+                                )
+                            }
+
+                            composable("myFormsProgress") {
+                                MyFormsProgressScreen(navController = innerNavController)
+                            }
+
                             //navigate to second form
                             composable("bankDetailsForm") {
                                 // BankDetailsFormScreen(navController)

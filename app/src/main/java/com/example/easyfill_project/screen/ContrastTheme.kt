@@ -13,7 +13,8 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             primary = Color.White,//primary for selected items in menu
             onBackground = Color.Black,//text color that appears ON the background
             onSurface = Color.Black,//text will be black
-            onPrimary = Color.Black
+            onPrimary = Color.Black ,
+            secondary = Color(0xFF2196F3), // blue
 
         )
 
@@ -23,7 +24,8 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             primary = Color.White,
             onBackground = Color.White,// text color that appears ON the background
             onSurface = Color.White,//the text will be white
-            onPrimary = Color.Black
+            onPrimary = Color.Black,
+            secondary = Color.Black, // black
         )
 
         ContrastMode.LOW -> lightColorScheme(//light purple shades
@@ -32,7 +34,9 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             primary = Color.White,
             onBackground = Color.Black,
             onSurface = Color.Black,
-            onPrimary = Color.Black
+            onPrimary = Color.Black,
+            secondary = Color(0xFF673AB7), // dark purple
+
         )
     }
 }
