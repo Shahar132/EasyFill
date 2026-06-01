@@ -96,8 +96,8 @@ fun HomeScreen(navController: NavHostController) {
                 .width(230.dp)
                 .height(180.dp)
                 .clickable {
-                    // Later: navigate to the relevant screen
-                    // innerNavController.navigate("rightsProcess")
+                    // navigate to the relevant screen
+                    navController.navigate("myFormsProgress")
                 },
             elevation = CardDefaults.cardElevation(6.dp)
         ) {

@@ -16,8 +16,6 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.runtime.*
 
 //text to speech imports
-import android.speech.tts.TextToSpeech
-import java.util.Locale
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.ui.platform.LocalContext
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
@@ -32,25 +30,23 @@ fun DemoFormsOptions(navController: NavHostController) {
     ) {
         Text(
             text = "בחר טופס שברצונך למלא",
-            style = MaterialTheme.typography.headlineLarge
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(modifier = Modifier.height(50.dp))
 
-        DemoFormCard(
-            title = "טופס בקשה לסיוע בדיור",
-            description = "טופס זה מיועד למימוש הזכאות למענקים והלוואות בתחום הדיור בנושאים האלה: סיוע בשכר דירה, התאמת דירה לנכות ועוד." ,
+        FormsRegistry.forms.forEach { form ->
+            DemoFormCard(
+                title = form.title,
+                description = form.description,
+                onClick = {
+                    navController.navigate(form.route)
+                }
+            )
 
-            onClick = { navController.navigate("housingAssistanceForm") }
-        )
-
-        Spacer(modifier = Modifier.height(35.dp))
-
-        DemoFormCard(
-            title = "טופס עדכון פרטי חשבון בנק",
-            description = "טופס עדכון פרטי חשבון בנק משמש להסדרת העברת התגמולים, הקצבאות וההחזרים הכספיים מאגף השיקום.",
-            onClick = { navController.navigate("bankDetailsForm") }
-        )
+            Spacer(modifier = Modifier.height(35.dp))
+        }
     }
 }
 

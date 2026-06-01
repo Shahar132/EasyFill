@@ -12,7 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 
-
+//Shows current section progress
+//(step 3 מתוך 7)
 @Composable
 fun FormProgressBar(
     currentStep: Int,
