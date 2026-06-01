@@ -103,10 +103,13 @@ fun HousingAssistanceFormScreen(
     }
 
     fun saveStep(step: Int) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
         FormProgressStorage.saveCurrentStep(
             context = context,
+            uid = uid,
             formId = formId,
-            currentStep = step.coerceIn(0, sections.lastIndex)
+            currentStep = step
         )
     }
 
@@ -303,8 +306,18 @@ fun HousingAssistanceFormScreen(
                         val nextStep = currentStep + 1
                         saveStep(nextStep)
                         currentStep = nextStep
+
                     } else {
-                        FormProgressStorage.markCompleted(context, formId)
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+
+                        if (uid != null) {
+                            FormProgressStorage.markCompleted(
+                                context = context,
+                                uid = uid,
+                                formId = formId
+                            )
+                        }
+
                         navController.navigate("demoFormOptions")
                     }
                 },
