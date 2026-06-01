@@ -17,9 +17,6 @@ import com.example.easyfill_project.forms_screens.FormsRegistry
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
-//Shows completion percentage - the tracking progress ui +calculating
-//(18 fields filled מתוך 25)
-
 data class FormProgressItem(
     val form: FormDefinition,
     val progress: Float,
@@ -53,9 +50,14 @@ fun MyFormsProgressScreen(navController: NavHostController) {
     }
 
     val forms = FormsRegistry.forms.map { form ->
-        val currentStep = FormProgressStorage
-            .getCurrentStep(context, form.formId)
-            .coerceIn(0, form.sections.lastIndex)
+
+        val currentStep = if (uid != null) {
+            FormProgressStorage
+                .getCurrentStep(context, uid, form.formId)
+                .coerceIn(0, form.sections.lastIndex)
+        } else {
+            0
+        }
 
         val progress = calculateFieldsProgress(
             savedFields = savedFields,
@@ -66,9 +68,17 @@ fun MyFormsProgressScreen(navController: NavHostController) {
             form = form,
             progress = progress,
             percentText = roundedPercent(progress),
-            status = getStatusByProgress(context, form.formId, progress),
+            status = if (uid != null) {
+                getStatusByProgress(context, uid, form.formId, progress)
+            } else {
+                FormStatus.NOT_STARTED
+            },
             currentStep = currentStep,
-            lastUpdated = FormProgressStorage.getLastUpdatedText(context, form.formId)
+            lastUpdated = if (uid != null) {
+                FormProgressStorage.getLastUpdatedText(context, uid, form.formId)
+            } else {
+                "עדיין לא התחלת למלא את הטופס"
+            }
         )
     }
 
@@ -88,14 +98,13 @@ fun MyFormsProgressScreen(navController: NavHostController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "אפשר להמשיך מאיפה שעצרת פעם קודמת. \nההתקדמות שלך נשמרת באופן אוטומטי.",
+                text = "אפשר להמשיך מאיפה שעצרת פעם קודמת.\nההתקדמות שלך נשמרת באופן אוטומטי.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
 
             Spacer(modifier = Modifier.height(8.dp))
         }
-
 
         items(forms) { formProgress ->
             FormProgressCard(
@@ -128,10 +137,11 @@ fun roundedPercent(progress: Float): Int {
 
 fun getStatusByProgress(
     context: android.content.Context,
+    uid: String,
     formId: String,
     progress: Float
 ): FormStatus {
-    if (FormProgressStorage.isCompleted(context, formId)) {
+    if (FormProgressStorage.isCompleted(context, uid, formId)) {
         return FormStatus.COMPLETED
     }
 
@@ -164,9 +174,7 @@ fun FormProgressCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = form.title,
                         style = MaterialTheme.typography.titleLarge,
@@ -191,7 +199,6 @@ fun FormProgressCard(
             val currentStepForDisplay = formProgress.currentStep + 1
             val currentSectionName = form.sections[formProgress.currentStep]
 
-
             Text(
                 text = "שלב $currentStepForDisplay מתוך $totalSteps - $currentSectionName",
                 style = MaterialTheme.typography.bodyLarge,
@@ -207,7 +214,7 @@ fun FormProgressCard(
             )
 
             Text(
-                text = "שים/י לב, חלק מהשדות מולאו אוטמטית, מומלץ לעבור עליהם בהמשך",
+                text = "שים/י לב, חלק מהשדות מולאו אוטומטית, מומלץ לעבור עליהם בהמשך",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -230,7 +237,7 @@ fun FormProgressCard(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            //take the color primary for button is white its ok
+
             when (formProgress.status) {
                 FormStatus.NOT_STARTED -> {
                     Button(
@@ -262,7 +269,7 @@ fun FormProgressCard(
                     OutlinedButton(
                         onClick = onContinueClick,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
+                        colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
