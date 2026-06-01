@@ -1,9 +1,7 @@
 package com.example.easyfill_project.forms_screens.housing_assistance_sections
 
-
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -16,7 +14,8 @@ import com.example.easyfill_project.texttospeech.TextToSpeechManager
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RentAssistanceSection(
-    autofill: Map<String, String?> = emptyMap()
+    formData: Map<String, String>,
+    onFieldChange: (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val ttsManager = remember { TextToSpeechManager(context) }
@@ -26,17 +25,7 @@ fun RentAssistanceSection(
         onDispose { ttsManager.shutdown() }
     }
 
-    var hasElevatorYes by remember { mutableStateOf(false) }
-    var hasElevatorNo by remember { mutableStateOf(false) }
-
-
-    LaunchedEffect(autofill["hasElevator"]) {
-        val value = autofill["hasElevator"]?.trim()
-
-        hasElevatorYes = value == "כן"
-        hasElevatorNo = value == "לא"
-    }
-
+    val hasElevator = formData["hasElevator"].orEmpty()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -56,56 +45,64 @@ fun RentAssistanceSection(
 
         SmartTextField(
             label = "רחוב",
-            valueFromAzure = autofill["street"],
+            value = formData["rentStreet"].orEmpty(),
+            onValueChange = { onFieldChange("rentStreet", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מספר בית",
-            valueFromAzure = autofill["houseNumber"],
+            value = formData["rentHouseNumber"].orEmpty(),
+            onValueChange = { onFieldChange("rentHouseNumber", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "כניסה",
-            valueFromAzure = autofill["entrance"],
+            value = formData["rentEntrance"].orEmpty(),
+            onValueChange = { onFieldChange("rentEntrance", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "דירה",
-            valueFromAzure = autofill["apartment"],
+            value = formData["rentApartment"].orEmpty(),
+            onValueChange = { onFieldChange("rentApartment", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "יישוב",
-            valueFromAzure = autofill["city"],
+            value = formData["rentCity"].orEmpty(),
+            onValueChange = { onFieldChange("rentCity", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מיקוד",
-            valueFromAzure = autofill["zipCode"],
+            value = formData["rentZipCode"].orEmpty(),
+            onValueChange = { onFieldChange("rentZipCode", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מספר חדרים",
-            valueFromAzure = autofill["roomsCount"],
+            value = formData["roomsCount"].orEmpty(),
+            onValueChange = { onFieldChange("roomsCount", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "קומה",
-            valueFromAzure = autofill["floor"],
+            value = formData["floor"].orEmpty(),
+            onValueChange = { onFieldChange("floor", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
@@ -117,16 +114,13 @@ fun RentAssistanceSection(
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            CheckBoxOption("כן", hasElevatorYes) {
-                hasElevatorYes = it
-                if (it) hasElevatorNo = false
+            CheckBoxOption("כן", hasElevator == "כן") {
+                onFieldChange("hasElevator", if (it) "כן" else "")
             }
 
-            CheckBoxOption("לא", hasElevatorNo) {
-                hasElevatorNo = it
-                if (it) hasElevatorYes = false
+            CheckBoxOption("לא", hasElevator == "לא") {
+                onFieldChange("hasElevator", if (it) "לא" else "")
             }
         }
-
     }
 }

@@ -10,9 +10,12 @@ import com.example.easyfill_project.forms_screens.components.RadioOption
 import com.example.easyfill_project.forms_screens.components.SmartTextField
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FamilyStatusSection(
-    autofill: Map<String, String?> = emptyMap()
+    formData: Map<String, String>,
+    onFieldChange: (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val ttsManager = remember { TextToSpeechManager(context) }
@@ -22,48 +25,55 @@ fun FamilyStatusSection(
         onDispose { ttsManager.shutdown() }
     }
 
-    var maritalStatus by remember { mutableStateOf("") }
-
-    // Autofill from Firestore
-    LaunchedEffect(autofill["maritalStatus"]) {
-        autofill["maritalStatus"]?.let { maritalStatus = it.trim() }
-    }
+    val maritalStatus = formData["maritalStatus"].orEmpty()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-
-        // 🔹 Section title
         Text(
             text = "מצב משפחתי",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
 
-        // Radio buttons (horizontal like the form)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            RadioOption("רווק/ה", "רווק", maritalStatus) { maritalStatus = it }
-            RadioOption("נשוי/אה", "נשוי", maritalStatus) { maritalStatus = it }
-            RadioOption("גרוש/ה", "גרוש", maritalStatus) { maritalStatus = it }
-            RadioOption("אלמן/ה", "אלמן", maritalStatus) { maritalStatus = it }
-            RadioOption("ידוע/ה בציבור", "ידוע בציבור", maritalStatus) { maritalStatus = it }
+            RadioOption("רווק/ה", "רווק", maritalStatus) {
+                onFieldChange("maritalStatus", it)
+            }
+
+            RadioOption("נשוי/אה", "נשוי", maritalStatus) {
+                onFieldChange("maritalStatus", it)
+            }
+
+            RadioOption("גרוש/ה", "גרוש", maritalStatus) {
+                onFieldChange("maritalStatus", it)
+            }
+
+            RadioOption("אלמן/ה", "אלמן", maritalStatus) {
+                onFieldChange("maritalStatus", it)
+            }
+
+            RadioOption("ידוע/ה בציבור", "ידוע בציבור", maritalStatus) {
+                onFieldChange("maritalStatus", it)
+            }
         }
 
-        // Children fields
         SmartTextField(
             label = "מספר הילדים",
-            valueFromAzure = autofill["childrenCount"],
+            value = formData["childrenCount"].orEmpty(),
+            onValueChange = { onFieldChange("childrenCount", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "גיל הילדים",
-            valueFromAzure = autofill["childrenAges"],
+            value = formData["childrenAges"].orEmpty(),
+            onValueChange = { onFieldChange("childrenAges", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )

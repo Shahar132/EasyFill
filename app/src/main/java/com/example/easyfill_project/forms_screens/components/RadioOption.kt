@@ -26,7 +26,9 @@ fun RadioOption(
         RadioButton(
             selected = selectedValue == value,
             onClick = {
-                onSelect(if (selectedValue == value) "" else value)
+                onSelect(
+                    if (selectedValue == value) "" else value
+                )
             },
             colors = RadioButtonDefaults.colors(
                 selectedColor = MaterialTheme.colorScheme.onSurface,

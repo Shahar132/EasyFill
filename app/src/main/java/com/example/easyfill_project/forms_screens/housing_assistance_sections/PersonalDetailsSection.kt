@@ -1,28 +1,19 @@
 package com.example.easyfill_project.forms_screens.housing_assistance_sections
 
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.easyfill_project.texttospeech.TextToSpeechManager
-
-
-import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.forms_screens.components.SmartTextField
-
-
+import com.example.easyfill_project.speechtotext.SpeechToTextManager
+import com.example.easyfill_project.texttospeech.TextToSpeechManager
 
 @Composable
 fun PersonalDetailsSection(
-    autofill: Map<String, String?> = emptyMap()
+    formData: Map<String, String>,
+    onFieldChange: (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val ttsManager = remember { TextToSpeechManager(context) }
@@ -36,7 +27,6 @@ fun PersonalDetailsSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-
         Text(
             text = "פרטים אישיים",
             style = MaterialTheme.typography.headlineMedium,
@@ -47,63 +37,72 @@ fun PersonalDetailsSection(
 
         SmartTextField(
             label = "שם משפחה",
-            valueFromAzure = autofill["lastName"],
+            value = formData["lastName"].orEmpty(),
+            onValueChange = { onFieldChange("lastName", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "שם פרטי",
-            valueFromAzure = autofill["firstName"],
+            value = formData["firstName"].orEmpty(),
+            onValueChange = { onFieldChange("firstName", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מספר תעודת זהות",
-            valueFromAzure = autofill["idNumber"],
+            value = formData["idNumber"].orEmpty(),
+            onValueChange = { onFieldChange("idNumber", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "רחוב",
-            valueFromAzure = autofill["street"],
+            value = formData["street"].orEmpty(),
+            onValueChange = { onFieldChange("street", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מספר בית",
-            valueFromAzure = autofill["houseNumber"],
+            value = formData["houseNumber"].orEmpty(),
+            onValueChange = { onFieldChange("houseNumber", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "יישוב",
-            valueFromAzure = autofill["city"],
+            value = formData["city"].orEmpty(),
+            onValueChange = { onFieldChange("city", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מיקוד",
-            valueFromAzure = autofill["zipCode"],
+            value = formData["zipCode"].orEmpty(),
+            onValueChange = { onFieldChange("zipCode", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "טלפון נייד",
-            valueFromAzure = autofill["phone"],
+            value = formData["phone"].orEmpty(),
+            onValueChange = { onFieldChange("phone", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "דואר אלקטרוני",
-            valueFromAzure = autofill["email"],
+            value = formData["email"].orEmpty(),
+            onValueChange = { onFieldChange("email", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )

@@ -12,7 +12,8 @@ import com.example.easyfill_project.texttospeech.TextToSpeechManager
 
 @Composable
 fun IncomeDetailsSection(
-    autofill: Map<String, String?> = emptyMap()
+    formData: Map<String, String>,
+    onFieldChange: (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val ttsManager = remember { TextToSpeechManager(context) }
@@ -36,38 +37,43 @@ fun IncomeDetailsSection(
 
         SmartTextField(
             label = "מקום העבודה",
-            valueFromAzure = autofill["workPlace"],
+            value = formData["workPlace"].orEmpty(),
+            onValueChange = { onFieldChange("workPlace", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "השכר שלך נטו",
-            valueFromAzure = autofill["salaryNet"],
+            value = formData["salaryNet"].orEmpty(),
+            onValueChange = { onFieldChange("salaryNet", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "מקום העבודה של בן/בת הזוג",
-            valueFromAzure = autofill["partnerWorkPlace"],
+            value = formData["partnerWorkPlace"].orEmpty(),
+            onValueChange = { onFieldChange("partnerWorkPlace", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "שכר בן/בת הזוג נטו",
-            valueFromAzure = autofill["partnerSalaryNet"],
+            value = formData["partnerSalaryNet"].orEmpty(),
+            onValueChange = { onFieldChange("partnerSalaryNet", it) },
             ttsManager = ttsManager,
             speechManager = speechManager
         )
 
         SmartTextField(
             label = "פירוט הכנסות נוספות",
-            valueFromAzure = autofill["additionalIncomeDetails"],
+            value = formData["additionalIncomeDetails"].orEmpty(),
+            onValueChange = { onFieldChange("additionalIncomeDetails", it) },
             ttsManager = ttsManager,
             speechManager = speechManager,
-            maxLines = 6 //  custom
+            maxLines = 6
         )
     }
 }

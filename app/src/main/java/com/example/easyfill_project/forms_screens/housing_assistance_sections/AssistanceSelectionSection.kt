@@ -3,7 +3,7 @@ package com.example.easyfill_project.forms_screens.housing_assistance_sections
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.easyfill_project.forms_screens.components.CheckBoxOption
@@ -11,42 +11,12 @@ import com.example.easyfill_project.forms_screens.components.CheckBoxOption
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AssistanceSelectionSection(
-    autofill: Map<String, String?> = emptyMap()
+    formData: Map<String, String>,
+    onFieldChange: (String, String) -> Unit
 ) {
-    var rentAssistance by remember { mutableStateOf(false) }
-    var apartmentAdaptation by remember { mutableStateOf(false) }
-    var apartmentExchange by remember { mutableStateOf(false) }
-    var houseBuilding by remember { mutableStateOf(false) }
-    var firstApartmentPurchase by remember { mutableStateOf(false) }
-    var apartmentRenovationLoan by remember { mutableStateOf(false) }
-    var firstMortgageAid by remember { mutableStateOf(false) }
-
-    LaunchedEffect(autofill["rentAssistance"]) {
-        rentAssistance = !autofill["rentAssistance"].isNullOrBlank()
-    }
-
-    LaunchedEffect(autofill["apartmentAdaptation"]) {
-        apartmentAdaptation = !autofill["apartmentAdaptation"].isNullOrBlank()
-    }
-
-    LaunchedEffect(autofill["apartmentExchange"]) {
-        apartmentExchange = !autofill["apartmentExchange"].isNullOrBlank()
-    }
-
-    LaunchedEffect(autofill["houseBuilding"]) {
-        houseBuilding = !autofill["houseBuilding"].isNullOrBlank()
-    }
-
-    LaunchedEffect(autofill["firstApartmentPurchase"]) {
-        firstApartmentPurchase = !autofill["firstApartmentPurchase"].isNullOrBlank()
-    }
-
-    LaunchedEffect(autofill["apartmentRenovationLoan"]) {
-        apartmentRenovationLoan = !autofill["apartmentRenovationLoan"].isNullOrBlank()
-    }
-
-    LaunchedEffect(autofill["firstMortgageAid"]) {
-        firstMortgageAid = !autofill["firstMortgageAid"].isNullOrBlank()
+    fun isChecked(key: String): Boolean {
+        val value = formData[key]
+        return !value.isNullOrBlank() && value != "false"
     }
 
     Column(
@@ -70,32 +40,32 @@ fun AssistanceSelectionSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            CheckBoxOption("א׳ - סיוע בשכר דירה", rentAssistance) {
-                rentAssistance = it
+            CheckBoxOption("א׳ - סיוע בשכר דירה", isChecked("rentAssistance")) {
+                onFieldChange("rentAssistance", it.toString())
             }
 
-            CheckBoxOption("ב׳ - התאמת דירה לנכות", apartmentAdaptation) {
-                apartmentAdaptation = it
+            CheckBoxOption("ב׳ - התאמת דירה לנכות", isChecked("apartmentAdaptation")) {
+                onFieldChange("apartmentAdaptation", it.toString())
             }
 
-            CheckBoxOption("ג׳ - החלפת דירה", apartmentExchange) {
-                apartmentExchange = it
+            CheckBoxOption("ג׳ - החלפת דירה", isChecked("apartmentExchange")) {
+                onFieldChange("apartmentExchange", it.toString())
             }
 
-            CheckBoxOption("ד׳ - בניית בית", houseBuilding) {
-                houseBuilding = it
+            CheckBoxOption("ד׳ - בניית בית", isChecked("houseBuilding")) {
+                onFieldChange("houseBuilding", it.toString())
             }
 
-            CheckBoxOption("ה׳ - רכישת דירה ראשונה", firstApartmentPurchase) {
-                firstApartmentPurchase = it
+            CheckBoxOption("ה׳ - רכישת דירה ראשונה", isChecked("firstApartmentPurchase")) {
+                onFieldChange("firstApartmentPurchase", it.toString())
             }
 
-            CheckBoxOption("ו׳ - הלוואה לשיפוץ דירה", apartmentRenovationLoan) {
-                apartmentRenovationLoan = it
+            CheckBoxOption("ו׳ - הלוואה לשיפוץ דירה", isChecked("apartmentRenovationLoan")) {
+                onFieldChange("apartmentRenovationLoan", it.toString())
             }
 
-            CheckBoxOption("ז׳ - הלוואה לסידור ראשון", firstMortgageAid) {
-                firstMortgageAid = it
+            CheckBoxOption("ז׳ - הלוואה לסידור ראשון", isChecked("firstMortgageAid")) {
+                onFieldChange("firstMortgageAid", it.toString())
             }
         }
     }

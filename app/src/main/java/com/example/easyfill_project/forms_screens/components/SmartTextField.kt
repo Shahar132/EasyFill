@@ -11,19 +11,8 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
@@ -31,48 +20,35 @@ import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-
 @Composable
 fun SmartTextField(
     label: String,
-    valueFromAzure: String?,
+    value: String,
+    onValueChange: (String) -> Unit,
     ttsManager: TextToSpeechManager,
     speechManager: SpeechToTextManager,
-    maxLines: Int = 1 // default
+    maxLines: Int = 1
 ) {
-
-    var value by remember { mutableStateOf("") }
-
-    LaunchedEffect(valueFromAzure) {
-        if (!valueFromAzure.isNullOrBlank()) {
-            value = valueFromAzure
-        }
-    }
-
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
 
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val spokenText =
-            result.data
-                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                ?.firstOrNull()
+        val spokenText = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
 
         if (!spokenText.isNullOrBlank()) {
-
-            // Normalize numbers here
             val normalizedText = speechManager.normalizeHebrewNumbers(spokenText)
-
-            value = normalizedText
+            onValueChange(normalizedText)
         }
     }
 
     Column {
         OutlinedTextField(
             value = value,
-            onValueChange = { value = it },
+            onValueChange = onValueChange,
             label = { Text(label) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -85,8 +61,8 @@ fun SmartTextField(
                         }
                     }
                 },
-
-            // Icons INSIDE the TextField
+            minLines = 1,
+            maxLines = maxLines,
             trailingIcon = {
                 Row {
                     IconButton(
@@ -96,7 +72,6 @@ fun SmartTextField(
                             } else {
                                 "$label, $value"
                             }
-
                             ttsManager.speak(textToRead)
                         }
                     ) {
@@ -120,8 +95,6 @@ fun SmartTextField(
                     }
                 }
             },
-
-            //  Colors for text feilds
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -134,6 +107,5 @@ fun SmartTextField(
                 unfocusedContainerColor = MaterialTheme.colorScheme.surface
             )
         )
-
     }
 }
