@@ -6,7 +6,7 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 
-class SpeechToTextManager(private val context: Context) {
+class SpeechToTextManager(val context: Context) {
 
     fun startSpeechRecognition(
         speechLauncher: ActivityResultLauncher<Intent>

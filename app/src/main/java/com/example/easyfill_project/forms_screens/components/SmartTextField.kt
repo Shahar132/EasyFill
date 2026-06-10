@@ -20,6 +20,16 @@ import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+//premission for audio record
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+
+// import of audio record
+import com.example.easyfill_project.voiceanalysis.AudioRecordManager
+//import volume collection
+import com.example.easyfill_project.voiceanalysis.VolumeAnalysisCollector
+
 @Composable
 fun SmartTextField(
     label: String,
@@ -32,9 +42,40 @@ fun SmartTextField(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
 
+    // Creates AudioRecordManager once for this text field
+    val audioRecordManager = remember {
+        AudioRecordManager(speechManager.context)
+    }
+
+    val volumeCollector = remember {
+        VolumeAnalysisCollector()
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            println("Microphone permission denied")
+        }
+    }
+    // Stops recording if this composable leaves the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            audioRecordManager.stopRecording()
+        }
+    }
+
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+
+        // Stop AudioRecord when Google speech-to-text finishes
+        audioRecordManager.stopRecording()
+
+        // Analyze all volume values collected during recording
+        val volumeResult = volumeCollector.stopAndAnalyze()
+        println("Volume analysis result: $volumeResult")
+
         val spokenText = result.data
             ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             ?.firstOrNull()
@@ -72,6 +113,7 @@ fun SmartTextField(
                             } else {
                                 "$label, $value"
                             }
+
                             ttsManager.speak(textToRead)
                         }
                     ) {
@@ -84,6 +126,23 @@ fun SmartTextField(
 
                     IconButton(
                         onClick = {
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                speechManager.context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (!hasPermission) {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                return@IconButton
+                            }
+
+                            volumeCollector.start()
+
+                            audioRecordManager.startRecording { volumeDb ->
+                                volumeCollector.addVolume(volumeDb)
+                                println("Volume dB: $volumeDb")
+                            }
+
                             speechManager.startSpeechRecognition(speechLauncher)
                         }
                     ) {
