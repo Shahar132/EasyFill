@@ -26,6 +26,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 
+
 @Composable
 fun AuthScreen(navController: NavHostController) {
 
@@ -131,10 +132,16 @@ fun AuthScreen(navController: NavHostController) {
                             isLoading = false
                             navController.navigate("app")
                         }
-                        .addOnFailureListener {
+                        .addOnFailureListener { e ->
                             isLoading = false
-                            loginError =
-                                "אימייל או סיסמה לא נכונים\nאם עדיין לא נרשמת, עבור למסך הרשמה,(אם עדכנת אימייל לאחרונה, ודא שאישרת את המייל שנשלח)"
+
+                            loginError = when {
+                                e.message?.contains("network", ignoreCase = true) == true ->
+                                    "אין חיבור לאינטרנט. בדוק את החיבור ונסה שוב."
+
+                                else ->
+                                    "אימייל או סיסמה לא נכונים.\nאם עדיין לא נרשמת, עבור למסך הרשמה.\nאם עדכנת אימייל לאחרונה, ודא שאישרת את המייל שנשלח."
+                            }
                         }
                 },
                 modifier = Modifier.fillMaxWidth()

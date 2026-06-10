@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import androidx.core.content.edit
 
 
 @Composable
@@ -184,6 +186,7 @@ fun UploadPdfScreen(navController: NavHostController) {
                 selectedPdfUri?.let { uri ->
 
                     uploadPdfToFirebaseStorage(
+                        context = context,
                         pdfUri = uri,
                         fileName = fileName,
                         fileSize = fileSize,
@@ -257,7 +260,7 @@ fun UploadPdfScreen(navController: NavHostController) {
 
         OutlinedButton(
             enabled = !isUploading,//not shown button until finished extracting
-            onClick = { navController.navigate("speechDemo") }, // navigate to demo screen
+            onClick = { navController.navigate("demoFormOptions") }, // navigate to demo screen
             modifier = Modifier
                 .wrapContentWidth(Alignment.End)
                 .padding(top = 24.dp),
@@ -277,7 +280,7 @@ fun UploadPdfScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
-                    text = "מעבר למילוי הטופס", // updated text
+                    text = "מעבר לבחירת טופס", // updated text
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -288,6 +291,7 @@ fun UploadPdfScreen(navController: NavHostController) {
 
 // This function uploads the selected PDF to Firebase Storage
 fun uploadPdfToFirebaseStorage(
+    context: Context,
     pdfUri: Uri,          // the selected PDF file from the phone
     fileName: String?,    // original file name, like "טופס.pdf"
     fileSize: Long?,      // file size in bytes
