@@ -1,6 +1,8 @@
 package com.example.easyfill_project.forms_screens.components
 
-import android.speech.RecognizerIntent
+import android.Manifest
+import android.content.pm.PackageManager
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -10,15 +12,22 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.core.content.ContextCompat
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun SmartTextField(
@@ -32,16 +41,20 @@ fun SmartTextField(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
 
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val spokenText = result.data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
+    var isListening by remember { mutableStateOf(false) }
+    var showRecorderDialog by remember { mutableStateOf(false) }
 
-        if (!spokenText.isNullOrBlank()) {
-            val normalizedText = speechManager.normalizeHebrewNumbers(spokenText)
-            onValueChange(normalizedText)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            Log.d("MIC_PERMISSION", "Microphone permission denied")
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            speechManager.stopSpeechRecognition()
         }
     }
 
@@ -72,6 +85,7 @@ fun SmartTextField(
                             } else {
                                 "$label, $value"
                             }
+
                             ttsManager.speak(textToRead)
                         }
                     ) {
@@ -83,14 +97,42 @@ fun SmartTextField(
                     }
 
                     IconButton(
+                        enabled = !isListening,
                         onClick = {
-                            speechManager.startSpeechRecognition(speechLauncher)
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                speechManager.context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (!hasPermission) {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                return@IconButton
+                            }
+
+                            isListening = true
+                            showRecorderDialog = true
+
+                            speechManager.startSpeechRecognition(
+                                onResult = { text ->
+                                    onValueChange(text)
+                                },
+                                onAnalysisResult = { analysis ->
+                                    Log.d("STT_ANALYSIS", analysis.toString())
+                                },
+                                onFinished = {
+                                    isListening = false
+                                    showRecorderDialog = false
+                                }
+                            )
                         }
                     ) {
                         Icon(
                             Icons.Default.Mic,
                             contentDescription = "הקלטה",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = if (isListening)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -107,5 +149,62 @@ fun SmartTextField(
                 unfocusedContainerColor = MaterialTheme.colorScheme.surface
             )
         )
+
+        if (showRecorderDialog) {
+            AlertDialog(
+                onDismissRequest = {},
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                textContentColor = MaterialTheme.colorScheme.onSurface,
+                title = {
+                    Text("מקליט ...")
+                },
+                text = {
+                    Column(
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                        val scale by infiniteTransition.animateFloat(
+                            initialValue = 1f,
+                            targetValue = 1.25f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(700),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "micScale"
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "recording",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .size(90.dp)
+                                .scale(scale)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text("מקשיב ...")
+                        Text("הקלט/י עכשיו, לסיום ההקלטה לחץ/י לעצירה")
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            Log.d("STT_UI", "Stop button clicked")
+                            speechManager.stopAndAnalyze()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Default.Stop, contentDescription = "stop")
+                        Text("עצירה")
+                    }
+                }
+            )
+        }
     }
 }
