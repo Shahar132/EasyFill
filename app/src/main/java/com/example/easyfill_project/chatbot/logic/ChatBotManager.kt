@@ -7,6 +7,7 @@ import com.example.easyfill_project.chatbot.model.BotContext
 import com.example.easyfill_project.chatbot.model.BotIntent
 import com.example.easyfill_project.chatbot.model.BotResponse
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
+import com.example.easyfill_project.chatbot.help.ScreenHelpCatalog
 
 class ChatBotManager(
     private val intentDetector: IntentDetector = RuleBasedIntentDetector()
@@ -292,50 +293,6 @@ class ChatBotManager(
     }
 
     private fun getScreenExplanation(currentScreen: String): String {
-        return when (currentScreen) {
-            "home" -> {
-                "אתה נמצא בדף הבית. מכאן אפשר להתחיל תהליך חדש או לעקוב אחרי ההתקדמות שלך."
-            }
-
-            "demoFormOptions" -> {
-                "כאן אפשר לבחור איזה טופס אתה רוצה למלא."
-            }
-
-            "housingAssistanceForm" -> {
-                "אתה נמצא בטופס סיוע בדיור. כאן ממלאים את הטופס שלב אחר שלב. אם שדה לא ברור, אפשר להשתמש בכפתור השמע ליד השדה."
-            }
-
-            "myFormsProgress" -> {
-                "כאן אפשר לראות את ההתקדמות שלך בטפסים שכבר התחלת."
-            }
-
-            "profile" -> {
-                "כאן אפשר לנהל את הפרטים האישיים שלך, שישמשו בהמשך למילוי אוטומטי של טפסים."
-            }
-
-            "Guidance" -> {
-                "זהו מסך מדריך למשתמש. כאן אפשר להבין איך להשתמש באפליקציה."
-            }
-
-            "Personal Settings" -> {
-                "כאן אפשר להתאים את האפליקציה לצרכים שלך, כמו גודל טקסט, ניגודיות, הקראה וצלילי רקע."
-            }
-
-            "contrastSettings" -> {
-                "כאן אפשר לבחור מצב ניגודיות או צבעים שיהיו נוחים יותר לקריאה."
-            }
-
-            "fontSizeSettings" -> {
-                "כאן אפשר לשנות את גודל הטקסט באפליקציה."
-            }
-
-            "backgroundSounds" -> {
-                "כאן אפשר לבחור צלילי רקע שיכולים לעזור ליצור סביבה רגועה יותר."
-            }
-
-            else -> {
-                "אתה נמצא במסך: $currentScreen. בהמשך אוכל להסביר כל מסך בצורה מפורטת יותר."
-            }
-        }
+        return ScreenHelpCatalog.getExplanation(currentScreen)
     }
 }
