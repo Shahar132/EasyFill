@@ -21,6 +21,21 @@ import androidx.compose.runtime.*
 // Modifier for layout control
 import androidx.compose.ui.Modifier
 
+
+//for chatbot ui
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
+
+
+//for chatbot navigation
+import com.example.easyfill_project.chatbot.model.BotAction
+import com.example.easyfill_project.screen.SoundManager
+
+import com.example.easyfill_project.chatbot.model.DistressSnapshot
+import com.example.easyfill_project.chatbot.model.BotAppState
+
+
 // Needed to force RTL (right-to-left) for right-side drawer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalConfiguration
@@ -384,131 +399,299 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             }
                         }
 
-                        NavHost(
-                            navController = innerNavController,
-                            startDestination = "home",
-                            modifier = Modifier.padding(innerPadding)
+
+
+                        Box(
+                            modifier = Modifier
+                                .padding(innerPadding)
+                                .fillMaxSize()
                         ) {
-                            composable("home") {
-                                LaunchedEffect(Unit) {
-                                    updateScreenText(TtsTexts.HOME)
-                                }
-
-
-                                HomeScreen(innerNavController)
-                            }
-
-                            composable("profile") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.PROFILE)}
-                                ProfileScreen(
-                                    navController = mainNavController,
-                                    onNameUpdated = { updatedName ->
-                                        userName = updatedName
+                            NavHost(
+                                navController = innerNavController,
+                                startDestination = "home",
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                composable("home") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.HOME)
                                     }
-                                )
-                            }
 
-                            composable("Guidance") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.GUIDANCE)}
-                                GuidanceScreen()
-                            }
-
-                            composable("Personal Settings") {
-                                LaunchedEffect(Unit) {
-                                    updateScreenText(TtsTexts.PERSONAL_SETTINGS)
+                                    HomeScreen(innerNavController)
                                 }
 
-                                PersonalSettingScreen(
-                                    innerNavController,
-                                    autoReadEnabled = autoReadEnabled,
-                                    onAutoReadChange = { enabled ->
-                                        autoReadEnabled = enabled
+                                composable("profile") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.PROFILE)
+                                    }
 
-                                        if (enabled) {
-                                            scope.launch {
-                                                delay(400)
-                                                ttsManager.speak(screenTextToRead)
-                                                isTtsSpeaking = true
+                                    ProfileScreen(
+                                        navController = mainNavController,
+                                        onNameUpdated = { updatedName ->
+                                            userName = updatedName
+                                        }
+                                    )
+                                }
+
+                                composable("Guidance") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.GUIDANCE)
+                                    }
+
+                                    GuidanceScreen()
+                                }
+
+                                composable("Personal Settings") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.PERSONAL_SETTINGS)
+                                    }
+
+                                    PersonalSettingScreen(
+                                        innerNavController,
+                                        autoReadEnabled = autoReadEnabled,
+                                        onAutoReadChange = { enabled ->
+                                            autoReadEnabled = enabled
+
+                                            if (enabled) {
+                                                scope.launch {
+                                                    delay(400)
+                                                    ttsManager.speak(screenTextToRead)
+                                                    isTtsSpeaking = true
+                                                }
+                                            } else {
+                                                ttsManager.stop()
+                                                isTtsSpeaking = false
                                             }
-                                        } else {
+                                        }
+                                    )
+                                }
+
+                                composable("backgroundSounds") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.SOUND)
+                                    }
+
+                                    BackgroundSoundsScreen(innerNavController)
+                                }
+
+                                composable("contrastSettings") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.CONTRAST)
+                                    }
+
+                                    ContrastSettingsScreen(
+                                        selectedMode = contrastMode,
+                                        onModeSelected = { contrastMode = it },
+                                        navController = innerNavController
+                                    )
+                                }
+
+                                composable("fontSizeSettings") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.FONT_SIZE)
+                                    }
+
+                                    FontSizeSettingsScreen(
+                                        selectedMode = fontSizeMode,
+                                        onModeSelected = { fontSizeMode = it },
+                                        navController = innerNavController
+                                    )
+                                }
+
+                                composable("uploadPdf") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.UPLOAD_PDF)
+                                    }
+
+                                    UploadPdfScreen(navController = innerNavController)
+                                }
+
+                                composable("demoFormOptions") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.FORM_OPTIONS)
+                                    }
+
+                                    DemoFormsOptions(navController = innerNavController)
+                                }
+
+                                composable("housingAssistanceForm") {
+                                    HousingAssistanceFormScreen(
+                                        navController = innerNavController,
+                                        startStep = 0
+                                    )
+                                }
+
+                                composable("housingAssistanceForm/{startStep}") { backStackEntry ->
+                                    val startStep = backStackEntry.arguments
+                                        ?.getString("startStep")
+                                        ?.toIntOrNull()
+                                        ?: 0
+
+                                    HousingAssistanceFormScreen(
+                                        navController = innerNavController,
+                                        startStep = startStep
+                                    )
+                                }
+
+                                composable("myFormsProgress") {
+                                    MyFormsProgressScreen(navController = innerNavController)
+                                }
+
+                                composable("bankDetailsForm") {
+                                    // BankDetailsFormScreen(navController)
+                                }
+                            }
+
+
+
+
+
+
+
+
+
+
+                            // for chatbot
+                            val testDistressSnapshot = DistressSnapshot(
+                                globalScore = 65,
+                                semanticTextScore = 0,
+                                faceScore = 0,
+                                voiceScore = 0,
+                                touchScore = 0,
+                                formBehaviorScore = 75
+                            )
+
+                            val shouldAutoOpenChat =
+                                testDistressSnapshot.globalScore >= 60 ||
+                                        testDistressSnapshot.formBehaviorScore >= 70 ||
+                                        testDistressSnapshot.semanticTextScore >= 70
+
+                            val botAppState = BotAppState(
+                                isMusicPlaying = SoundManager.selectedSound != "none",
+                                selectedSound = SoundManager.selectedSound,
+                                isTtsSpeaking = isTtsSpeaking,
+                                autoReadEnabled = autoReadEnabled,
+                                fontSizeMode = fontSizeMode.name,
+                                contrastMode = contrastMode.name
+                            )
+
+                            FloatingChatOverlay(
+                                currentScreen = currentRoute ?: "לא ידוע",
+                                autoOpenOnDistress = shouldAutoOpenChat,
+                                distressSnapshot = testDistressSnapshot,
+                                appState = botAppState,
+                                onBotAction = { action ->
+                                    when (action) {
+                                        BotAction.READ_ALOUD -> {
+                                            ttsManager.speak(screenTextToRead)
+                                            isTtsSpeaking = true
+                                        }
+
+                                        BotAction.STOP_READING -> {
                                             ttsManager.stop()
                                             isTtsSpeaking = false
                                         }
+
+                                        BotAction.ENABLE_AUTO_READ -> {
+                                            autoReadEnabled = true
+                                            prefs.edit()
+                                                .putBoolean("auto_read_enabled", true)
+                                                .apply()
+
+                                            ttsManager.speak(screenTextToRead)
+                                            isTtsSpeaking = true
+                                        }
+
+                                        BotAction.DISABLE_AUTO_READ -> {
+                                            autoReadEnabled = false
+                                            prefs.edit()
+                                                .putBoolean("auto_read_enabled", false)
+                                                .apply()
+
+                                            ttsManager.stop()
+                                            isTtsSpeaking = false
+                                        }
+
+                                        BotAction.OPEN_PERSONAL_SETTINGS -> {
+                                            innerNavController.navigate("Personal Settings")
+                                        }
+
+                                        BotAction.OPEN_CONTRAST_SETTINGS -> {
+                                            innerNavController.navigate("contrastSettings")
+                                        }
+
+                                        BotAction.OPEN_FONT_SIZE_SETTINGS -> {
+                                            innerNavController.navigate("fontSizeSettings")
+                                        }
+
+                                        BotAction.OPEN_BACKGROUND_SOUNDS -> {
+                                            innerNavController.navigate("backgroundSounds")
+                                        }
+
+                                        BotAction.PLAY_NATURE_SOUND -> {
+                                            SoundManager.play(
+                                                context = context,
+                                                soundName = "nature",
+                                                soundRes = R.raw.nature_sound
+                                            )
+                                        }
+
+                                        BotAction.PLAY_CALM_MUSIC -> {
+                                            SoundManager.play(
+                                                context = context,
+                                                soundName = "calm",
+                                                soundRes = R.raw.calm_music
+                                            )
+                                        }
+
+                                        BotAction.PLAY_INSTRUMENT_SOUND -> {
+                                            SoundManager.play(
+                                                context = context,
+                                                soundName = "instruments",
+                                                soundRes = R.raw.violin_sound
+                                            )
+                                        }
+
+                                        BotAction.STOP_BACKGROUND_MUSIC -> {
+                                            SoundManager.stop()
+                                        }
+
+                                        BotAction.SET_CONTRAST_DEFAULT -> {
+                                            contrastMode = ContrastMode.DEFAULT
+                                        }
+
+                                        BotAction.SET_CONTRAST_HIGH -> {
+                                            contrastMode = ContrastMode.HIGH
+                                        }
+
+                                        BotAction.SET_CONTRAST_LOW -> {
+                                            contrastMode = ContrastMode.LOW
+                                        }
+
+                                        BotAction.SET_FONT_SMALL -> {
+                                            fontSizeMode = FontSizeMode.SMALL
+                                        }
+
+                                        BotAction.SET_FONT_NORMAL -> {
+                                            fontSizeMode = FontSizeMode.NORMAL
+                                        }
+
+                                        BotAction.SET_FONT_LARGE -> {
+                                            fontSizeMode = FontSizeMode.LARGE
+                                        }
+
+                                        BotAction.NONE -> Unit
                                     }
-                                )
-                            }
-
-                            composable("backgroundSounds") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.SOUND)}
-                                BackgroundSoundsScreen(innerNavController)
-                            }
-
-                            composable("contrastSettings") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.CONTRAST)}
-                                ContrastSettingsScreen(
-                                    selectedMode = contrastMode,
-                                    onModeSelected = { contrastMode = it },
-                                    navController = innerNavController
-                                )
-                            }
-
-                            composable("fontSizeSettings") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.FONT_SIZE)}
-                                FontSizeSettingsScreen(
-                                    selectedMode = fontSizeMode,
-                                    onModeSelected = { fontSizeMode = it },
-                                    navController = innerNavController
-                                )
-                            }
-                            //navigate to screen upload file to extract data from it
-                            composable("uploadPdf") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.UPLOAD_PDF)}
-                                UploadPdfScreen(navController = innerNavController)
-                            }
-                            //navigate to form options screen
-                            composable("demoFormOptions") {
-                                DemoFormsOptions(navController = innerNavController)
-                                LaunchedEffect(Unit) {
-                                    updateScreenText(TtsTexts.FORM_OPTIONS)}
-                            }
-                            //navigate to first form
-                            composable("housingAssistanceForm") {
-                                HousingAssistanceFormScreen(
-                                    navController = innerNavController,
-                                    startStep = 0
-                                )
-                            }
-
-                            composable("housingAssistanceForm/{startStep}") { backStackEntry ->
-                                val startStep = backStackEntry.arguments
-                                    ?.getString("startStep")
-                                    ?.toIntOrNull()
-                                    ?: 0
-
-                                HousingAssistanceFormScreen(
-                                    navController = innerNavController,
-                                    startStep = startStep
-                                )
-                            }
-
-                            composable("myFormsProgress") {
-                                MyFormsProgressScreen(navController = innerNavController)
-                            }
-
-                            //navigate to second form
-                            composable("bankDetailsForm") {
-                                // BankDetailsFormScreen(navController)
-                            }
-
-
+                                }
+                            )
                         }
                     }
+
+
+
+
+
+
+
                 }
             }
         }
