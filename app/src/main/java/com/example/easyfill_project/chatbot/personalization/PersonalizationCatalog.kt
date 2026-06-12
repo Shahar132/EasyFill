@@ -114,7 +114,7 @@ object PersonalizationCatalog {
     val contrastModes = listOf(
         ContrastOption(
             key = "default",
-            displayName = "צבעים רגילים",
+            displayName = "גווני כחול רגילים",
             mode = ContrastMode.DEFAULT,
             keywords = listOf(
                 "צבעים רגילים",
@@ -125,7 +125,7 @@ object PersonalizationCatalog {
         ),
         ContrastOption(
             key = "high",
-            displayName = "ניגודיות גבוהה",
+            displayName = "צבעי שחור-לבן",
             mode = ContrastMode.HIGH,
             keywords = listOf(
                 "ניגודיות גבוהה",
@@ -136,7 +136,7 @@ object PersonalizationCatalog {
         ),
         ContrastOption(
             key = "low",
-            displayName = "צבעים רגועים",
+            displayName = "צבעי סגול לילך",
             mode = ContrastMode.LOW,
             keywords = listOf(
                 "צבעים רגועים",
