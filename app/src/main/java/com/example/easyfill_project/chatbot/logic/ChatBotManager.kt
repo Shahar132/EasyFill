@@ -6,6 +6,7 @@ import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.chatbot.model.BotContext
 import com.example.easyfill_project.chatbot.model.BotIntent
 import com.example.easyfill_project.chatbot.model.BotResponse
+import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
 class ChatBotManager(
     private val intentDetector: IntentDetector = RuleBasedIntentDetector()
@@ -22,19 +23,19 @@ class ChatBotManager(
 
         return when (intent) {
 
-            BotIntent.EXPLAIN_SCREEN -> {
+            BotIntent.ExplainScreen -> {
                 BotResponse(
                     message = getScreenExplanation(currentScreen)
                 )
             }
 
-            BotIntent.EXPLAIN_FIELD -> {
+            BotIntent.ExplainField -> {
                 BotResponse(
                     message = "הכול בסדר. ליד כל שדה יש כפתור השמעה שאפשר ללחוץ עליו כדי לשמוע הסבר על השדה. אפשר גם ללחוץ על המיקרופון כדי לדבר את התשובה במקום לכתוב."
                 )
             }
 
-            BotIntent.USER_CONFUSED -> {
+            BotIntent.UserConfused -> {
                 BotResponse(
                     message = if (globalDistressScore >= 60) {
                         "זה בסדר, נתקדם לאט. נראה שהשלב הזה קצת עמוס. אפשר לפתוח את מסך ההתאמה האישית כדי לשנות גודל טקסט, צבעים או צלילי רקע. לפתוח?"
@@ -42,15 +43,15 @@ class ChatBotManager(
                         "זה בסדר, נתקדם לאט. אפשר לשאול אותי מה עושים במסך הזה, או להשתמש בכפתורי ההשמעה והמיקרופון ליד השדות."
                     },
                     action = if (globalDistressScore >= 60) {
-                        BotAction.OPEN_PERSONAL_SETTINGS
+                        BotAction.OpenPersonalSettings
                     } else {
-                        BotAction.NONE
+                        BotAction.None
                     },
                     requiresConfirmation = globalDistressScore >= 60
                 )
             }
 
-            BotIntent.USER_STRESSED -> {
+            BotIntent.UserStressed -> {
                 BotResponse(
                     message = if (globalDistressScore >= 60) {
                         "אני שם לב שהשימוש כרגע קצת עמוס. רוצה שאפתח את מסך ההתאמה האישית כדי שיהיה נוח יותר?"
@@ -58,257 +59,171 @@ class ChatBotManager(
                         "אני מבין שזה יכול להיות עמוס. אפשר להמשיך לאט, שלב אחד בכל פעם."
                     },
                     action = if (globalDistressScore >= 60) {
-                        BotAction.OPEN_PERSONAL_SETTINGS
+                        BotAction.OpenPersonalSettings
                     } else {
-                        BotAction.NONE
+                        BotAction.None
                     },
                     requiresConfirmation = globalDistressScore >= 60
                 )
             }
 
-            BotIntent.READ_ALOUD -> {
+            BotIntent.ReadAloud -> {
                 if (appState.isTtsSpeaking) {
                     BotResponse(
                         message = "ההקראה כבר פועלת.",
-                        action = BotAction.NONE
+                        action = BotAction.None
                     )
                 } else {
                     BotResponse(
                         message = "בסדר, אני מפעיל הקראה של הטקסט במסך.",
-                        action = BotAction.READ_ALOUD
+                        action = BotAction.ReadAloud
                     )
                 }
             }
 
-            BotIntent.STOP_READING -> {
+            BotIntent.StopReading -> {
                 if (appState.isTtsSpeaking) {
                     BotResponse(
                         message = "בסדר, אני מפסיק את ההקראה.",
-                        action = BotAction.STOP_READING
+                        action = BotAction.StopReading
                     )
                 } else {
                     BotResponse(
                         message = "אין כרגע הקראה פעילה.",
-                        action = BotAction.NONE
+                        action = BotAction.None
                     )
                 }
             }
 
-            BotIntent.ENABLE_AUTO_READ -> {
+            BotIntent.EnableAutoRead -> {
                 if (appState.autoReadEnabled) {
                     BotResponse(
                         message = "ההקראה האוטומטית כבר פועלת.",
-                        action = BotAction.NONE
+                        action = BotAction.None
                     )
                 } else {
                     BotResponse(
                         message = "בסדר, אני מפעיל הקראה אוטומטית לכל מסך.",
-                        action = BotAction.ENABLE_AUTO_READ
+                        action = BotAction.EnableAutoRead
                     )
                 }
             }
 
-            BotIntent.DISABLE_AUTO_READ -> {
+            BotIntent.DisableAutoRead -> {
                 if (appState.autoReadEnabled) {
                     BotResponse(
                         message = "בסדר, אני מכבה את ההקראה האוטומטית.",
-                        action = BotAction.DISABLE_AUTO_READ
+                        action = BotAction.DisableAutoRead
                     )
                 } else {
                     BotResponse(
                         message = "ההקראה האוטומטית כבר כבויה.",
-                        action = BotAction.NONE
+                        action = BotAction.None
                     )
                 }
             }
 
-            BotIntent.OPEN_PERSONAL_SETTINGS -> {
+            BotIntent.OpenPersonalSettings -> {
                 BotResponse(
                     message = "אפשר לפתוח את מסך ההתאמה האישית, ושם לבחור מוזיקה, צבעים, גודל טקסט והקראה. לפתוח?",
-                    action = BotAction.OPEN_PERSONAL_SETTINGS,
+                    action = BotAction.OpenPersonalSettings,
                     requiresConfirmation = true
                 )
             }
 
-            BotIntent.OPEN_CONTRAST_SETTINGS -> {
+            BotIntent.OpenContrastSettings -> {
                 BotResponse(
                     message = "אפשר לפתוח את הגדרות הצבעים והניגודיות. לפתוח?",
-                    action = BotAction.OPEN_CONTRAST_SETTINGS,
+                    action = BotAction.OpenContrastSettings,
                     requiresConfirmation = true
                 )
             }
 
-            BotIntent.OPEN_FONT_SIZE_SETTINGS -> {
+            BotIntent.OpenFontSizeSettings -> {
                 BotResponse(
                     message = "אפשר לפתוח את הגדרות גודל הטקסט. לפתוח?",
-                    action = BotAction.OPEN_FONT_SIZE_SETTINGS,
+                    action = BotAction.OpenFontSizeSettings,
                     requiresConfirmation = true
                 )
             }
 
-            BotIntent.OPEN_BACKGROUND_SOUNDS -> {
+            BotIntent.OpenBackgroundSounds -> {
                 BotResponse(
                     message = "אפשר לפתוח את מסך צלילי הרקע ולבחור צליל. לפתוח?",
-                    action = BotAction.OPEN_BACKGROUND_SOUNDS,
+                    action = BotAction.OpenBackgroundSounds,
                     requiresConfirmation = true
                 )
             }
 
-            BotIntent.PLAY_NATURE_SOUND -> {
-                if (appState.selectedSound == "nature") {
+            is BotIntent.PlaySound -> {
+                if (appState.selectedSound == intent.option.key) {
                     BotResponse(
-                        message = "צלילי הטבע כבר פועלים.",
-                        action = BotAction.NONE
+                        message = "${intent.option.displayName} כבר פועל.",
+                        action = BotAction.None
                     )
                 } else {
                     BotResponse(
-                        message = "בסדר, אני מפעיל צלילי טבע מרגיעים.",
-                        action = BotAction.PLAY_NATURE_SOUND
+                        message = "בסדר, אני מפעיל ${intent.option.displayName}.",
+                        action = BotAction.PlaySound(intent.option)
                     )
                 }
             }
 
-            BotIntent.PLAY_CALM_MUSIC -> {
-                if (appState.selectedSound == "calm") {
-                    BotResponse(
-                        message = "מוזיקת המדיטציה כבר פועלת.",
-                        action = BotAction.NONE
-                    )
-                } else {
-                    BotResponse(
-                        message = "בסדר, אני מפעיל מוזיקה למדיטציה.",
-                        action = BotAction.PLAY_CALM_MUSIC
-                    )
-                }
-            }
-
-            BotIntent.PLAY_INSTRUMENT_SOUND -> {
-                if (appState.selectedSound == "instruments") {
-                    BotResponse(
-                        message = "צלילי הנגינה כבר פועלים.",
-                        action = BotAction.NONE
-                    )
-                } else {
-                    BotResponse(
-                        message = "בסדר, אני מפעיל צלילי נגינה מרגיעים.",
-                        action = BotAction.PLAY_INSTRUMENT_SOUND
-                    )
-                }
-            }
-
-            BotIntent.STOP_BACKGROUND_MUSIC -> {
+            BotIntent.StopBackgroundMusic -> {
                 if (appState.isMusicPlaying) {
                     BotResponse(
                         message = "בסדר, אני מפסיק את מוזיקת הרקע.",
-                        action = BotAction.STOP_BACKGROUND_MUSIC
+                        action = BotAction.StopBackgroundMusic
                     )
                 } else {
                     BotResponse(
                         message = "מוזיקת הרקע כבר כבויה.",
-                        action = BotAction.NONE
+                        action = BotAction.None
                     )
                 }
             }
 
-            BotIntent.SET_CONTRAST_DEFAULT -> {
-                if (appState.contrastMode == "DEFAULT") {
+            is BotIntent.SetContrast -> {
+                if (appState.contrastMode == intent.option.mode.name) {
                     BotResponse(
-                        message = "הצבעים כבר מוגדרים למצב רגיל.",
-                        action = BotAction.NONE
+                        message = "${intent.option.displayName} כבר פעיל.",
+                        action = BotAction.None
                     )
                 } else {
                     BotResponse(
-                        message = "בסדר, אני מחזיר את הצבעים למצב רגיל.",
-                        action = BotAction.SET_CONTRAST_DEFAULT
+                        message = "בסדר, אני משנה את הצבעים ל${intent.option.displayName}.",
+                        action = BotAction.SetContrast(intent.option)
                     )
                 }
             }
 
-            BotIntent.SET_CONTRAST_HIGH -> {
-                if (appState.contrastMode == "HIGH") {
+            is BotIntent.SetFontSize -> {
+                if (appState.fontSizeMode == intent.option.mode.name) {
                     BotResponse(
-                        message = "מצב ניגודיות גבוהה כבר פעיל.",
-                        action = BotAction.NONE
+                        message = "גודל הטקסט כבר מוגדר ל${intent.option.displayName}.",
+                        action = BotAction.None
                     )
                 } else {
                     BotResponse(
-                        message = "בסדר, אני מפעיל מצב ניגודיות גבוהה.",
-                        action = BotAction.SET_CONTRAST_HIGH
+                        message = "בסדר, אני משנה את גודל הטקסט ל${intent.option.displayName}.",
+                        action = BotAction.SetFontSize(intent.option)
                     )
                 }
             }
 
-            BotIntent.SET_CONTRAST_LOW -> {
-                if (appState.contrastMode == "LOW") {
-                    BotResponse(
-                        message = "מצב הצבעים הרגועים כבר פעיל.",
-                        action = BotAction.NONE
-                    )
-                } else {
-                    BotResponse(
-                        message = "בסדר, אני מעביר את הממשק לצבעים רגועים יותר.",
-                        action = BotAction.SET_CONTRAST_LOW
-                    )
-                }
-            }
-
-            BotIntent.SET_FONT_SMALL -> {
-                if (appState.fontSizeMode == "SMALL") {
-                    BotResponse(
-                        message = "גודל הטקסט כבר מוגדר לקטן.",
-                        action = BotAction.NONE
-                    )
-                } else {
-                    BotResponse(
-                        message = "בסדר, אני משנה את גודל הטקסט לקטן.",
-                        action = BotAction.SET_FONT_SMALL
-                    )
-                }
-            }
-
-            BotIntent.SET_FONT_NORMAL -> {
-                if (appState.fontSizeMode == "NORMAL") {
-                    BotResponse(
-                        message = "גודל הטקסט כבר מוגדר לרגיל.",
-                        action = BotAction.NONE
-                    )
-                } else {
-                    BotResponse(
-                        message = "בסדר, אני מחזיר את גודל הטקסט לרגיל.",
-                        action = BotAction.SET_FONT_NORMAL
-                    )
-                }
-            }
-
-            BotIntent.SET_FONT_LARGE -> {
-                if (appState.fontSizeMode == "LARGE") {
-                    BotResponse(
-                        message = "גודל הטקסט כבר מוגדר לגדול.",
-                        action = BotAction.NONE
-                    )
-                } else {
-                    BotResponse(
-                        message = "בסדר, אני מגדיל את גודל הטקסט.",
-                        action = BotAction.SET_FONT_LARGE
-                    )
-                }
-            }
-
-            BotIntent.VOICE_INPUT_HELP -> {
+            BotIntent.VoiceInputHelp -> {
                 BotResponse(
                     message = "ליד שדות מתאימים אפשר ללחוץ על המיקרופון ולדבר את התשובה במקום להקליד. אפשר גם להשתמש בכפתור ההשמעה ליד השדה כדי לשמוע הסבר."
                 )
             }
 
-            BotIntent.GENERAL_HELP -> {
+            BotIntent.GeneralHelp -> {
                 BotResponse(
                     message = "אני כאן כדי לעזור לך להשתמש באפליקציה. אפשר לבקש הסבר, הקראה, מוזיקה, שינוי צבעים, שינוי גודל טקסט או התאמה אישית."
                 )
             }
         }
     }
-
-
 
     fun getDistressSuggestion(
         context: BotContext
@@ -317,57 +232,55 @@ class ChatBotManager(
         val appState = context.appState
 
         return when {
-            // המשתמש הרבה זמן בשלב הזה והמוזיקה לא פועלת
             distress.formBehaviorScore >= 70 && !appState.isMusicPlaying -> {
                 BotResponse(
                     message = "שמתי לב שאתה נמצא הרבה זמן בשלב הזה. רוצה שאפעיל מוזיקת רקע מרגיעה?",
-                    action = BotAction.PLAY_CALM_MUSIC,
+                    action = BotAction.PlaySound(PersonalizationCatalog.defaultCalmSound),
                     requiresConfirmation = true
                 )
             }
 
-            // המשתמש הרבה זמן בשלב הזה אבל מוזיקה כבר פועלת
-            distress.formBehaviorScore >= 70 && appState.isMusicPlaying && !appState.autoReadEnabled -> {
+            distress.formBehaviorScore >= 70 &&
+                    appState.isMusicPlaying &&
+                    !appState.autoReadEnabled -> {
                 BotResponse(
                     message = "שמתי לב שאתה נמצא הרבה זמן בשלב הזה. מוזיקת הרקע כבר פועלת. רוצה שאפעיל הקראה אוטומטית כדי להקל עליך במסכים הבאים?",
-                    action = BotAction.ENABLE_AUTO_READ,
+                    action = BotAction.EnableAutoRead,
                     requiresConfirmation = true
                 )
             }
 
-            // מצוקה לפי טקסט / בלבול
             distress.semanticTextScore >= 70 -> {
                 BotResponse(
                     message = "נראה שהשלב הזה קצת לא ברור. ליד כל שדה יש כפתור השמעה להסבר, ואפשר גם להשתמש במיקרופון כדי לדבר את התשובה במקום לכתוב.",
-                    action = BotAction.NONE,
-                    requiresConfirmation = false
+                    action = BotAction.None
                 )
             }
 
-            // מצוקה פיזית / קול / מגע, ואם הצבעים עדיין רגילים
-            (distress.faceScore >= 70 || distress.voiceScore >= 70 || distress.touchScore >= 70) &&
-                    appState.contrastMode == "DEFAULT" -> {
+            (distress.faceScore >= 70 ||
+                    distress.voiceScore >= 70 ||
+                    distress.touchScore >= 70) &&
+                    appState.contrastMode != PersonalizationCatalog.lowContrast.mode.name -> {
                 BotResponse(
                     message = "נראה שהשימוש כרגע קצת עמוס. רוצה שאעביר את הצבעים למצב רגוע יותר?",
-                    action = BotAction.SET_CONTRAST_LOW,
+                    action = BotAction.SetContrast(PersonalizationCatalog.lowContrast),
                     requiresConfirmation = true
                 )
             }
 
-            // מצוקה כללית, ואם הטקסט עדיין לא גדול
-            distress.globalScore >= 60 && appState.fontSizeMode != "LARGE" -> {
+            distress.globalScore >= 60 &&
+                    appState.fontSizeMode != PersonalizationCatalog.largeFont.mode.name -> {
                 BotResponse(
                     message = "נראה שהשלב הזה קצת עמוס. רוצה שאגדיל את הטקסט כדי שיהיה קל יותר לקרוא?",
-                    action = BotAction.SET_FONT_LARGE,
+                    action = BotAction.SetFontSize(PersonalizationCatalog.largeFont),
                     requiresConfirmation = true
                 )
             }
 
-            // מצוקה כללית, אם כבר יש התאמות בסיסיות
             distress.globalScore >= 60 -> {
                 BotResponse(
                     message = "נראה שהשלב הזה קצת עמוס. רוצה שאפתח את מסך ההתאמה האישית כדי שתוכל לבחור מה יעזור לך?",
-                    action = BotAction.OPEN_PERSONAL_SETTINGS,
+                    action = BotAction.OpenPersonalSettings,
                     requiresConfirmation = true
                 )
             }
@@ -377,20 +290,6 @@ class ChatBotManager(
             }
         }
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     private fun getScreenExplanation(currentScreen: String): String {
         return when (currentScreen) {

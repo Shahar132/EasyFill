@@ -31,11 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.easyfill_project.chatbot.logic.ChatBotManager
 import com.example.easyfill_project.chatbot.model.BotAction
+import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.BotContext
 import com.example.easyfill_project.chatbot.model.BotResponse
 import com.example.easyfill_project.chatbot.model.ChatMessage
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
-import com.example.easyfill_project.chatbot.model.BotAppState
 
 @Composable
 fun ChatPanel(
@@ -69,8 +69,6 @@ fun ChatPanel(
         )
     }
 
-    // כרגע זה Context לבדיקה בלבד.
-    // בעתיד במקום DistressSnapshot ידני נקבל את זה מ-DistressManager.
     val botContext = BotContext(
         currentScreen = currentScreen,
         distressSnapshot = distressSnapshot,
@@ -85,7 +83,7 @@ fun ChatPanel(
             )
         )
 
-        if (botResponse.action != BotAction.NONE) {
+        if (botResponse.action != BotAction.None) {
             if (botResponse.requiresConfirmation) {
                 pendingAction = botResponse.action
             } else {
@@ -263,52 +261,80 @@ private fun ChatMessageBubble(
 private fun isUserApproval(text: String): Boolean {
     val cleanText = text.trim().lowercase()
 
-    return cleanText.contains("כן") ||
-            cleanText.contains("אפשר") ||
-            cleanText.contains("בסדר") ||
-            cleanText.contains("תפעיל") ||
-            cleanText.contains("פתח") ||
-            cleanText.contains("יאללה") ||
-            cleanText.contains("אוקי")
+    return cleanText == "כן" ||
+            cleanText == "כן בבקשה" ||
+            cleanText == "אפשר" ||
+            cleanText == "בסדר" ||
+            cleanText == "אוקי" ||
+            cleanText == "יאללה" ||
+            cleanText == "מאשר" ||
+            cleanText == "תאשר"
 }
 
 private fun isUserRejection(text: String): Boolean {
     val cleanText = text.trim().lowercase()
 
-    return cleanText.contains("לא") ||
-            cleanText.contains("עזוב") ||
-            cleanText.contains("לא עכשיו") ||
-            cleanText.contains("ביטול") ||
-            cleanText.contains("אל תפעיל") ||
-            cleanText.contains("אל תפתח")
+    return cleanText == "לא" ||
+            cleanText == "לא תודה" ||
+            cleanText == "עזוב" ||
+            cleanText == "לא עכשיו" ||
+            cleanText == "ביטול" ||
+            cleanText == "אל תפעיל" ||
+            cleanText == "אל תפתח"
 }
 
 private fun getActionExecutedMessage(action: BotAction): String {
     return when (action) {
-        BotAction.READ_ALOUD -> "בסדר, הפעלתי הקראה."
-        BotAction.STOP_READING -> "בסדר, עצרתי את ההקראה."
+        BotAction.ReadAloud -> {
+            "בסדר, הפעלתי הקראה."
+        }
 
-        BotAction.ENABLE_AUTO_READ -> "הפעלתי הקראה אוטומטית לכל מסך."
-        BotAction.DISABLE_AUTO_READ -> "כיביתי הקראה אוטומטית."
+        BotAction.StopReading -> {
+            "בסדר, עצרתי את ההקראה."
+        }
 
-        BotAction.OPEN_PERSONAL_SETTINGS -> "פתחתי את מסך ההתאמה האישית."
-        BotAction.OPEN_CONTRAST_SETTINGS -> "פתחתי את הגדרות הניגודיות."
-        BotAction.OPEN_FONT_SIZE_SETTINGS -> "פתחתי את הגדרות גודל הטקסט."
-        BotAction.OPEN_BACKGROUND_SOUNDS -> "פתחתי את מסך צלילי הרקע."
+        BotAction.EnableAutoRead -> {
+            "הפעלתי הקראה אוטומטית לכל מסך."
+        }
 
-        BotAction.PLAY_NATURE_SOUND -> "הפעלתי צלילי טבע מרגיעים."
-        BotAction.PLAY_CALM_MUSIC -> "הפעלתי מוזיקה למדיטציה."
-        BotAction.PLAY_INSTRUMENT_SOUND -> "הפעלתי צלילי נגינה מרגיעים."
-        BotAction.STOP_BACKGROUND_MUSIC -> "עצרתי את מוזיקת הרקע."
+        BotAction.DisableAutoRead -> {
+            "כיביתי הקראה אוטומטית."
+        }
 
-        BotAction.SET_CONTRAST_DEFAULT -> "העברתי את הצבעים למצב רגיל."
-        BotAction.SET_CONTRAST_HIGH -> "הפעלתי מצב ניגודיות גבוהה."
-        BotAction.SET_CONTRAST_LOW -> "הפעלתי צבעים רגועים."
+        BotAction.OpenPersonalSettings -> {
+            "פתחתי את מסך ההתאמה האישית."
+        }
 
-        BotAction.SET_FONT_SMALL -> "שיניתי את גודל הטקסט לקטן."
-        BotAction.SET_FONT_NORMAL -> "שיניתי את גודל הטקסט לרגיל."
-        BotAction.SET_FONT_LARGE -> "שיניתי את גודל הטקסט לגדול."
+        BotAction.OpenContrastSettings -> {
+            "פתחתי את הגדרות הצבעים."
+        }
 
-        BotAction.NONE -> ""
+        BotAction.OpenFontSizeSettings -> {
+            "פתחתי את הגדרות גודל הטקסט."
+        }
+
+        BotAction.OpenBackgroundSounds -> {
+            "פתחתי את מסך צלילי הרקע."
+        }
+
+        is BotAction.PlaySound -> {
+            "הפעלתי ${action.option.displayName}."
+        }
+
+        BotAction.StopBackgroundMusic -> {
+            "עצרתי את מוזיקת הרקע."
+        }
+
+        is BotAction.SetContrast -> {
+            "שיניתי את הצבעים ל${action.option.displayName}."
+        }
+
+        is BotAction.SetFontSize -> {
+            "שיניתי את גודל הטקסט ל${action.option.displayName}."
+        }
+
+        BotAction.None -> {
+            ""
+        }
     }
 }

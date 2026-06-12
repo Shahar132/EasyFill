@@ -581,18 +581,20 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 appState = botAppState,
                                 onBotAction = { action ->
                                     when (action) {
-                                        BotAction.READ_ALOUD -> {
+
+                                        BotAction.ReadAloud -> {
                                             ttsManager.speak(screenTextToRead)
                                             isTtsSpeaking = true
                                         }
 
-                                        BotAction.STOP_READING -> {
+                                        BotAction.StopReading -> {
                                             ttsManager.stop()
                                             isTtsSpeaking = false
                                         }
 
-                                        BotAction.ENABLE_AUTO_READ -> {
+                                        BotAction.EnableAutoRead -> {
                                             autoReadEnabled = true
+
                                             prefs.edit()
                                                 .putBoolean("auto_read_enabled", true)
                                                 .apply()
@@ -601,8 +603,9 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                             isTtsSpeaking = true
                                         }
 
-                                        BotAction.DISABLE_AUTO_READ -> {
+                                        BotAction.DisableAutoRead -> {
                                             autoReadEnabled = false
+
                                             prefs.edit()
                                                 .putBoolean("auto_read_enabled", false)
                                                 .apply()
@@ -611,75 +614,43 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                             isTtsSpeaking = false
                                         }
 
-                                        BotAction.OPEN_PERSONAL_SETTINGS -> {
+                                        BotAction.OpenPersonalSettings -> {
                                             innerNavController.navigate("Personal Settings")
                                         }
 
-                                        BotAction.OPEN_CONTRAST_SETTINGS -> {
+                                        BotAction.OpenContrastSettings -> {
                                             innerNavController.navigate("contrastSettings")
                                         }
 
-                                        BotAction.OPEN_FONT_SIZE_SETTINGS -> {
+                                        BotAction.OpenFontSizeSettings -> {
                                             innerNavController.navigate("fontSizeSettings")
                                         }
 
-                                        BotAction.OPEN_BACKGROUND_SOUNDS -> {
+                                        BotAction.OpenBackgroundSounds -> {
                                             innerNavController.navigate("backgroundSounds")
                                         }
 
-                                        BotAction.PLAY_NATURE_SOUND -> {
+                                        is BotAction.PlaySound -> {
                                             SoundManager.play(
                                                 context = context,
-                                                soundName = "nature",
-                                                soundRes = R.raw.nature_sound
+                                                soundName = action.option.key,
+                                                soundRes = action.option.soundRes
                                             )
                                         }
 
-                                        BotAction.PLAY_CALM_MUSIC -> {
-                                            SoundManager.play(
-                                                context = context,
-                                                soundName = "calm",
-                                                soundRes = R.raw.calm_music
-                                            )
-                                        }
-
-                                        BotAction.PLAY_INSTRUMENT_SOUND -> {
-                                            SoundManager.play(
-                                                context = context,
-                                                soundName = "instruments",
-                                                soundRes = R.raw.violin_sound
-                                            )
-                                        }
-
-                                        BotAction.STOP_BACKGROUND_MUSIC -> {
+                                        BotAction.StopBackgroundMusic -> {
                                             SoundManager.stop()
                                         }
 
-                                        BotAction.SET_CONTRAST_DEFAULT -> {
-                                            contrastMode = ContrastMode.DEFAULT
+                                        is BotAction.SetContrast -> {
+                                            contrastMode = action.option.mode
                                         }
 
-                                        BotAction.SET_CONTRAST_HIGH -> {
-                                            contrastMode = ContrastMode.HIGH
+                                        is BotAction.SetFontSize -> {
+                                            fontSizeMode = action.option.mode
                                         }
 
-                                        BotAction.SET_CONTRAST_LOW -> {
-                                            contrastMode = ContrastMode.LOW
-                                        }
-
-                                        BotAction.SET_FONT_SMALL -> {
-                                            fontSizeMode = FontSizeMode.SMALL
-                                        }
-
-                                        BotAction.SET_FONT_NORMAL -> {
-                                            fontSizeMode = FontSizeMode.NORMAL
-                                        }
-
-                                        BotAction.SET_FONT_LARGE -> {
-                                            fontSizeMode = FontSizeMode.LARGE
-                                        }
-
-                                        BotAction.NONE -> Unit
+                                        BotAction.None -> Unit
                                     }
                                 }
                             )

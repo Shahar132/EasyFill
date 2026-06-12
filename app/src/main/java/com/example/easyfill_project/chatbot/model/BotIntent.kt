@@ -1,37 +1,43 @@
 package com.example.easyfill_project.chatbot.model
 
-enum class BotIntent {
-    EXPLAIN_SCREEN,
-    EXPLAIN_FIELD,
+import com.example.easyfill_project.chatbot.personalization.ContrastOption
+import com.example.easyfill_project.chatbot.personalization.FontSizeOption
+import com.example.easyfill_project.chatbot.personalization.SoundOption
 
-    USER_CONFUSED,
-    USER_STRESSED,
+sealed class BotIntent {
 
-    READ_ALOUD,
-    STOP_READING,
+    object ExplainScreen : BotIntent()
+    object ExplainField : BotIntent()
 
-    ENABLE_AUTO_READ,
-    DISABLE_AUTO_READ,
+    object UserConfused : BotIntent()
+    object UserStressed : BotIntent()
 
-    OPEN_PERSONAL_SETTINGS,
-    OPEN_CONTRAST_SETTINGS,
-    OPEN_FONT_SIZE_SETTINGS,
-    OPEN_BACKGROUND_SOUNDS,
+    object ReadAloud : BotIntent()
+    object StopReading : BotIntent()
 
-    PLAY_NATURE_SOUND,
-    PLAY_CALM_MUSIC,
-    PLAY_INSTRUMENT_SOUND,
-    STOP_BACKGROUND_MUSIC,
+    object EnableAutoRead : BotIntent()
+    object DisableAutoRead : BotIntent()
 
-    SET_CONTRAST_DEFAULT,
-    SET_CONTRAST_HIGH,
-    SET_CONTRAST_LOW,
+    object OpenPersonalSettings : BotIntent()
+    object OpenContrastSettings : BotIntent()
+    object OpenFontSizeSettings : BotIntent()
+    object OpenBackgroundSounds : BotIntent()
 
-    SET_FONT_SMALL,
-    SET_FONT_NORMAL,
-    SET_FONT_LARGE,
+    data class PlaySound(
+        val option: SoundOption
+    ) : BotIntent()
 
-    VOICE_INPUT_HELP,
+    object StopBackgroundMusic : BotIntent()
 
-    GENERAL_HELP
+    data class SetContrast(
+        val option: ContrastOption
+    ) : BotIntent()
+
+    data class SetFontSize(
+        val option: FontSizeOption
+    ) : BotIntent()
+
+    object VoiceInputHelp : BotIntent()
+
+    object GeneralHelp : BotIntent()
 }
