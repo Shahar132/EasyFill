@@ -3,6 +3,8 @@ package com.example.easyfill_project.chatbot.intent
 import com.example.easyfill_project.chatbot.model.BotIntent
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
+import com.example.easyfill_project.chatbot.semantic.AppIntentCatalog
+
 class RuleBasedIntentDetector : IntentDetector {
 
     override fun detectIntent(userMessage: String): BotIntent {
@@ -11,7 +13,7 @@ class RuleBasedIntentDetector : IntentDetector {
         val soundOption = PersonalizationCatalog.findSoundInText(text)
         val fontSizeOption = PersonalizationCatalog.findFontSizeInText(text)
         val contrastOption = PersonalizationCatalog.findContrastInText(text)
-
+        val catalogIntent = AppIntentCatalog.findIntentByRule(text)
         return when {
             // עזרה כללית / יכולות הבוט
             text.contains("מה אתה יודע לעשות") ||
@@ -222,6 +224,9 @@ class RuleBasedIntentDetector : IntentDetector {
                     text.contains("מוצף") ||
                     text.contains("מעייף") -> {
                 BotIntent.UserStressed
+            }
+            catalogIntent != null -> {
+                catalogIntent
             }
 
             else -> {
