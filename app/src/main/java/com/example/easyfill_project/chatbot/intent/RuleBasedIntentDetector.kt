@@ -126,6 +126,14 @@ class RuleBasedIntentDetector : IntentDetector {
                     text.contains("מעייף") -> {
                 BotIntent.UserStressed
             }
+            text.contains("מה אתה יודע לעשות") ||
+                    text.contains("איך אתה יכול לעזור") ||
+                    text.contains("במה אתה יכול לעזור") ||
+                    text.contains("מה האפשרויות שלך") ||
+                    text.contains("מה היכולות שלך") ||
+                    text == "עזרה" -> {
+                BotIntent.GeneralHelp
+            }
 
             else -> {
                 BotIntent.GeneralHelp
