@@ -1,5 +1,6 @@
 package com.example.easyfill_project.chatbot.logic
 
+import com.example.easyfill_project.chatbot.help.ScreenHelpCatalog
 import com.example.easyfill_project.chatbot.intent.IntentDetector
 import com.example.easyfill_project.chatbot.intent.RuleBasedIntentDetector
 import com.example.easyfill_project.chatbot.model.BotAction
@@ -7,7 +8,6 @@ import com.example.easyfill_project.chatbot.model.BotContext
 import com.example.easyfill_project.chatbot.model.BotIntent
 import com.example.easyfill_project.chatbot.model.BotResponse
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
-import com.example.easyfill_project.chatbot.help.ScreenHelpCatalog
 
 class ChatBotManager(
     private val intentDetector: IntentDetector = RuleBasedIntentDetector()
@@ -124,6 +124,54 @@ class ChatBotManager(
                 }
             }
 
+            BotIntent.OpenHome -> {
+                BotResponse(
+                    message = "אפשר לחזור לדף הבית. להעביר אותך לשם?",
+                    action = BotAction.OpenHome,
+                    requiresConfirmation = true
+                )
+            }
+
+            BotIntent.OpenFormOptions -> {
+                BotResponse(
+                    message = "נראה שאתה מחפש טופס או רוצה להתחיל מילוי. רוצה שאעביר אותך למסך בחירת הטפסים?",
+                    action = BotAction.OpenFormOptions,
+                    requiresConfirmation = true
+                )
+            }
+
+            BotIntent.OpenFormsProgress -> {
+                BotResponse(
+                    message = "אפשר לראות את ההתקדמות שלך בטפסים שכבר התחלת. להעביר אותך למסך ההתקדמות?",
+                    action = BotAction.OpenFormsProgress,
+                    requiresConfirmation = true
+                )
+            }
+
+            BotIntent.OpenProfile -> {
+                BotResponse(
+                    message = "אפשר לפתוח את הפרופיל האישי, שם נמצאים הפרטים שמשמשים למילוי אוטומטי. לפתוח?",
+                    action = BotAction.OpenProfile,
+                    requiresConfirmation = true
+                )
+            }
+
+            BotIntent.OpenGuidance -> {
+                BotResponse(
+                    message = "אפשר לפתוח את מדריך המשתמש כדי לראות הסבר כללי על האפליקציה. לפתוח?",
+                    action = BotAction.OpenGuidance,
+                    requiresConfirmation = true
+                )
+            }
+
+            BotIntent.OpenUploadPdf -> {
+                BotResponse(
+                    message = "אפשר לעבור למסך העלאת טופס PDF. להעביר אותך לשם?",
+                    action = BotAction.OpenUploadPdf,
+                    requiresConfirmation = true
+                )
+            }
+
             BotIntent.OpenPersonalSettings -> {
                 BotResponse(
                     message = "אפשר לפתוח את מסך ההתאמה האישית, ושם לבחור מוזיקה, צבעים, גודל טקסט והקראה. לפתוח?",
@@ -221,17 +269,22 @@ class ChatBotManager(
             BotIntent.GeneralHelp -> {
                 BotResponse(
                     message = """
-            אני יכול לעזור לך בכמה דברים:
-            
-            • להסביר מה עושים במסך הנוכחי
-            • להסביר שדות בטופס
-            • להקריא את הטקסט במסך
-            • להפעיל או לכבות הקראה אוטומטית
-            • להפעיל או לכבות צלילי רקע
-            • לשנות גודל טקסט
-            • לשנות צבעים וניגודיות
-            • לעזור כשמשהו לא ברור או מרגיש עמוס
-        """.trimIndent()
+                        אני יכול לעזור לך בכמה דברים:
+                        
+                        • להסביר מה עושים במסך הנוכחי
+                        • להסביר שדות בטופס
+                        • להעביר אותך למסך בחירת טפסים
+                        • להראות את התקדמות הטפסים שלך
+                        • לפתוח את הפרופיל האישי
+                        • לפתוח את מדריך המשתמש
+                        • לפתוח את מסך העלאת הטפסים
+                        • להקריא את הטקסט במסך
+                        • להפעיל או לכבות הקראה אוטומטית
+                        • להפעיל או לכבות צלילי רקע
+                        • לשנות גודל טקסט
+                        • לשנות צבעים וניגודיות
+                        • לעזור כשמשהו לא ברור או מרגיש עמוס
+                    """.trimIndent()
                 )
             }
         }

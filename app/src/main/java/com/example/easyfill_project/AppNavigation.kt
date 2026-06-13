@@ -31,6 +31,7 @@ import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
 //for chatbot navigation
 import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.screen.SoundManager
+import com.example.easyfill_project.chatbot.navigation.BotNavigationHandler
 
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.chatbot.model.BotAppState
@@ -580,77 +581,71 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 distressSnapshot = testDistressSnapshot,
                                 appState = botAppState,
                                 onBotAction = { action ->
-                                    when (action) {
 
-                                        BotAction.ReadAloud -> {
-                                            ttsManager.speak(screenTextToRead)
-                                            isTtsSpeaking = true
+                                    val navigationHandled = BotNavigationHandler.handle(
+                                        action = action,
+                                        navController = innerNavController
+                                    )
+
+                                    if (!navigationHandled) {
+                                        when (action) {
+
+                                            BotAction.ReadAloud -> {
+                                                ttsManager.speak(screenTextToRead)
+                                                isTtsSpeaking = true
+                                            }
+
+                                            BotAction.StopReading -> {
+                                                ttsManager.stop()
+                                                isTtsSpeaking = false
+                                            }
+
+                                            BotAction.EnableAutoRead -> {
+                                                autoReadEnabled = true
+
+                                                prefs.edit()
+                                                    .putBoolean("auto_read_enabled", true)
+                                                    .apply()
+
+                                                ttsManager.speak(screenTextToRead)
+                                                isTtsSpeaking = true
+                                            }
+
+                                            BotAction.DisableAutoRead -> {
+                                                autoReadEnabled = false
+
+                                                prefs.edit()
+                                                    .putBoolean("auto_read_enabled", false)
+                                                    .apply()
+
+                                                ttsManager.stop()
+                                                isTtsSpeaking = false
+                                            }
+
+                                            is BotAction.PlaySound -> {
+                                                SoundManager.play(
+                                                    context = context,
+                                                    soundName = action.option.key,
+                                                    soundRes = action.option.soundRes
+                                                )
+                                            }
+
+                                            BotAction.StopBackgroundMusic -> {
+                                                SoundManager.stop()
+                                            }
+
+                                            is BotAction.SetContrast -> {
+                                                contrastMode = action.option.mode
+                                            }
+
+                                            is BotAction.SetFontSize -> {
+                                                fontSizeMode = action.option.mode
+                                            }
+
+                                            BotAction.None -> Unit
+
+                                            else -> Unit
                                         }
-
-                                        BotAction.StopReading -> {
-                                            ttsManager.stop()
-                                            isTtsSpeaking = false
-                                        }
-
-                                        BotAction.EnableAutoRead -> {
-                                            autoReadEnabled = true
-
-                                            prefs.edit()
-                                                .putBoolean("auto_read_enabled", true)
-                                                .apply()
-
-                                            ttsManager.speak(screenTextToRead)
-                                            isTtsSpeaking = true
-                                        }
-
-                                        BotAction.DisableAutoRead -> {
-                                            autoReadEnabled = false
-
-                                            prefs.edit()
-                                                .putBoolean("auto_read_enabled", false)
-                                                .apply()
-
-                                            ttsManager.stop()
-                                            isTtsSpeaking = false
-                                        }
-
-                                        BotAction.OpenPersonalSettings -> {
-                                            innerNavController.navigate("Personal Settings")
-                                        }
-
-                                        BotAction.OpenContrastSettings -> {
-                                            innerNavController.navigate("contrastSettings")
-                                        }
-
-                                        BotAction.OpenFontSizeSettings -> {
-                                            innerNavController.navigate("fontSizeSettings")
-                                        }
-
-                                        BotAction.OpenBackgroundSounds -> {
-                                            innerNavController.navigate("backgroundSounds")
-                                        }
-
-                                        is BotAction.PlaySound -> {
-                                            SoundManager.play(
-                                                context = context,
-                                                soundName = action.option.key,
-                                                soundRes = action.option.soundRes
-                                            )
-                                        }
-
-                                        BotAction.StopBackgroundMusic -> {
-                                            SoundManager.stop()
-                                        }
-
-                                        is BotAction.SetContrast -> {
-                                            contrastMode = action.option.mode
-                                        }
-
-                                        is BotAction.SetFontSize -> {
-                                            fontSizeMode = action.option.mode
-                                        }
-
-                                        BotAction.None -> Unit
                                     }
                                 }
                             )

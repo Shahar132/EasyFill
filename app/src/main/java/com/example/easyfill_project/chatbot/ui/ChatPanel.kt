@@ -285,20 +285,45 @@ private fun isUserRejection(text: String): Boolean {
 
 private fun getActionExecutedMessage(action: BotAction): String {
     return when (action) {
+
         BotAction.ReadAloud -> {
-            "בסדר, הפעלתי הקראה."
+            "הפעלתי את ההקראה."
         }
 
         BotAction.StopReading -> {
-            "בסדר, עצרתי את ההקראה."
+            "עצרתי את ההקראה."
         }
 
         BotAction.EnableAutoRead -> {
-            "הפעלתי הקראה אוטומטית לכל מסך."
+            "הפעלתי הקראה אוטומטית."
         }
 
         BotAction.DisableAutoRead -> {
             "כיביתי הקראה אוטומטית."
+        }
+
+        BotAction.OpenHome -> {
+            "העברתי אותך לדף הבית."
+        }
+
+        BotAction.OpenFormOptions -> {
+            "העברתי אותך למסך בחירת הטפסים."
+        }
+
+        BotAction.OpenFormsProgress -> {
+            "העברתי אותך למסך התקדמות הטפסים."
+        }
+
+        BotAction.OpenProfile -> {
+            "פתחתי את הפרופיל האישי."
+        }
+
+        BotAction.OpenGuidance -> {
+            "פתחתי את מדריך המשתמש."
+        }
+
+        BotAction.OpenUploadPdf -> {
+            "פתחתי את מסך העלאת הטפסים."
         }
 
         BotAction.OpenPersonalSettings -> {
@@ -306,7 +331,7 @@ private fun getActionExecutedMessage(action: BotAction): String {
         }
 
         BotAction.OpenContrastSettings -> {
-            "פתחתי את הגדרות הצבעים."
+            "פתחתי את הגדרות הצבעים והניגודיות."
         }
 
         BotAction.OpenFontSizeSettings -> {
@@ -322,7 +347,7 @@ private fun getActionExecutedMessage(action: BotAction): String {
         }
 
         BotAction.StopBackgroundMusic -> {
-            "עצרתי את מוזיקת הרקע."
+            "כיביתי את מוזיקת הרקע."
         }
 
         is BotAction.SetContrast -> {

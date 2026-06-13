@@ -23,6 +23,13 @@ sealed class BotIntent {
     object OpenFontSizeSettings : BotIntent()
     object OpenBackgroundSounds : BotIntent()
 
+    object OpenHome : BotIntent()
+    object OpenFormOptions : BotIntent()
+    object OpenFormsProgress : BotIntent()
+    object OpenProfile : BotIntent()
+    object OpenGuidance : BotIntent()
+    object OpenUploadPdf : BotIntent()
+
     data class PlaySound(
         val option: SoundOption
     ) : BotIntent()

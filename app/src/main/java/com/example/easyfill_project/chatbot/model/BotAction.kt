@@ -19,6 +19,13 @@ sealed class BotAction {
     object OpenFontSizeSettings : BotAction()
     object OpenBackgroundSounds : BotAction()
 
+    object OpenHome : BotAction()
+    object OpenFormOptions : BotAction()
+    object OpenFormsProgress : BotAction()
+    object OpenProfile : BotAction()
+    object OpenGuidance : BotAction()
+    object OpenUploadPdf : BotAction()
+
     data class PlaySound(
         val option: SoundOption
     ) : BotAction()
