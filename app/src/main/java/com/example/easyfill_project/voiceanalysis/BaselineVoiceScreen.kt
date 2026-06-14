@@ -3,12 +3,12 @@ package com.example.easyfill_project.voiceanalysis
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
@@ -22,13 +22,25 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 
+import androidx.compose.material.icons.filled.Timer
+import kotlinx.coroutines.delay
+
 @Composable
 fun BaselineVoiceScreen(
     speechManager: SpeechToTextManager,
     onBaselineFinished: () -> Unit
 ) {
     var isRecording by remember { mutableStateOf(false) }
-    var transcript by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var showSuccessDialog by remember { mutableStateOf(false) }
+    var recordingSeconds by remember { mutableIntStateOf(0) }
+
+
+
+    // Saves baseline data to Firebase
+    val baselineRepository = remember {
+        VoiceBaselineRepository()
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -56,6 +68,18 @@ fun BaselineVoiceScreen(
         }
     }
 
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingSeconds = 0
+
+            while (isRecording) {
+                delay(1000)
+                recordingSeconds++
+            }
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surface
@@ -63,11 +87,10 @@ fun BaselineVoiceScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-
             Text(
                 text = "היכרות קולית קצרה",
                 style = MaterialTheme.typography.headlineMedium,
@@ -79,8 +102,8 @@ fun BaselineVoiceScreen(
 
             Text(
                 text = """
-                    כדי שנוכל להבין טוב יותר את קצב הדיבור הרגיל שלך, 
-                    נבקש ממך לדבר באופן חופשי במשך 20 עד 30 שניות.
+                    כדי שנוכל להבין טוב יותר את קצב הדיבור שלך,
+                    נבקש ממך לדבר באופן חופשי במשך לפחות 15 שניות.
 
                     אפשר לספר על עצמך, על תחביבים, דברים שאת/ה אוהב/ת לעשות בזמן הפנוי,
                     או כל דבר כללי שנוח לך לדבר עליו.
@@ -107,6 +130,7 @@ fun BaselineVoiceScreen(
             ) {
                 IconButton(
                     modifier = Modifier.fillMaxSize(),
+                    enabled = !isSaving,
                     onClick = {
                         val hasPermission = ContextCompat.checkSelfPermission(
                             speechManager.context,
@@ -119,22 +143,58 @@ fun BaselineVoiceScreen(
                         }
 
                         if (!isRecording) {
+                            // Start baseline recording
                             isRecording = true
-                            transcript = ""
+                            recordingSeconds = 0
 
                             speechManager.startSpeechRecognition(
-                                onResult = { text ->
-                                    transcript = text
-                                },
+                                // We do not show transcript to the user
+                                onResult = {},
+
+                                // When analysis is ready, save it to Firestore
                                 onAnalysisResult = { analysis ->
                                     Log.d("BASELINE_ANALYSIS", analysis.toString())
+
+                                    //check if is reliable - more tan 15 seconds speaking
+                                    if (!analysis.isReliable) {
+
+                                        Toast.makeText(
+                                            speechManager.context,
+                                            "יש לדבר לפחות 15 שניות כדי ליצור פרופיל קולי אמין",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+
+                                        Log.d(
+                                            "BASELINE",
+                                            "Recording too short: ${analysis.durationSeconds}"
+                                        )
+
+                                        isSaving = false
+                                        isRecording = false
+                                    } else {
+                                        isSaving = true
+
+                                        baselineRepository.saveBaseline(
+                                            analysis = analysis,
+                                            onSuccess = {
+                                                isSaving = false
+                                                showSuccessDialog = true
+                                            },
+                                            onFailure = { error ->
+                                                Log.e("BASELINE", "Failed to save baseline", error)
+                                                isSaving = false
+                                            }
+                                        )
+                                    }
                                 },
+
+                                // STT finished, but navigation happens only after Firebase save succeeds
                                 onFinished = {
                                     isRecording = false
-                                    onBaselineFinished()
                                 }
                             )
                         } else {
+                            // Stop recording and trigger analysis
                             speechManager.stopAndAnalyze()
                         }
                     }
@@ -154,27 +214,82 @@ fun BaselineVoiceScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = if (isRecording) "מקליט עכשיו... לחץ/י שוב לעצירה" else "לחץ/י על המיקרופון להתחלה",
+                text = when {
+                    isSaving -> "שומר את הנתונים..."
+                    isRecording -> "מקליט עכשיו... לחץ/י שוב לעצירה"
+                    else -> "לחץ/י על המיקרופון להתחלה"
+                },
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            if (isRecording) {
+                Spacer(modifier = Modifier.height(12.dp))
 
-            if (transcript.isNotBlank()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = "timer",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Text(
-                        text = transcript,
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "$recordingSeconds שניות",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = if (recordingSeconds >= 15)
+                        "אפשר לעצור את ההקלטה"
+                    else
+                        "יש לדבר לפחות 15 שניות",
+                    color = if (recordingSeconds >= 15)
+                        MaterialTheme.colorScheme.secondary
+                    else
+                        MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            if (isSaving) {
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator()
+            }
+
+            if (showSuccessDialog) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    textContentColor = MaterialTheme.colorScheme.onSurface,
+                    title = {
+                        Text("הפרופיל הקולי נוצר בהצלחה")
+                    },
+                    text = {
+                        Text("תודה! יצרנו עבורך פרופיל קולי בסיסי. עכשיו נמשיך לשלב העלאת הקובץ.")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showSuccessDialog = false
+                                onBaselineFinished()
+                            }
+                        ) {
+                            Text("לחץ/י להמשך")
+                        }
+                    }
+                )
             }
         }
     }
