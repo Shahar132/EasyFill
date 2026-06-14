@@ -21,7 +21,10 @@ import androidx.navigation.NavHostController
 
 // This is a simple Composable function that represents your Home screen
 @Composable
-fun HomeScreen(navController: NavHostController) {
+fun HomeScreen(
+    navController: NavHostController,
+    baselineDone: Boolean
+) {
 
     Column(
         modifier = Modifier
@@ -44,8 +47,13 @@ fun HomeScreen(navController: NavHostController) {
                 .width(230.dp)
                 .height(180.dp)
                 .clickable {
-                    // navigate to the relevant screen
-                    navController.navigate("uploadPdf")
+
+                    if (baselineDone) {
+                        navController.navigate("uploadPdf")
+                    } else {
+                        navController.navigate("baselineVoice")
+                    }
+
                 },
             elevation = CardDefaults.cardElevation(6.dp)
         ) {

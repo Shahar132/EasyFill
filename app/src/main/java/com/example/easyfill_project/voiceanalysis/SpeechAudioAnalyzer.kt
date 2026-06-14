@@ -5,6 +5,7 @@ import kotlin.math.abs
 data class SpeechAnalysisResult(
     val finalText: String,
     val durationSeconds: Double,
+    val isReliable: Boolean,
     val speechRateWordsPerSecond: Double,
     val averageRms: Float,
     val maxRms: Float,
@@ -59,6 +60,10 @@ class SpeechAudioAnalyzer {
         val durationSeconds =
             if (speechStartTime > 0) (endTime - speechStartTime) / 1000.0 else 0.0
 
+
+        val minReliableDurationSeconds = 15.0
+        val isReliable = durationSeconds >= minReliableDurationSeconds
+
         val words = finalText.trim()
             .split("\\s+".toRegex())
             .filter { it.isNotBlank() }
@@ -79,9 +84,11 @@ class SpeechAudioAnalyzer {
         val hesitationWords = listOf("אממ", "אה", "אהה", "כאילו", "טוב", "בעצם")
         val hesitationCount = words.count { it in hesitationWords }
 
+
         return SpeechAnalysisResult(
             finalText = finalText,
             durationSeconds = durationSeconds,
+            isReliable = isReliable,
             speechRateWordsPerSecond = speechRate,
             averageRms = averageRms,
             maxRms = maxRms,

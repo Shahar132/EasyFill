@@ -118,6 +118,21 @@ fun SmartTextField(
                                 },
                                 onAnalysisResult = { analysis ->
                                     Log.d("STT_ANALYSIS", analysis.toString())
+
+                                    if (!analysis.isReliable) {
+                                        Log.d(
+                                            "VOICE_ANALYSIS",
+                                            "Recording ignored because it is shorter than 15 seconds. Duration = ${analysis.durationSeconds}"
+                                        )
+                                    } else {
+                                        Log.d("VOICE_ANALYSIS", "Recording is reliable, compare to baseline")
+                                        Log.d("VOICE_ANALYSIS", analysis.toString())
+
+                                        // Next step later:
+                                        // get baseline from Firestore
+                                        // compare current analysis to baseline
+                                        // calculate stress score
+                                    }
                                 },
                                 onFinished = {
                                     isListening = false

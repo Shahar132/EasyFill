@@ -42,6 +42,7 @@ import com.example.easyfill_project.screen.GuidanceScreen
 import com.example.easyfill_project.screen.HomeScreen
 import com.example.easyfill_project.screen.PersonalSettingScreen
 import com.example.easyfill_project.screen.ProfileScreen
+import com.example.easyfill_project.voiceanalysis.BaselineVoiceScreen
 
 import kotlinx.coroutines.launch
 import com.example.easyfill_project.screen.ContrastMode
@@ -59,10 +60,13 @@ import androidx.compose.material.icons.filled.VolumeUp
 import com.example.easyfill_project.forms_screens.DemoFormsOptions
 import com.example.easyfill_project.forms_screens.HousingAssistanceFormScreen
 import com.example.easyfill_project.screen.MyFormsProgressScreen
+import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
 //for delay
 import kotlinx.coroutines.delay
+import androidx.core.content.edit
+
 
 // Main navigation function
 @Composable
@@ -128,6 +132,16 @@ fun AppWithDrawer(mainNavController: NavHostController) {
     //regarding tts
     val context = LocalContext.current
     val ttsManager = remember { TextToSpeechManager(context) }
+    val speechManager = remember { SpeechToTextManager(context) }
+
+
+    val baselinePrefs = remember {
+        context.getSharedPreferences("baseline_prefs", Context.MODE_PRIVATE)
+    }
+
+    var baselineDone by remember {
+        mutableStateOf(baselinePrefs.getBoolean("baseline_done", false))
+    }
 
     var screenTextToRead by remember { mutableStateOf("") }
     var isTtsSpeaking by remember { mutableStateOf(false) }
@@ -395,7 +409,8 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 }
 
 
-                                HomeScreen(innerNavController)
+                                HomeScreen(
+                                    navController = innerNavController, baselineDone = baselineDone)
                             }
 
                             composable("profile") {
@@ -465,6 +480,24 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                     navController = innerNavController
                                 )
                             }
+                            //screen of audio baseline
+                            composable("baselineVoice") {
+                                BaselineVoiceScreen(
+                                    speechManager = speechManager,
+                                    onBaselineFinished = {
+                                        baselinePrefs.edit {
+                                            putBoolean("baseline_done", true)
+                                        }
+
+                                        baselineDone = true
+
+                                        innerNavController.navigate("uploadPdf") {
+                                            popUpTo("baselineVoice") { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+
                             //navigate to screen upload file to extract data from it
                             composable("uploadPdf") {
                                 LaunchedEffect(Unit) {
