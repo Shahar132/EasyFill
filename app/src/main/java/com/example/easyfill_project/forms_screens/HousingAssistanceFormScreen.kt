@@ -18,6 +18,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 
+import com.example.easyfill_project.hand_analysis.MotionTrackingController
+
 @Composable
 fun HousingAssistanceFormScreen(
     navController: NavHostController,
@@ -25,6 +27,20 @@ fun HousingAssistanceFormScreen(
 ) {
     val context = LocalContext.current
     val formId = "housing_assistance"
+
+    val motionController = remember {
+        MotionTrackingController(context)
+    }
+
+    val motionScope = rememberCoroutineScope()
+
+    DisposableEffect(Unit) {//It starts sensors for 30 seconds to create baseline.
+        motionController.startTracking(motionScope)
+
+        onDispose {
+            motionController.stopTracking()
+        }
+    }
 
     val sections = FormsRegistry.getFormById(formId).sections
 
