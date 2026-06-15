@@ -108,7 +108,6 @@ fun BaselineVoiceScreen(
                     אפשר לספר על עצמך, על תחביבים, דברים שאת/ה אוהב/ת לעשות בזמן הפנוי,
                     או כל דבר כללי שנוח לך לדבר עליו.
 
-                    ההקלטה הזו תשמש כבסיס להשוואה בהמשך, בזמן מילוי הטפסים.
                 """.trimIndent(),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
