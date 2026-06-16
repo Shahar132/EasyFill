@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -39,13 +40,13 @@ fun HomeScreen(
             style = MaterialTheme.typography.headlineLarge
         )
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // First card
         Card(
             modifier = Modifier
-                .width(230.dp)
-                .height(180.dp)
+                .width(245.dp)
+                .height(165.dp)
                 .clickable {
 
                     if (baselineDone) {
@@ -55,7 +56,11 @@ fun HomeScreen(
                     }
 
                 },
-            elevation = CardDefaults.cardElevation(6.dp)
+            elevation = CardDefaults.cardElevation(6.dp),
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.secondary
+            )
         ) {
 
             Column(
@@ -96,18 +101,22 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // second card
         Card(
             modifier = Modifier
-                .width(230.dp)
-                .height(180.dp)
+                .width(245.dp)
+                .height(165.dp)
                 .clickable {
                     // navigate to the relevant screen
                     navController.navigate("myFormsProgress")
                 },
-            elevation = CardDefaults.cardElevation(6.dp)
+            elevation = CardDefaults.cardElevation(6.dp),
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.secondary
+            )
         ) {
 
             Column(
@@ -143,6 +152,60 @@ fun HomeScreen(
                         text = "מעקב אחר ההתקדמות שלי",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface //text color in card
+                    )
+                }
+            }
+        }
+
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+// third card - info / guidance for personal setting
+        Card(
+            modifier = Modifier
+                .width(245.dp)
+                .height(165.dp)
+                .clickable {
+                    navController.navigate("guidanceSlides")
+                },
+            elevation = CardDefaults.cardElevation(6.dp),
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.secondary
+            )
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Image(
+                        painter = painterResource(id = R.drawable.info_card),
+                        contentDescription = "Important information",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                Divider()
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .background(MaterialTheme.colorScheme.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "לפני שמתחילים\nמידע חשוב והדרכה",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }

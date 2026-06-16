@@ -25,7 +25,7 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             onBackground = Color.White,// text color that appears ON the background
             onSurface = Color.White,//the text will be white
             onPrimary = Color.Black,
-            secondary = Color(0xFF524F4F), // dark grey
+            secondary = Color(0xFF5B5757), // dark grey
         )
 
         ContrastMode.LOW -> lightColorScheme(//light purple shades

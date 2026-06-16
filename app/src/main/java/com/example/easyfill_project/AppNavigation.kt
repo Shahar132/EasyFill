@@ -66,6 +66,7 @@ import com.example.easyfill_project.texttospeech.TtsTexts
 //for delay
 import kotlinx.coroutines.delay
 import androidx.core.content.edit
+import com.example.easyfill_project.screen.GuidanceSlidesScreen
 
 
 // Main navigation function
@@ -534,10 +535,16 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 MyFormsProgressScreen(navController = innerNavController)
                             }
 
+                            composable("guidanceSlides") {
+                                GuidanceSlidesScreen(navController = innerNavController)
+                            }
+
                             //navigate to second form
                             composable("bankDetailsForm") {
                                 // BankDetailsFormScreen(navController)
                             }
+
+
 
 
                         }
