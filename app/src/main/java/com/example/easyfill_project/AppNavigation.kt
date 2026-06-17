@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
 
 
+
 //for chatbot navigation
 import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.screen.SoundManager
@@ -35,6 +36,25 @@ import com.example.easyfill_project.chatbot.navigation.BotNavigationHandler
 
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.chatbot.model.BotAppState
+
+
+
+
+
+//
+import android.util.Log
+import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecTokenizer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+
+import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecIntentMatcher
+
+import kotlinx.coroutines.withContext
+import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecEmbeddingReader
+
+
+//
 
 
 // Needed to force RTL (right-to-left) for right-side drawer
@@ -143,6 +163,44 @@ fun AppWithDrawer(mainNavController: NavHostController) {
 
     //regarding tts
     val context = LocalContext.current
+
+//    LaunchedEffect(Unit) {
+//        withContext(Dispatchers.IO) {
+//            try {
+//                val matcher = Model2VecIntentMatcher(context)
+//                matcher.load()
+//
+//                val testSentences = listOf(
+//                    "אני מחפש איפה להתחיל בקשה חדשה",
+//                    "איפה אני רואה את מה שכבר התחלתי למלא",
+//                    "אני צריך להוסיף מסמך או טופס חדש",
+//                    "איפה החשבון שלי באפליקציה",
+//                    "אני לא מבין מה צריך לעשות במסך הזה",
+//                    "אפשר שתקריא לי מה מופיע פה",
+//                    "תפסיק לקרוא את הטקסט",
+//                    "קשה לי להקליד אפשר לדבר?",
+//                    "אני רוצה לשנות את הנוחות של האפליקציה",
+//                    "מה אתה יכול לעשות בשבילי"
+//                )
+//
+//                testSentences.forEach { sentence ->
+//                    val match = matcher.findBestIntent(sentence)
+//
+//                    Log.d(
+//                        "M2V_MATCH",
+//                        "text=$sentence | intent=${match?.intent} | score=${match?.score} | matched=${match?.matchedText}"
+//                    )
+//                }
+//
+//            } catch (t: Throwable) {
+//                Log.e("M2V_MATCH", "Intent matching test failed", t)
+//            }
+//        }
+//    }
+
+
+
+
     val ttsManager = remember { TextToSpeechManager(context) }
 
     var screenTextToRead by remember { mutableStateOf("") }

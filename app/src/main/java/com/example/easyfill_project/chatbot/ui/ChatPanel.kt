@@ -37,6 +37,11 @@ import com.example.easyfill_project.chatbot.model.BotResponse
 import com.example.easyfill_project.chatbot.model.ChatMessage
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 
+import androidx.compose.ui.platform.LocalContext
+import com.example.easyfill_project.chatbot.intent.Model2VecIntentDetector
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 @Composable
 fun ChatPanel(
     currentScreen: String,
@@ -56,8 +61,22 @@ fun ChatPanel(
         mutableStateOf(false)
     }
 
+    val context = LocalContext.current
+
+    val semanticIntentDetector = remember {
+        Model2VecIntentDetector(context)
+    }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            semanticIntentDetector.load()
+        }
+    }
+
     val chatBotManager = remember {
-        ChatBotManager()
+        ChatBotManager(
+            intentDetector = semanticIntentDetector
+        )
     }
 
     val messages = remember {
