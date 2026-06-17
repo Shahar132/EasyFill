@@ -7,7 +7,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.util.Log
 
-//Connects to Android sensors, starts/stops listening, and sends sensor data into MotionAnalyzer.
+// Connects to Android sensors, starts/stops listening, and sends sensor data into MotionAnalyzer.
 class MotionSensorManager(
     private val context: Context
 ) : SensorEventListener {
