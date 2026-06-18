@@ -68,6 +68,40 @@ import kotlinx.coroutines.delay
 import androidx.core.content.edit
 import com.example.easyfill_project.screen.GuidanceSlidesScreen
 
+//for chatbot ui
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
+
+
+
+//for chatbot navigation
+import com.example.easyfill_project.chatbot.model.BotAction
+import com.example.easyfill_project.screen.SoundManager
+import com.example.easyfill_project.chatbot.navigation.BotNavigationHandler
+
+import com.example.easyfill_project.chatbot.model.DistressSnapshot
+import com.example.easyfill_project.chatbot.model.BotAppState
+
+
+
+
+
+//
+import android.util.Log
+import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecTokenizer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+
+import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecIntentMatcher
+
+import kotlinx.coroutines.withContext
+import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecEmbeddingReader
+
+
+//
+
 
 // Main navigation function
 @Composable
@@ -544,15 +578,114 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 // BankDetailsFormScreen(navController)
                             }
 
-
-
-
                         }
+
+
+                        // for chatbot
+                        val testDistressSnapshot = DistressSnapshot(
+                            globalScore = 65,
+                            semanticTextScore = 0,
+                            faceScore = 0,
+                            voiceScore = 0,
+                            touchScore = 0,
+                            formBehaviorScore = 75
+                        )
+
+                        val shouldAutoOpenChat =
+                            testDistressSnapshot.globalScore >= 60 ||
+                                    testDistressSnapshot.formBehaviorScore >= 70 ||
+                                    testDistressSnapshot.semanticTextScore >= 70
+
+                        val botAppState = BotAppState(
+                            isMusicPlaying = SoundManager.selectedSound != "none",
+                            selectedSound = SoundManager.selectedSound,
+                            isTtsSpeaking = isTtsSpeaking,
+                            autoReadEnabled = autoReadEnabled,
+                            fontSizeMode = fontSizeMode.name,
+                            contrastMode = contrastMode.name
+                        )
+
+                        FloatingChatOverlay(
+                            currentScreen = currentRoute ?: "לא ידוע",
+                            autoOpenOnDistress = shouldAutoOpenChat,
+                            distressSnapshot = testDistressSnapshot,
+                            appState = botAppState,
+                            onBotAction = { action ->
+
+                                val navigationHandled = BotNavigationHandler.handle(
+                                    action = action,
+                                    navController = innerNavController
+                                )
+
+                                if (!navigationHandled) {
+                                    when (action) {
+
+                                        BotAction.ReadAloud -> {
+                                            ttsManager.speak(screenTextToRead)
+                                            isTtsSpeaking = true
+                                        }
+
+                                        BotAction.StopReading -> {
+                                            ttsManager.stop()
+                                            isTtsSpeaking = false
+                                        }
+
+                                        BotAction.EnableAutoRead -> {
+                                            autoReadEnabled = true
+
+                                            prefs.edit()
+                                                .putBoolean("auto_read_enabled", true)
+                                                .apply()
+
+                                            ttsManager.speak(screenTextToRead)
+                                            isTtsSpeaking = true
+                                        }
+
+                                        BotAction.DisableAutoRead -> {
+                                            autoReadEnabled = false
+
+                                            prefs.edit()
+                                                .putBoolean("auto_read_enabled", false)
+                                                .apply()
+
+                                            ttsManager.stop()
+                                            isTtsSpeaking = false
+                                        }
+
+                                        is BotAction.PlaySound -> {
+                                            SoundManager.play(
+                                                context = context,
+                                                soundName = action.option.key,
+                                                soundRes = action.option.soundRes
+                                            )
+                                        }
+
+                                        BotAction.StopBackgroundMusic -> {
+                                            SoundManager.stop()
+                                        }
+
+                                        is BotAction.SetContrast -> {
+                                            contrastMode = action.option.mode
+                                        }
+
+                                        is BotAction.SetFontSize -> {
+                                            fontSizeMode = action.option.mode
+                                        }
+
+                                        BotAction.None -> Unit
+
+                                        else -> Unit
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
                     }
                 }
             }
         }
-    }
 
-}
+
+
 

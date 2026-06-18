@@ -1,18 +1,32 @@
 package com.example.easyfill_project.screen
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material3.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
 @Composable
 fun FontSizeSettingsScreen(
@@ -33,23 +47,15 @@ fun FontSizeSettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        FontSizeOption(
-            title = "טקסט קטן",
-            selected = selectedMode == FontSizeMode.SMALL,
-            onClick = { onModeSelected(FontSizeMode.SMALL) }
-        )
-
-        FontSizeOption(
-            title = "טקסט רגיל",
-            selected = selectedMode == FontSizeMode.NORMAL,
-            onClick = { onModeSelected(FontSizeMode.NORMAL) }
-        )
-
-        FontSizeOption(
-            title = "טקסט גדול",
-            selected = selectedMode == FontSizeMode.LARGE,
-            onClick = { onModeSelected(FontSizeMode.LARGE) }
-        )
+        PersonalizationCatalog.fontSizes.forEach { option ->
+            FontSizeOptionCard(
+                title = option.displayName,
+                selected = selectedMode == option.mode,
+                onClick = {
+                    onModeSelected(option.mode)
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(140.dp))
 
@@ -61,8 +67,8 @@ fun FontSizeSettingsScreen(
             shape = RoundedCornerShape(20.dp),
             border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.surface,  // background
-                contentColor = MaterialTheme.colorScheme.onSurface   // text + icon
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
             )
         ) {
             Row(
@@ -72,7 +78,9 @@ fun FontSizeSettingsScreen(
                     imageVector = Icons.Default.ArrowForward,
                     contentDescription = "Back"
                 )
+
                 Spacer(modifier = Modifier.width(6.dp))
+
                 Text(
                     text = "חזרה למסך הקודם",
                     style = MaterialTheme.typography.bodyMedium
@@ -80,11 +88,10 @@ fun FontSizeSettingsScreen(
             }
         }
     }
-    }
-
+}
 
 @Composable
-fun FontSizeOption(
+fun FontSizeOptionCard(
     title: String,
     selected: Boolean,
     onClick: () -> Unit
