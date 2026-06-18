@@ -1,22 +1,29 @@
 package com.example.easyfill_project.chatbot.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,7 +35,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.easyfill_project.chatbot.intent.Model2VecIntentDetector
 import com.example.easyfill_project.chatbot.logic.ChatBotManager
 import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.chatbot.model.BotAppState
@@ -36,11 +49,13 @@ import com.example.easyfill_project.chatbot.model.BotContext
 import com.example.easyfill_project.chatbot.model.BotResponse
 import com.example.easyfill_project.chatbot.model.ChatMessage
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
-
-import androidx.compose.ui.platform.LocalContext
-import com.example.easyfill_project.chatbot.intent.Model2VecIntentDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.Icon
 
 @Composable
 fun ChatPanel(
@@ -88,6 +103,14 @@ fun ChatPanel(
         )
     }
 
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
     val botContext = BotContext(
         currentScreen = currentScreen,
         distressSnapshot = distressSnapshot,
@@ -111,6 +134,60 @@ fun ChatPanel(
         }
     }
 
+    fun sendCurrentMessage() {
+        val userText = message.trim()
+
+        if (userText.isEmpty()) {
+            return
+        }
+
+        messages.add(
+            ChatMessage(
+                text = userText,
+                isFromUser = true
+            )
+        )
+
+        val currentPendingAction = pendingAction
+
+        if (currentPendingAction != null && isUserApproval(userText)) {
+            onBotAction(currentPendingAction)
+
+            messages.add(
+                ChatMessage(
+                    text = getActionExecutedMessage(currentPendingAction),
+                    isFromUser = false
+                )
+            )
+
+            pendingAction = null
+            message = ""
+            return
+        }
+
+        if (currentPendingAction != null && isUserRejection(userText)) {
+            messages.add(
+                ChatMessage(
+                    text = "אין בעיה, לא ביצעתי את הפעולה.",
+                    isFromUser = false
+                )
+            )
+
+            pendingAction = null
+            message = ""
+            return
+        }
+
+        val botResponse = chatBotManager.getResponse(
+            userMessage = userText,
+            context = botContext
+        )
+
+        handleBotResponse(botResponse)
+
+        message = ""
+    }
+
     LaunchedEffect(currentScreen) {
         if (!hasShownDistressSuggestion) {
             val distressSuggestion = chatBotManager.getDistressSuggestion(botContext)
@@ -124,31 +201,56 @@ fun ChatPanel(
 
     Card(
         modifier = modifier
-            .width(330.dp)
-            .height(420.dp),
+            .width(320.dp)
+            .height(330.dp),
         shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF1ECF4)
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(12.dp)
         ) {
-            Text(
-                text = "EasyFill Assistant",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "EasyFill Assistant",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
 
-            Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
 
-            Text(
-                text = "מסך נוכחי: $currentScreen",
-                style = MaterialTheme.typography.bodySmall
-            )
+                    Text(
+                        text = "מסך נוכחי: $currentScreen",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Text(
+                        text = "×",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -159,89 +261,94 @@ fun ChatPanel(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedTextField(
-                value = message,
-                onValueChange = { message = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text("כתוב הודעה...")
+            CompactChatInput(
+                message = message,
+                onMessageChange = { message = it },
+                onSend = {
+                    sendCurrentMessage()
                 },
-                singleLine = true
+                onMicClick = {
+                    // כאן בהמשך נחבר קלט קולי / STT
+                }
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = {
-                    val userText = message.trim()
-
-                    if (userText.isNotEmpty()) {
-                        messages.add(
-                            ChatMessage(
-                                text = userText,
-                                isFromUser = true
-                            )
-                        )
-
-                        val currentPendingAction = pendingAction
-
-                        if (currentPendingAction != null && isUserApproval(userText)) {
-                            onBotAction(currentPendingAction)
-
-                            messages.add(
-                                ChatMessage(
-                                    text = getActionExecutedMessage(currentPendingAction),
-                                    isFromUser = false
-                                )
-                            )
-
-                            pendingAction = null
-                            message = ""
-                            return@Button
-                        }
-
-                        if (currentPendingAction != null && isUserRejection(userText)) {
-                            messages.add(
-                                ChatMessage(
-                                    text = "אין בעיה, לא ביצעתי את הפעולה.",
-                                    isFromUser = false
-                                )
-                            )
-
-                            pendingAction = null
-                            message = ""
-                            return@Button
-                        }
-
-                        val botResponse = chatBotManager.getResponse(
-                            userMessage = userText,
-                            context = botContext
-                        )
-
-                        handleBotResponse(botResponse)
-
-                        message = ""
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("שלח")
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Button(
-                onClick = onClose,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("סגור")
-            }
         }
     }
 }
 
+@Composable
+private fun CompactChatInput(
+    message: String,
+    onMessageChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onMicClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White, RoundedCornerShape(28.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp)
+        ) {
+            if (message.isBlank()) {
+                Text(
+                    text = "כתוב הודעה...",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            BasicTextField(
+                value = message,
+                onValueChange = onMessageChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        onSend()
+                    }
+                )
+            )
+        }
+
+        IconButton(
+            onClick = onMicClick,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Mic,
+                contentDescription = "קלט קולי",
+                tint = Color.DarkGray
+            )
+        }
+
+        IconButton(
+            onClick = onSend,
+            modifier = Modifier
+                .size(40.dp)
+                .background(Color.Black, CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Send,
+                contentDescription = "שלח",
+                tint = Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
 @Composable
 private fun ChatMessageBubble(
     chatMessage: ChatMessage

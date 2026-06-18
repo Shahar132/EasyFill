@@ -164,40 +164,6 @@ fun AppWithDrawer(mainNavController: NavHostController) {
     //regarding tts
     val context = LocalContext.current
 
-//    LaunchedEffect(Unit) {
-//        withContext(Dispatchers.IO) {
-//            try {
-//                val matcher = Model2VecIntentMatcher(context)
-//                matcher.load()
-//
-//                val testSentences = listOf(
-//                    "אני מחפש איפה להתחיל בקשה חדשה",
-//                    "איפה אני רואה את מה שכבר התחלתי למלא",
-//                    "אני צריך להוסיף מסמך או טופס חדש",
-//                    "איפה החשבון שלי באפליקציה",
-//                    "אני לא מבין מה צריך לעשות במסך הזה",
-//                    "אפשר שתקריא לי מה מופיע פה",
-//                    "תפסיק לקרוא את הטקסט",
-//                    "קשה לי להקליד אפשר לדבר?",
-//                    "אני רוצה לשנות את הנוחות של האפליקציה",
-//                    "מה אתה יכול לעשות בשבילי"
-//                )
-//
-//                testSentences.forEach { sentence ->
-//                    val match = matcher.findBestIntent(sentence)
-//
-//                    Log.d(
-//                        "M2V_MATCH",
-//                        "text=$sentence | intent=${match?.intent} | score=${match?.score} | matched=${match?.matchedText}"
-//                    )
-//                }
-//
-//            } catch (t: Throwable) {
-//                Log.e("M2V_MATCH", "Intent matching test failed", t)
-//            }
-//        }
-//    }
-
 
 
 
