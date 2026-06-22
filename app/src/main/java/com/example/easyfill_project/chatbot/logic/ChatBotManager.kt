@@ -36,35 +36,16 @@ class ChatBotManager(
                 )
             }
 
-            BotIntent.UserConfused -> {
+            BotIntent.UserConfused -> {//if the user is confused
                 BotResponse(
-                    message = if (globalDistressScore >= 60) {
-                        "זה בסדר, נתקדם לאט. נראה שהשלב הזה קצת עמוס. אפשר לפתוח את מסך ההתאמה האישית כדי לשנות גודל טקסט, צבעים או צלילי רקע. לפתוח?"
-                    } else {
-                        "זה בסדר, נתקדם לאט. אפשר לשאול אותי מה עושים במסך הזה, או להשתמש בכפתורי ההשמעה והמיקרופון ליד השדות."
-                    },
-                    action = if (globalDistressScore >= 60) {
-                        BotAction.OpenPersonalSettings
-                    } else {
-                        BotAction.None
-                    },
-                    requiresConfirmation = globalDistressScore >= 60
+                    message = "אני יודע שזה יכול להיות מבלבל, נתקדם לאט. אפשר לשאול אותי מה עושים במסך הזה, או להשתמש בכפתורי ההשמעה והמיקרופון ליד השדות."
                 )
             }
 
-            BotIntent.UserStressed -> {
+            BotIntent.UserStressed -> {//when user is in stress
                 BotResponse(
-                    message = if (globalDistressScore >= 60) {
-                        "אני שם לב שהשימוש כרגע קצת עמוס. רוצה שאפתח את מסך ההתאמה האישית כדי שיהיה נוח יותר?"
-                    } else {
-                        "אני מבין שזה יכול להיות עמוס. אפשר להמשיך לאט, שלב אחד בכל פעם."
-                    },
-                    action = if (globalDistressScore >= 60) {
-                        BotAction.OpenPersonalSettings
-                    } else {
-                        BotAction.None
-                    },
-                    requiresConfirmation = globalDistressScore >= 60
+                    message = "אני מבין שזה יכול להיות עמוס ומלחיץ. אפשר לעצור רגע, לקחת נשימה קצרה, ולהמשיך שלב אחד בכל פעם. אני כאן כדי לעזור."
+
                 )
             }
 
@@ -289,70 +270,45 @@ class ChatBotManager(
             }
         }
     }
-
-    fun getDistressSuggestion(
-        context: BotContext
-    ): BotResponse? {
-        val distress = context.distressSnapshot
+    // support logic - based on detected score.
+    fun getDistressSuggestion(context: BotContext): BotResponse? {
+        val handScore = context.distressSnapshot.touchScore
         val appState = context.appState
 
-        return when {
-            distress.formBehaviorScore >= 70 && !appState.isMusicPlaying -> {
-                BotResponse(
-                    message = "שמתי לב שאתה נמצא הרבה זמן בשלב הזה. רוצה שאפעיל מוזיקת רקע מרגיעה?",
-                    action = BotAction.PlaySound(PersonalizationCatalog.defaultCalmSound),
-                    requiresConfirmation = true
-                )
-            }
+        return when (handScore) {
+            0 -> null//none
 
-            distress.formBehaviorScore >= 70 &&
-                    appState.isMusicPlaying &&
-                    !appState.autoReadEnabled -> {
-                BotResponse(
-                    message = "שמתי לב שאתה נמצא הרבה זמן בשלב הזה. מוזיקת הרקע כבר פועלת. רוצה שאפעיל הקראה אוטומטית כדי להקל עליך במסכים הבאים?",
-                    action = BotAction.EnableAutoRead,
-                    requiresConfirmation = true
-                )
-            }
+            //only supportive message when score is 1
+            1 -> BotResponse(
+                message = "שמנו לב שאולי קצת קשה לך. אפשר לקחת נשימה קצרה או הפסקה, במידה ואתה צריך עזרה - אנחנו כאן לעזור."
+            )
 
-            distress.semanticTextScore >= 70 -> {
-                BotResponse(
-                    message = "נראה שהשלב הזה קצת לא ברור. ליד כל שדה יש כפתור השמעה להסבר, ואפשר גם להשתמש במיקרופון כדי לדבר את התשובה במקום לכתוב.",
-                    action = BotAction.None
-                )
-            }
+            2 -> BotResponse(
+                message = "רוצה שאגדיל את הטקסט כדי שיהיה קל יותר לקרוא?",
+                action = BotAction.SetFontSize(PersonalizationCatalog.largeFont),
+                requiresConfirmation = true
+            )
 
-            (distress.faceScore >= 70 ||
-                    distress.voiceScore >= 70 ||
-                    distress.touchScore >= 70) &&
-                    appState.contrastMode != PersonalizationCatalog.lowContrast.mode.name -> {
-                BotResponse(
-                    message = "נראה שהשימוש כרגע קצת עמוס. רוצה שאעביר את הצבעים למצב רגוע יותר?",
-                    action = BotAction.SetContrast(PersonalizationCatalog.lowContrast),
-                    requiresConfirmation = true
-                )
-            }
+            3 -> BotResponse(
+                message = if (!appState.autoReadEnabled) {
+                    "נראה שקשה לך כרגע. רוצה שאפעיל הקראה אוטומטית? אפשר גם להשתמש במיקרופון ולענות בקול במקום להקליד."
+                } else {
+                    "נראה שקשה לך כרגע. רוצה שאעביר את הצבעים למצב רגוע יותר? אפשר גם להשתמש במיקרופון ולענות בקול במקום להקליד."
+                },
+                action = if (!appState.autoReadEnabled) {
+                    BotAction.EnableAutoRead
+                } else {
+                    BotAction.SetContrast(PersonalizationCatalog.lowContrast)
+                },
+                requiresConfirmation = true
+            )
+            4 -> BotResponse(
+                message = "נראה שקשה לך מאוד כרגע. רוצה שאציג אפשרויות סיוע ויצירת קשר עם מוקדי עזרה?",
+                action = BotAction.ShowEmergencyContacts,
+                requiresConfirmation = true
+            )
 
-            distress.globalScore >= 60 &&
-                    appState.fontSizeMode != PersonalizationCatalog.largeFont.mode.name -> {
-                BotResponse(
-                    message = "נראה שהשלב הזה קצת עמוס. רוצה שאגדיל את הטקסט כדי שיהיה קל יותר לקרוא?",
-                    action = BotAction.SetFontSize(PersonalizationCatalog.largeFont),
-                    requiresConfirmation = true
-                )
-            }
-
-            distress.globalScore >= 60 -> {
-                BotResponse(
-                    message = "נראה שהשלב הזה קצת עמוס. רוצה שאפתח את מסך ההתאמה האישית כדי שתוכל לבחור מה יעזור לך?",
-                    action = BotAction.OpenPersonalSettings,
-                    requiresConfirmation = true
-                )
-            }
-
-            else -> {
-                null
-            }
+            else -> null
         }
     }
 

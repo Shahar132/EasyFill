@@ -17,8 +17,7 @@ class MotionTrackingController(
 ) {
 
 
-    private val distressManager = DistressScoringManager()
-
+    private val distressManager = DistressScoringManager
     private val motionManager = MotionSensorManager(context)
     private val baselineRepository = MotionBaselineRepository()
 
@@ -107,7 +106,17 @@ class MotionTrackingController(
 
         Log.d(
             "MOTION_SCORE",
-            "score=$score, exceedCount=$exceedCount, exceedRatio=$exceedRatio, baselineP95=${baseline.accelerationP95}"
+            "score=$score, " +
+                    "accExceedCount=$exceedCount, " +
+                    "accExceedRatio=$exceedRatio, " +
+                    "gyroExceedCount=$gyroExceedCount, " +
+                    "gyroExceedRatio=$gyroExceedRatio, " +
+                    "baselineAccP95=${baseline.accelerationP95}, " +
+                    "baselineGyroP95=${baseline.gyroscopeP95}, " +
+                    "currentAccVar=${current.accelerationVariation}, " +
+                    "accVarThreshold=${baseline.accelerationVariation * ACC_VARIATION_FACTOR}, " +
+                    "currentGyroVar=${current.gyroscopeVariation}, " +
+                    "gyroVarThreshold=${baseline.gyroscopeVariation * GYRO_VARIATION_FACTOR}"
         )
 
         distressManager.updateHandScore(score)

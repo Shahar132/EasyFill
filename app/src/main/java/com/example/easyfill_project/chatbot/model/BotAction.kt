@@ -26,6 +26,8 @@ sealed class BotAction {
     object OpenGuidance : BotAction()
     object OpenUploadPdf : BotAction()
 
+    object ShowEmergencyContacts : BotAction()
+
     data class PlaySound(
         val option: SoundOption
     ) : BotAction()

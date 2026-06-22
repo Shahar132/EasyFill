@@ -44,6 +44,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun FloatingChatOverlay(
@@ -68,6 +70,9 @@ fun FloatingChatOverlay(
         mutableStateOf(false)
     }
 
+    var showAlertText by remember { mutableStateOf(false) }
+
+
     LaunchedEffect(autoOpenOnDistress) {
         if (autoOpenOnDistress && !hasAutoOpenedForDistress) {
             hasUnreadDistressAlert = true
@@ -81,6 +86,16 @@ fun FloatingChatOverlay(
 
         if (!autoOpenOnDistress) {
             hasAutoOpenedForDistress = false
+        }
+    }
+
+    LaunchedEffect(distressSnapshot.touchScore) {
+        if (distressSnapshot.touchScore > 0) {
+            showAlertText = true
+            delay(5000)
+            showAlertText = false
+        } else {
+            showAlertText = false
         }
     }
 
@@ -194,7 +209,7 @@ fun FloatingChatOverlay(
                     )
                 }
                 .zIndex(30f)
-                .size(76.dp),
+                .size(width = 190.dp, height = 100.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -248,13 +263,48 @@ fun FloatingChatOverlay(
                 )
             }
 
-            if (hasUnreadDistressAlert && !isChatOpen) {
+            if (distressSnapshot.touchScore > 0 && !isChatOpen) {
+
+                val alertColor = when (distressSnapshot.touchScore) {
+                    1 -> Color(0xFF4CAF50) // green
+                    2 -> Color(0xFFFFA000) // orange
+                    else -> Color.Red      // score 3-4
+                }
+
+                val alertText = when (distressSnapshot.touchScore) {
+                    1 -> "יש לי הצעה קטנה"
+                    2 -> "אפשר לעזור?"
+                    3 -> "רוצה שאקל עליך?"
+                    else -> "יש אפשרויות סיוע"
+                }
+
+                if (showAlertText) {
+                //  text bubble
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.Center)
+                        .offset(x = 55.dp, y = (-15).dp)
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                        .border(1.dp, alertColor, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = alertText,
+                        color = alertColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .offset(x = (-40).dp, y = (-20).dp)
                         .size(22.dp)
                         .clip(CircleShape)
-                        .background(Color.Red),
+                        .background(alertColor),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -266,5 +316,6 @@ fun FloatingChatOverlay(
                 }
             }
         }
+
     }
 }

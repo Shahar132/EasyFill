@@ -76,6 +76,8 @@ fun ChatPanel(
         mutableStateOf(false)
     }
 
+
+
     val context = LocalContext.current
 
     val semanticIntentDetector = remember {
@@ -151,7 +153,10 @@ fun ChatPanel(
         val currentPendingAction = pendingAction
 
         if (currentPendingAction != null && isUserApproval(userText)) {
-            onBotAction(currentPendingAction)
+
+            if (currentPendingAction != BotAction.ShowEmergencyContacts) {
+                onBotAction(currentPendingAction)
+            }
 
             messages.add(
                 ChatMessage(
@@ -188,14 +193,46 @@ fun ChatPanel(
         message = ""
     }
 
-    LaunchedEffect(currentScreen) {
-        if (!hasShownDistressSuggestion) {
+    var lastShownHandScore by remember {
+        mutableStateOf(0)
+    }
+    var distressMessageIndex by remember { mutableStateOf<Int?>(null) }
+
+
+    LaunchedEffect(distressSnapshot.touchScore) {
+        val currentHandScore = distressSnapshot.touchScore
+
+        if (currentHandScore > 0 && currentHandScore != lastShownHandScore) {
             val distressSuggestion = chatBotManager.getDistressSuggestion(botContext)
 
             if (distressSuggestion != null) {
-                handleBotResponse(distressSuggestion)
-                hasShownDistressSuggestion = true
+                val index = distressMessageIndex
+
+                if (index != null && index in messages.indices) {
+                    messages[index] = ChatMessage(
+                        text = distressSuggestion.message,
+                        isFromUser = false
+                    )
+                } else {
+                    messages.add(
+                        ChatMessage(
+                            text = distressSuggestion.message,
+                            isFromUser = false
+                        )
+                    )
+                    distressMessageIndex = messages.lastIndex
+                }
+
+                if (distressSuggestion.action != BotAction.None) {
+                    pendingAction = distressSuggestion.action
+                }
+
+                lastShownHandScore = currentHandScore
             }
+        }
+
+        if (currentHandScore == 0) {
+            lastShownHandScore = 0
         }
     }
 
@@ -484,8 +521,27 @@ private fun getActionExecutedMessage(action: BotAction): String {
             "שיניתי את גודל הטקסט ל${action.option.displayName}."
         }
 
+        BotAction.ShowEmergencyContacts -> {
+            """
+אפשר לפנות לעזרה דרך:
+
+• אדם קרוב שאת/ה סומך/ת עליו
+• מוקד חירום מקומי במקרה של סכנה מיידית
+• עובד/ת סוציאלי/ת, יועץ/ת או רופא/ה
+
+בנוסף, אני יכול לעזור לך עכשיו בתוך האפליקציה:
+• להגדיל טקסט
+• להפעיל הקראה
+• לשנות צבעים למצב רגוע יותר
+• לפתוח התאמה אישית
+
+אפשר לכתוב לי למשל: "תגדיל טקסט" או "תפעיל הקראה".
+""".trimIndent()
+        }
+
         BotAction.None -> {
             ""
         }
+
     }
 }

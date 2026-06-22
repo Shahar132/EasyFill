@@ -84,23 +84,7 @@ import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.chatbot.model.BotAppState
 
 
-
-
-
-//
-import android.util.Log
-import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecTokenizer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
-
-import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecIntentMatcher
-
-import kotlinx.coroutines.withContext
-import com.example.easyfill_project.chatbot.semantic.model2vec.Model2VecEmbeddingReader
-
-
-//
+import com.example.easyfill_project.distress_scoring.DistressScoringManager
 
 
 // Main navigation function
@@ -582,19 +566,21 @@ fun AppWithDrawer(mainNavController: NavHostController) {
 
 
                         // for chatbot
-                        val testDistressSnapshot = DistressSnapshot(
-                            globalScore = 65,
+                        val handScore by DistressScoringManager.handScore.collectAsState()
+                        val voiceScore by DistressScoringManager.voiceScore.collectAsState()
+                        val faceScore by DistressScoringManager.faceScore.collectAsState()
+                        val totalScore by DistressScoringManager.totalScore.collectAsState()
+
+                        val realDistressSnapshot = DistressSnapshot(
+                            globalScore = totalScore,
                             semanticTextScore = 0,
-                            faceScore = 0,
-                            voiceScore = 0,
-                            touchScore = 0,
-                            formBehaviorScore = 75
+                            faceScore = faceScore,
+                            voiceScore = voiceScore,
+                            touchScore = handScore,
+                            formBehaviorScore = 0
                         )
 
-                        val shouldAutoOpenChat =
-                            testDistressSnapshot.globalScore >= 60 ||
-                                    testDistressSnapshot.formBehaviorScore >= 70 ||
-                                    testDistressSnapshot.semanticTextScore >= 70
+                        //val shouldAutoOpenChat = totalScore >= 2
 
                         val botAppState = BotAppState(
                             isMusicPlaying = SoundManager.selectedSound != "none",
@@ -607,8 +593,8 @@ fun AppWithDrawer(mainNavController: NavHostController) {
 
                         FloatingChatOverlay(
                             currentScreen = currentRoute ?: "לא ידוע",
-                            autoOpenOnDistress = shouldAutoOpenChat,
-                            distressSnapshot = testDistressSnapshot,
+                            autoOpenOnDistress = false,
+                            distressSnapshot = realDistressSnapshot,
                             appState = botAppState,
                             onBotAction = { action ->
 

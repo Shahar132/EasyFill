@@ -1,46 +1,59 @@
 package com.example.easyfill_project.distress_scoring
 
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
-class DistressScoringManager {
+object DistressScoringManager {
 
-    private var handScore = 0//form the controller can be between 0 to 4
-    private var voiceScore = 0
-    private var faceScore = 0
+    private val _handScore = MutableStateFlow(0)
+    val handScore: StateFlow<Int> = _handScore
+
+    private val _voiceScore = MutableStateFlow(0)
+    val voiceScore: StateFlow<Int> = _voiceScore
+
+    private val _faceScore = MutableStateFlow(0)
+    val faceScore: StateFlow<Int> = _faceScore
+
+    private val _totalScore = MutableStateFlow(0)
+    val totalScore: StateFlow<Int> = _totalScore
 
     fun updateHandScore(score: Int) {
-        handScore = score
+        _handScore.value = score
+        updateTotal()
     }
 
     fun updateVoiceScore(score: Int) {
-        voiceScore = score
+        _voiceScore.value = score
+        updateTotal()
     }
 
     fun updateFaceScore(score: Int) {
-        faceScore = score
+        _faceScore.value = score
+        updateTotal()
     }
 
-    fun getTotalScore(): Int {
-        return handScore + voiceScore + faceScore
+    private fun updateTotal() {
+        _totalScore.value =
+            _handScore.value + _voiceScore.value + _faceScore.value
+
+        printStatus()
     }
 
     fun isDistressDetected(): Boolean {
-        return getTotalScore() >= 2
+        return _totalScore.value >= 2
     }
 
     fun printStatus() {
-
         Log.d(
             "DISTRESS_SCORE",
             """
-            Hand score = $handScore
-            Voice score = $voiceScore
-            Face score = $faceScore
-            
-            Total score = ${getTotalScore()}
+            Hand score = ${_handScore.value}
+            Voice score = ${_voiceScore.value}
+            Face score = ${_faceScore.value}
+            Total score = ${_totalScore.value}
             Distress = ${isDistressDetected()}
             """.trimIndent()
         )
-
     }
 }
