@@ -20,6 +20,9 @@ import kotlinx.coroutines.delay
 
 import com.example.easyfill_project.hand_analysis.MotionTrackingController
 
+//for form behavior analysis Baseline
+import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
+
 @Composable
 fun HousingAssistanceFormScreen(
     navController: NavHostController,
@@ -40,6 +43,10 @@ fun HousingAssistanceFormScreen(
         onDispose {
             motionController.stopTracking()
         }
+    }
+
+    LaunchedEffect(Unit) { // It resets form behavior tracking so each form entry starts a new baseline session.
+        FormBehaviorTrackingController.clear()
     }
 
     val sections = FormsRegistry.getFormById(formId).sections
