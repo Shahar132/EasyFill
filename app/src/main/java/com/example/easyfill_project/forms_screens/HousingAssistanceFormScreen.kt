@@ -305,6 +305,13 @@ fun HousingAssistanceFormScreen(
                         saveFormData()
 
                         val previousStep = currentStep - 1
+
+                       //  Reports backward step navigation to the form behavior tracker.
+                        FormBehaviorTrackingController.onStepChanged(
+                            fromStep = currentStep,
+                            toStep = previousStep
+                        )
+
                         saveStep(previousStep)
                         currentStep = previousStep
                     },
@@ -327,9 +334,15 @@ fun HousingAssistanceFormScreen(
 
                     if (currentStep < sections.size - 1) {
                         val nextStep = currentStep + 1
+
+                       // Reports forward step navigation to the form behavior tracker.
+                        FormBehaviorTrackingController.onStepChanged(
+                            fromStep = currentStep,
+                            toStep = nextStep
+                        )
+
                         saveStep(nextStep)
                         currentStep = nextStep
-
                     } else {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
 

@@ -27,6 +27,18 @@ object FormBehaviorTrackingController {
     private const val IDLE_LEVEL_2_MS = 20_000L
     private const val IDLE_LEVEL_3_MS = 30_000L
 
+
+
+    // Step navigation is checked within this time window.
+// This helps detect repeated movement between form steps in a short period.
+    private const val STEP_NAVIGATION_WINDOW_MS = 60_000L
+
+    // A step visit shorter than this, without editing fields, is treated as a possible no-progress visit.
+// This is not a distress trigger by itself, only a supporting navigation signal.
+    private const val SHORT_STEP_VISIT_MS = 10_000L
+
+
+
     private val activeSessions = mutableMapOf<String, FieldBehaviorSession>()
     private val completedSamples = mutableListOf<FieldBehaviorSample>()
     private val fieldFocusCounts = mutableMapOf<String, Int>()
@@ -34,6 +46,41 @@ object FormBehaviorTrackingController {
     private var currentBaseline: FormBehaviorBaseline? = null
 
     private val baselineRepository = FormBehaviorBaselineRepository()
+
+
+    // Stores the last time the user moved between form steps.
+    private var lastStepChangeTimeMs: Long? = null
+
+    // Stores the last navigation direction.
+// 1 = forward, -1 = backward, 0 = no previous direction.
+    private var lastStepDirection: Int = 0
+
+    // Stores recent step navigation events inside the navigation time window.
+// This allows the score to go down after the user stops moving back and forth.
+    private val recentStepNavigationEvents = mutableListOf<StepNavigationEvent>()
+
+    // Stores fields edited since the last step change.
+// This helps detect movement between steps without real progress.
+    private val editedFieldsSinceLastStepChange = mutableSetOf<String>()
+
+    // Stores the latest step navigation result so other modules can read it later.
+    private var lastStepNavigationResult = FormStepNavigationResult()
+
+    // Stores the latest field behavior comparison result.
+   // It is updated after a field sample is compared to the baseline.
+    private var lastFieldComparisonResult: FormBehaviorComparisonResult? = null
+
+    // Stores the latest overall form behavior result.
+    // This combines field behavior and step navigation behavior.
+    private var lastOverallFormBehaviorResult = FormBehaviorOverallResult()
+
+    private data class StepNavigationEvent(
+        val timestampMs: Long,
+        val wasBackward: Boolean,
+        val directionChanged: Boolean,
+        val noProgress: Boolean,
+        val shortNoProgress: Boolean
+    )
 
     fun onFieldFocused(
         fieldId: String,
@@ -93,6 +140,12 @@ object FormBehaviorTrackingController {
             oldValue = session.lastValue,
             newValue = newValue
         )
+
+        // Marks this field as edited since the last step change.
+        // This helps detect navigation between steps without real form progress.
+        if (delta.insertedChars > 0 || delta.deletedChars > 0) {
+            editedFieldsSinceLastStepChange.add(fieldId)
+        }
 
         session.insertedChars += delta.insertedChars
         session.deletedChars += delta.deletedChars
@@ -195,7 +248,7 @@ object FormBehaviorTrackingController {
                         baseline = baseline
                     )
 
-                    // Keeps the compact log you already had.
+                    // Keeps the compact log.
                     Log.d(
                         TAG,
                         "Comparison result: $comparisonResult"
@@ -205,22 +258,26 @@ object FormBehaviorTrackingController {
                     Log.d(
                         "FORM_COMPARISON",
                         """
-            Field = ${comparisonResult.fieldId}
-            Score = ${comparisonResult.score}
-            Level = ${comparisonResult.level}
-            Top contributor = ${comparisonResult.topContributor}
-            
-            dwellTimeZ = ${comparisonResult.dwellTimeZ}
-            thinkingTimeZ = ${comparisonResult.thinkingTimeZ}
-            typingSpeedZ = ${comparisonResult.typingSpeedZ}
-            idleTimeZ = ${comparisonResult.idleTimeZ}
-            reviewTimeZ = ${comparisonResult.reviewTimeZ}
-            deleteRatioZ = ${comparisonResult.deleteRatioZ}
-            longPausesZ = ${comparisonResult.longPausesZ}
-            
-            shouldSuggestHelp = ${comparisonResult.shouldSuggestHelp}
-            """.trimIndent()
+                    Field = ${comparisonResult.fieldId}
+                    Score = ${comparisonResult.score}
+                    Level = ${comparisonResult.level}
+                    Top contributor = ${comparisonResult.topContributor}
+                    
+                    dwellTimeZ = ${comparisonResult.dwellTimeZ}
+                    thinkingTimeZ = ${comparisonResult.thinkingTimeZ}
+                    typingSpeedZ = ${comparisonResult.typingSpeedZ}
+                    idleTimeZ = ${comparisonResult.idleTimeZ}
+                    reviewTimeZ = ${comparisonResult.reviewTimeZ}
+                    deleteRatioZ = ${comparisonResult.deleteRatioZ}
+                    longPausesZ = ${comparisonResult.longPausesZ}
+                    
+                    shouldSuggestHelp = ${comparisonResult.shouldSuggestHelp}
+                    """.trimIndent()
                     )
+
+                    // Saves the latest field comparison result and updates the overall form behavior score.
+                    lastFieldComparisonResult = comparisonResult
+                    updateOverallFormBehaviorResult()
                 }
             }
         } else {
@@ -244,6 +301,18 @@ object FormBehaviorTrackingController {
         completedSamples.clear()
         fieldFocusCounts.clear()
         currentBaseline = null
+
+        // Clears step navigation behavior data for a new form session.
+        lastStepChangeTimeMs = null
+        lastStepDirection = 0
+
+        recentStepNavigationEvents.clear()
+        editedFieldsSinceLastStepChange.clear()
+        lastStepNavigationResult = FormStepNavigationResult()
+
+        // Clears the latest behavior results for a new form session.
+        lastFieldComparisonResult = null
+        lastOverallFormBehaviorResult = FormBehaviorOverallResult()
 
         Log.d(TAG, "Form behavior tracking cleared. New baseline session started.")
     }
@@ -412,6 +481,263 @@ object FormBehaviorTrackingController {
             onFailure = { e ->
                 Log.e(TAG, "Failed to save baseline to Firebase", e)
             }
+        )
+    }
+
+
+    // Tracks navigation behavior between form steps.
+// This detects repeated backtracking, direction changes, and navigation without editing fields.
+// The result is used as a supporting signal only, not as a standalone distress trigger.
+    fun onStepChanged(
+        fromStep: Int,
+        toStep: Int
+    ) {
+        if (fromStep == toStep) return
+
+        val now = SystemClock.elapsedRealtime()
+
+        val direction = if (toStep > fromStep) {
+            1 // Forward
+        } else {
+            -1 // Backward
+        }
+
+        val previousStepChangeTime = lastStepChangeTimeMs
+        val timeSinceLastStepChange = previousStepChangeTime?.let {
+            now - it
+        }
+
+        val editedFieldsCount = editedFieldsSinceLastStepChange.size
+
+        // A direction change means forward -> backward or backward -> forward.
+        val directionChanged =
+            lastStepDirection != 0 &&
+                    direction != lastStepDirection &&
+                    timeSinceLastStepChange != null &&
+                    timeSinceLastStepChange <= STEP_NAVIGATION_WINDOW_MS
+
+        // Pure forward scanning is not counted as no-progress confusion.
+        // No-progress navigation is counted only when the user moves backward
+        // or changes direction without editing fields.
+        val noProgress =
+            editedFieldsCount == 0 &&
+                    (direction == -1 || directionChanged)
+
+        // A short no-progress visit is a quick movement away from a step without editing fields.
+        // This is treated as a supporting signal only.
+        val shortNoProgress =
+            timeSinceLastStepChange != null &&
+                    timeSinceLastStepChange <= SHORT_STEP_VISIT_MS &&
+                    noProgress
+
+        val event = StepNavigationEvent(
+            timestampMs = now,
+            wasBackward = direction == -1,
+            directionChanged = directionChanged,
+            noProgress = noProgress,
+            shortNoProgress = shortNoProgress
+        )
+
+        recentStepNavigationEvents.add(event)
+
+        // Keeps only events that happened inside the selected navigation window.
+        recentStepNavigationEvents.removeAll { stepEvent ->
+            now - stepEvent.timestampMs > STEP_NAVIGATION_WINDOW_MS
+        }
+
+        val backStepCount = recentStepNavigationEvents.count { it.wasBackward }
+        val directionChangeCount = recentStepNavigationEvents.count { it.directionChanged }
+        val noProgressStepSwitches = recentStepNavigationEvents.count { it.noProgress }
+        val shortNoProgressStepVisits = recentStepNavigationEvents.count { it.shortNoProgress }
+        val changesInLastWindow = recentStepNavigationEvents.size
+
+        val score = calculateStepNavigationScore(
+            backStepCount = backStepCount,
+            directionChangeCount = directionChangeCount,
+            noProgressStepSwitches = noProgressStepSwitches,
+            shortNoProgressStepVisits = shortNoProgressStepVisits,
+            changesInLastWindow = changesInLastWindow
+        )
+
+        val level = when {
+            score >= 75 -> FormBehaviorLoadLevel.HIGH_LOAD
+            score >= 30 -> FormBehaviorLoadLevel.MODERATE_LOAD
+            else -> FormBehaviorLoadLevel.NORMAL
+        }
+
+        val topContributor = getStepNavigationTopContributor(
+            backStepCount = backStepCount,
+            directionChangeCount = directionChangeCount,
+            noProgressStepSwitches = noProgressStepSwitches,
+            shortNoProgressStepVisits = shortNoProgressStepVisits,
+            changesInLastWindow = changesInLastWindow
+        )
+
+        lastStepNavigationResult = FormStepNavigationResult(
+            score = score,
+            level = level,
+            topContributor = topContributor,
+
+            backStepCount = backStepCount,
+            directionChangeCount = directionChangeCount,
+            noProgressStepSwitches = noProgressStepSwitches,
+            shortNoProgressStepVisits = shortNoProgressStepVisits,
+            changesInLastWindow = changesInLastWindow,
+
+            shouldSuggestHelp = score >= 30
+        )
+
+        Log.d(
+            "FORM_STEP_BEHAVIOR",
+            """
+        Step changed: $fromStep -> $toStep
+        Direction = ${if (direction == 1) "FORWARD" else "BACKWARD"}
+        Edited fields since last step = $editedFieldsCount
+        
+        Back steps = $backStepCount
+        Direction changes = $directionChangeCount
+        No progress step switches = $noProgressStepSwitches
+        Short no-progress step visits = $shortNoProgressStepVisits
+        Changes in last 60 seconds = $changesInLastWindow
+        
+        Step navigation score = $score
+        Step navigation level = $level
+        Top contributor = $topContributor
+        Should suggest help = ${lastStepNavigationResult.shouldSuggestHelp}
+        """.trimIndent()
+        )
+
+        // After a step change, start tracking edited fields for the next step interval.
+        editedFieldsSinceLastStepChange.clear()
+
+        lastStepChangeTimeMs = now
+        lastStepDirection = direction
+    }
+
+
+    // Calculates a rule-based navigation score from 0 to 100.
+// The score is based on repeated backtracking, direction changes, and navigation without progress.
+// This score should be treated as a supporting signal, not as a standalone distress decision.
+    private fun calculateStepNavigationScore(
+        backStepCount: Int,
+        directionChangeCount: Int,
+        noProgressStepSwitches: Int,
+        shortNoProgressStepVisits: Int,
+        changesInLastWindow: Int
+    ): Int {
+        val backStepScore = when {
+            backStepCount >= 3 -> 25
+            backStepCount == 2 -> 15
+            else -> 0
+        }
+
+        val directionChangeScore = when {
+            directionChangeCount >= 3 -> 30
+            directionChangeCount == 2 -> 20
+            directionChangeCount == 1 -> 10
+            else -> 0
+        }
+
+        val noProgressScore = when {
+            noProgressStepSwitches >= 4 -> 25
+            noProgressStepSwitches >= 2 -> 15
+            else -> 0
+        }
+
+        val shortNoProgressScore = when {
+            shortNoProgressStepVisits >= 3 -> 20
+            shortNoProgressStepVisits >= 2 -> 10
+            else -> 0
+        }
+
+        val hasNavigationProblem =
+            backStepCount > 0 ||
+                    directionChangeCount > 0 ||
+                    noProgressStepSwitches > 0 ||
+                    shortNoProgressStepVisits > 0
+
+        val frequentNavigationScore = if (hasNavigationProblem) {
+            when {
+                changesInLastWindow >= 6 -> 20
+                changesInLastWindow >= 4 -> 10
+                else -> 0
+            }
+        } else {
+            0
+        }
+
+        return (
+                backStepScore +
+                        directionChangeScore +
+                        noProgressScore +
+                        shortNoProgressScore +
+                        frequentNavigationScore
+                ).coerceIn(0, 100)
+    }
+
+    fun getLastStepNavigationResult(): FormStepNavigationResult {
+        return lastStepNavigationResult
+    }
+
+    fun getLastOverallFormBehaviorResult(): FormBehaviorOverallResult {
+        return lastOverallFormBehaviorResult
+    }
+
+
+    // Finds the main reason for the step navigation score.
+// This is used for logs and later can help the chatbot explain what was detected.
+    private fun getStepNavigationTopContributor(
+        backStepCount: Int,
+        directionChangeCount: Int,
+        noProgressStepSwitches: Int,
+        shortNoProgressStepVisits: Int,
+        changesInLastWindow: Int
+    ): String {
+        return when {
+            directionChangeCount >= 2 ->
+                "שינויי כיוון חוזרים בין שלבים"
+
+            noProgressStepSwitches >= 2 ->
+                "מעבר בין שלבים ללא התקדמות במילוי"
+
+            shortNoProgressStepVisits >= 2 ->
+                "ביקורים קצרים בשלבים ללא עריכת שדות"
+
+            backStepCount >= 2 ->
+                "חזרה חוזרת לשלבים קודמים"
+
+            changesInLastWindow >= 6 ->
+                "ריבוי מעברים בין שלבים בזמן קצר"
+
+            else ->
+                "לא נמצאה חריגה משמעותית בניווט"
+        }
+    }
+
+    // Updates the overall form behavior result by combining field behavior and step navigation behavior.
+// This result is not connected to DistressScoringManager yet.
+// For now, it is used only for testing and logging.
+    private fun updateOverallFormBehaviorResult() {
+        lastOverallFormBehaviorResult = FormBehaviorScoreAggregator.aggregate(
+            fieldComparisonResult = lastFieldComparisonResult,
+            stepNavigationResult = lastStepNavigationResult
+        )
+
+        Log.d(
+            "FORM_OVERALL_BEHAVIOR",
+            """
+        Overall form behavior score = ${lastOverallFormBehaviorResult.score}
+        Overall form behavior level = ${lastOverallFormBehaviorResult.level}
+        Top contributor = ${lastOverallFormBehaviorResult.topContributor}
+        
+        Field behavior score = ${lastOverallFormBehaviorResult.fieldBehaviorScore}
+        Step navigation score = ${lastOverallFormBehaviorResult.stepNavigationScore}
+        
+        Field top contributor = ${lastOverallFormBehaviorResult.fieldTopContributor}
+        Step top contributor = ${lastOverallFormBehaviorResult.stepTopContributor}
+        
+        Should suggest help = ${lastOverallFormBehaviorResult.shouldSuggestHelp}
+        """.trimIndent()
         )
     }
 }
