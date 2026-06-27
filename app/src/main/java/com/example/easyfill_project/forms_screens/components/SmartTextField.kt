@@ -29,6 +29,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 
+
+import com.example.easyfill_project.distress_scoring.DistressScoringManager
+import com.example.easyfill_project.voiceanalysis.SpeechRateScorer
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.example.easyfill_project.voiceanalysis.VoiceRmsScorer
+
+
 @Composable
 fun SmartTextField(
     label: String,
@@ -116,23 +124,71 @@ fun SmartTextField(
                                 onResult = { text ->
                                     onValueChange(text)
                                 },
+                                onSpeechStarted = {
+                                    Log.d("STT_UI", "Speech started in SmartTextField")
+                                },
                                 onAnalysisResult = { analysis ->
                                     Log.d("STT_ANALYSIS", analysis.toString())
 
-                                    if (!analysis.isReliable) {
-                                        Log.d(
-                                            "VOICE_ANALYSIS",
-                                            "Recording ignored because it is shorter than 15 seconds. Duration = ${analysis.durationSeconds}"
-                                        )
-                                    } else {
-                                        Log.d("VOICE_ANALYSIS", "Recording is reliable, compare to baseline")
-                                        Log.d("VOICE_ANALYSIS", analysis.toString())
+                                    val currentSpeechRate = analysis.speechRateWordsPerSecond
 
-                                        // Next step later:
-                                        // get baseline from Firestore
-                                        // compare current analysis to baseline
-                                        // calculate stress score
+                                    val userId = FirebaseAuth.getInstance().currentUser?.uid
+
+                                    if (userId == null) {
+                                        Log.d("VOICE_ANALYSIS", "No logged in user")
+                                        return@startSpeechRecognition
                                     }
+
+                                    FirebaseFirestore.getInstance()
+                                        .collection("users")
+                                        .document(userId)
+                                        .collection("voiceParameters")
+                                        .document("baseline")
+                                        .get()
+                                        .addOnSuccessListener { document ->
+
+                                            val baselineSpeechRate =
+                                                document.getDouble("speechRateWordsPerSecond")
+
+                                            val baselineRmsVariation =
+                                                document.getDouble("rmsVariation")
+
+                                            val speechRateScore = SpeechRateScorer.calculateVoiceScore(
+                                                baselineSpeechRate = baselineSpeechRate,
+                                                currentSpeechRate = currentSpeechRate
+                                            )
+
+                                            val rmsScore = VoiceRmsScorer.calculateScore(
+                                                baselineVariation = baselineRmsVariation,
+                                                currentVariation = analysis.rmsVariation.toDouble()
+                                            )
+
+                                            val voiceScore = speechRateScore + rmsScore
+
+                                            //SpeechRateScorer returns:
+                                            //0 → normal (weighted deviation < 0.30)
+                                            //1 → moderate deviation (0.30–0.49)
+                                            //2 → high deviation (≥ 0.50)
+                                            //VoiceRmsScorer returns :
+                                            //0 → RMS variation close to baseline
+                                            //1 → current RMS variation ≥ 1.5 × baseline
+                                            //2 → current RMS variation ≥ 2.0 × baseline
+
+                                            //->voiceScore = 0..4
+
+                                            //send to distress scoring manager
+                                            DistressScoringManager.updateVoiceScore(voiceScore)
+
+                                            Log.d(
+                                                "VOICE_ANALYSIS",
+                                                "baselineRate=$baselineSpeechRate currentRate=$currentSpeechRate " +
+                                                        "baselineRmsVariation=$baselineRmsVariation currentRmsVariation=${analysis.rmsVariation} " +
+                                                        "speechRateScore=$speechRateScore rmsScore=$rmsScore totalVoiceScore=$voiceScore"
+                                            )
+                                        }
+                                        .addOnFailureListener { error ->
+                                            Log.e("VOICE_ANALYSIS", "Failed to get baseline", error)
+                                        }
                                 },
                                 onFinished = {
                                     isListening = false

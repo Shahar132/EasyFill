@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
@@ -65,7 +64,6 @@ import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
 //for delay
 import kotlinx.coroutines.delay
-import androidx.core.content.edit
 import com.example.easyfill_project.screen.GuidanceSlidesScreen
 
 //for chatbot ui
@@ -85,6 +83,8 @@ import com.example.easyfill_project.chatbot.model.BotAppState
 
 
 import com.example.easyfill_project.distress_scoring.DistressScoringManager
+import com.example.easyfill_project.voiceanalysis.VoiceBaselineRepository
+
 
 
 // Main navigation function
@@ -154,19 +154,25 @@ fun AppWithDrawer(mainNavController: NavHostController) {
     val speechManager = remember { SpeechToTextManager(context) }
 
 
-    val baselinePrefs = remember {
-        context.getSharedPreferences("baseline_prefs", Context.MODE_PRIVATE)
+    var baselineDone by remember { mutableStateOf(false) }
+
+    val voiceBaselineRepository = remember {
+        VoiceBaselineRepository()
     }
 
-    var baselineDone by remember {
-        mutableStateOf(baselinePrefs.getBoolean("baseline_done", false))
+    LaunchedEffect(Unit) {
+        voiceBaselineRepository.hasBaseline(
+            onResult = { exists ->
+                baselineDone = exists
+            }
+        )
     }
 
     var screenTextToRead by remember { mutableStateOf("") }
     var isTtsSpeaking by remember { mutableStateOf(false) }
 
 
-    //for automatic reading if user pick ON toggle+shared prefernce
+    //for automatic reading if user pick ON toggle+shared preferences
     val prefs = context.getSharedPreferences("user_settings", Context.MODE_PRIVATE)
 
     var autoReadEnabled by remember {
@@ -504,9 +510,6 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 BaselineVoiceScreen(
                                     speechManager = speechManager,
                                     onBaselineFinished = {
-                                        baselinePrefs.edit {
-                                            putBoolean("baseline_done", true)
-                                        }
 
                                         baselineDone = true
 

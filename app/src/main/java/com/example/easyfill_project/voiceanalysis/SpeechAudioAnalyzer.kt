@@ -27,6 +27,9 @@ class SpeechAudioAnalyzer {
     private val rmsValues = mutableListOf<Float>()
     private val pauseDurationsMs = mutableListOf<Long>()
 
+    private var speechEndTime = 0L
+
+
     fun startSpeech() {
         speechStartTime = System.currentTimeMillis()
     }
@@ -55,7 +58,8 @@ class SpeechAudioAnalyzer {
     }
 
     fun analyze(): SpeechAnalysisResult {
-        val endTime = System.currentTimeMillis()
+        val endTime =
+            if (speechEndTime > 0L) speechEndTime else System.currentTimeMillis()
 
         val durationSeconds =
             if (speechStartTime > 0) (endTime - speechStartTime) / 1000.0 else 0.0
@@ -98,5 +102,10 @@ class SpeechAudioAnalyzer {
             averagePauseMs = if (pauseDurationsMs.isNotEmpty()) pauseDurationsMs.average() else 0.0,
             hesitationCount = hesitationCount
         )
+    }
+
+
+    fun stopSpeech() {
+        speechEndTime = System.currentTimeMillis()
     }
 }

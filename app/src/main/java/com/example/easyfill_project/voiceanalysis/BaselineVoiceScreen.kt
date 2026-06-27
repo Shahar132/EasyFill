@@ -35,6 +35,11 @@ fun BaselineVoiceScreen(
     var showSuccessDialog by remember { mutableStateOf(false) }
     var recordingSeconds by remember { mutableIntStateOf(0) }
 
+    var speechDetected by remember { mutableStateOf(false) }
+    var canStopRecording by remember { mutableStateOf(false) }
+    var noSpeechToastShown by remember { mutableStateOf(false) }
+
+
 
 
     // Saves baseline data to Firebase
@@ -68,14 +73,34 @@ fun BaselineVoiceScreen(
         }
     }
 
+//no speech after 5 sec → toast
+    LaunchedEffect(isRecording, speechDetected) {
+        if (isRecording && !speechDetected && !noSpeechToastShown) {
+            delay(5000)
 
-    LaunchedEffect(isRecording) {
-        if (isRecording) {
+            if (isRecording && !speechDetected) {
+                noSpeechToastShown = true
+                Toast.makeText(
+                    speechManager.context,
+                    "לא זוהה דיבור. דבר/י בקול ברור ליד המיקרופון.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    LaunchedEffect(isRecording, speechDetected) {
+        if (isRecording && speechDetected) {
             recordingSeconds = 0
+            canStopRecording = false
 
-            while (isRecording) {
+            while (isRecording && speechDetected) {
                 delay(1000)
                 recordingSeconds++
+
+                if (recordingSeconds >= 15) {
+                    canStopRecording = true
+                }
             }
         }
     }
@@ -144,63 +169,98 @@ fun BaselineVoiceScreen(
                         if (!isRecording) {
                             // Start baseline recording
                             isRecording = true
+                            speechDetected = false
+                            canStopRecording = false
                             recordingSeconds = 0
+                            noSpeechToastShown = false
+
 
                             speechManager.startSpeechRecognition(
+
                                 // We do not show transcript to the user
-                                onResult = {},
+                                onResult = { text ->
+                                    if (text.isNotBlank() && !speechDetected) {
+                                        speechDetected = true
+                                        recordingSeconds = 0
+                                        canStopRecording = false
+                                        speechManager.markReliableSpeechStart()
+
+                                    }
+                                },
+
+                                onSpeechStarted = {
+                                    Log.d("BASELINE", "Sound detected, waiting for real words")
+                                },
 
                                 // When analysis is ready, save it to Firestore
                                 onAnalysisResult = { analysis ->
                                     Log.d("BASELINE_ANALYSIS", analysis.toString())
 
-                                    //check if is reliable - more tan 15 seconds speaking
                                     if (!analysis.isReliable) {
-
-                                        Toast.makeText(
-                                            speechManager.context,
-                                            "יש לדבר לפחות 15 שניות כדי ליצור פרופיל קולי אמין",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-
                                         Log.d(
                                             "BASELINE",
-                                            "Recording too short: ${analysis.durationSeconds}"
+                                            "Unexpected unreliable analysis: ${analysis.durationSeconds}"
                                         )
 
                                         isSaving = false
                                         isRecording = false
-                                    } else {
-                                        isSaving = true
-
-                                        baselineRepository.saveBaseline(
-                                            analysis = analysis,
-                                            onSuccess = {
-                                                isSaving = false
-                                                showSuccessDialog = true
-                                            },
-                                            onFailure = { error ->
-                                                Log.e("BASELINE", "Failed to save baseline", error)
-                                                isSaving = false
-                                            }
-                                        )
+                                        return@startSpeechRecognition
                                     }
+
+                                    isSaving = true
+
+
+                                    baselineRepository.saveBaseline(
+                                        analysis = analysis,
+                                        validSpeechSeconds = recordingSeconds,
+                                        onSuccess = {
+                                            isSaving = false
+                                            showSuccessDialog = true
+                                        },
+                                        onFailure = { error ->
+                                            Log.e("BASELINE", "Failed to save baseline", error)
+                                            isSaving = false
+                                        }
+                                    )
                                 },
 
                                 // STT finished, but navigation happens only after Firebase save succeeds
                                 onFinished = {
+                                    if (!speechDetected) {
+                                        Toast.makeText(
+                                            speechManager.context,
+                                            "לא זוהה דיבור. אפשר להתחיל הקלטה מחדש.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+
                                     isRecording = false
+                                    speechDetected = false
+                                    canStopRecording = false
+                                    recordingSeconds = 0
                                 }
                             )
-                        } else {
-                            // Stop recording and trigger analysis
+
+                        }  else {
+                    if (!canStopRecording) {
+                        Toast.makeText(
+                            speechManager.context,
+                            "נודיע לך מתי אפשר לעצור. דבר/י בקול ברור ליד המיקרופון.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@IconButton
+                    }
+
+                    Log.d("BASELINE_CLICK", "Stopping recording")
+                            isRecording = false
+                            isSaving = true
                             speechManager.stopAndAnalyze()
-                        }
+                }
                     }
                 ) {
                     Icon(
-                        imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                        contentDescription = "record baseline",
+
+                        imageVector = if (isRecording && canStopRecording) Icons.Default.Stop else Icons.Default.Mic,                        contentDescription = "record baseline",
                         tint = if (isRecording)
                             MaterialTheme.colorScheme.onSurface
                         else
@@ -215,7 +275,9 @@ fun BaselineVoiceScreen(
             Text(
                 text = when {
                     isSaving -> "שומר את הנתונים..."
-                    isRecording -> "מקליט עכשיו... לחץ/י שוב לעצירה"
+                    isRecording && !speechDetected -> "מחכה לזיהוי דיבור... דבר/י בקול ברור ליד המיקרופון"
+                    isRecording && !canStopRecording -> "זוהה דיבור. המשך/י לדבר בקול ברור"
+                    isRecording -> "אפשר לעצור את ההקלטה"
                     else -> "לחץ/י על המיקרופון להתחלה"
                 },
                 style = MaterialTheme.typography.bodyLarge,
@@ -223,7 +285,7 @@ fun BaselineVoiceScreen(
                 textAlign = TextAlign.Center
             )
 
-            if (isRecording) {
+            if (isRecording && speechDetected) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
@@ -251,7 +313,7 @@ fun BaselineVoiceScreen(
                     text = if (recordingSeconds >= 15)
                         "אפשר לעצור את ההקלטה"
                     else
-                        "יש לדבר לפחות 15 שניות",
+                        "יש לדבר לפחות 15 שניות בקול ברור כדי ליצור פרופיל קולי אמין",
                     color = if (recordingSeconds >= 15)
                         MaterialTheme.colorScheme.secondary
                     else

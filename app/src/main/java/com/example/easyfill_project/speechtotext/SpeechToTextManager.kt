@@ -19,6 +19,7 @@ class SpeechToTextManager(val context: Context) {
 
     fun startSpeechRecognition(
         onResult: (String) -> Unit,
+        onSpeechStarted: () -> Unit,
         onAnalysisResult: (SpeechAnalysisResult) -> Unit,
         onFinished: () -> Unit
     ) {
@@ -97,9 +98,10 @@ class SpeechToTextManager(val context: Context) {
                 Log.d("STT", "Ready for speech")
             }
 
+            //is Android/STT saying: i detected real speech.
             override fun onBeginningOfSpeech() {
                 Log.d("STT", "Beginning of speech")
-                analyzer?.startSpeech()
+                onSpeechStarted()
             }
 
             override fun onRmsChanged(rmsdB: Float) {
@@ -113,6 +115,9 @@ class SpeechToTextManager(val context: Context) {
 
             override fun onEndOfSpeech() {
                 Log.d("STT", "End of speech")
+                analyzer?.stopSpeech()
+                sendAnalysisOnce()
+                finishOnce()
             }
 
             override fun onError(error: Int) {
@@ -169,8 +174,10 @@ class SpeechToTextManager(val context: Context) {
         speechRecognizer = null
     }
 
+
     fun stopAndAnalyze() {
         Log.d("STT", "Manual stop requested")
+        analyzer?.stopSpeech()
         speechRecognizer?.stopListening()
     }
 
@@ -194,5 +201,10 @@ class SpeechToTextManager(val context: Context) {
             .joinToString(" ") { word ->
                 map[word.trim()] ?: word
             }
+    }
+
+
+    fun markReliableSpeechStart() {
+        analyzer?.startSpeech()
     }
 }

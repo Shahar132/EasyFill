@@ -273,37 +273,61 @@ class ChatBotManager(
     // support logic - based on detected score.
     fun getDistressSuggestion(context: BotContext): BotResponse? {
         val handScore = context.distressSnapshot.touchScore
+        val voiceScore = context.distressSnapshot.voiceScore
+        val combinedScore = handScore + voiceScore
+
+        val severityLevel = when (combinedScore) {
+            0 -> 0
+            in 1..2 -> 1
+            in 3..4 -> 2
+            in 5..6 -> 3
+            else -> 4
+        }
+        //return boolean
+        val voiceIsDominant = voiceScore > handScore
         val appState = context.appState
 
-        return when (handScore) {
-            0 -> null//none
+        return when (severityLevel) {
+            0 -> null
 
-            //only supportive message when score is 1
             1 -> BotResponse(
-                message = "שמנו לב שאולי קצת קשה לך. אפשר לקחת נשימה קצרה או הפסקה, במידה ואתה צריך עזרה - אנחנו כאן לעזור."
+                message = if (voiceIsDominant) {//voice true
+                    "שמנו לב שאולי הדיבור שלך קצת שונה מהרגיל. אפשר לקחת נשימה קצרה, להמשיך לאט, או להקליד במקום לדבר אם זה נוח יותר."
+                } else {//false - hand is stronger
+                    "שמנו לב שאולי קצת קשה לך. אפשר להניח את הטלפון על השולחן, לקחת נשימה קצרה או לעשות הפסקה קטנה ולהמשיך אחר כך."
+                }
             )
 
             2 -> BotResponse(
-                message = "רוצה שאגדיל את הטקסט כדי שיהיה קל יותר לקרוא?",
-                action = BotAction.SetFontSize(PersonalizationCatalog.largeFont),
+                message = if (voiceIsDominant) {//voice true
+                    "נראה שקשה לך כרגע. אפשר לעבור להקלדה במקום דיבור, ואני יכול גם להעביר את המסך למצב רגוע יותר. רוצה שאשנה את הצבעים?"
+                } else { //hand true
+                    "נראה שאתה חווה קצת עומס. רוצה שאגדיל את הטקסט כדי שיהיה קל יותר להמשיך?"
+                },
+                action = if (voiceIsDominant) {
+                    BotAction.EnableAutoRead
+                } else {
+                    BotAction.SetFontSize(PersonalizationCatalog.largeFont)
+                },
                 requiresConfirmation = true
             )
 
             3 -> BotResponse(
-                message = if (!appState.autoReadEnabled) {
-                    "נראה שקשה לך כרגע. רוצה שאפעיל הקראה אוטומטית? אפשר גם להשתמש במיקרופון ולענות בקול במקום להקליד."
-                } else {
-                    "נראה שקשה לך כרגע. רוצה שאעביר את הצבעים למצב רגוע יותר? אפשר גם להשתמש במיקרופון ולענות בקול במקום להקליד."
+                message = if (voiceIsDominant) {//voice true
+                    "נראה שקשה לך כרגע. אפשר לעבור להקלדה במקום דיבור, ואני יכול גם להפעיל מוזיקת רקע, האם תרצה/י בכך?"
+                } else {//hand true
+                    "נראה שקשה לך כרגע בזמן השימוש. אפשר להניח את הטלפון, לקחת רגע, ואני פה להזכיר לך שאתה יכול להשתמש בהקלטה קולית ואינך חייב להקליד"
                 },
-                action = if (!appState.autoReadEnabled) {
-                    BotAction.EnableAutoRead
-                } else {
-                    BotAction.SetContrast(PersonalizationCatalog.lowContrast)
-                },
+                action = BotAction.SetContrast(PersonalizationCatalog.lowContrast),
                 requiresConfirmation = true
             )
+
             4 -> BotResponse(
-                message = "נראה שקשה לך מאוד כרגע. רוצה שאציג אפשרויות סיוע ויצירת קשר עם מוקדי עזרה?",
+                message = if (voiceIsDominant) {//voice true
+                    "נראה שקשה לך מאוד כרגע. כדאי לעצור רגע, לנשום לאט, ולהמשיך רק כשנוח לך. רוצה שאציג אפשרויות סיוע?"
+                } else {//hand true
+                    "נראה שקשה לך מאוד כרגע. אפשר להניח את הטלפון בצד, לקחת הפסקה קצרה, ולהמשיך אחר כך. רוצה שאציג אפשרויות סיוע?"
+                },
                 action = BotAction.ShowEmergencyContacts,
                 requiresConfirmation = true
             )

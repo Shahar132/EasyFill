@@ -11,6 +11,7 @@ class VoiceBaselineRepository {
 
     fun saveBaseline(
         analysis: SpeechAnalysisResult,
+        validSpeechSeconds: Int,
         onSuccess: () -> Unit,
         onFailure: (Exception) -> Unit
     ) {
@@ -21,9 +22,22 @@ class VoiceBaselineRepository {
             return
         }
 
+        val words = analysis.finalText.trim()
+            .split("\\s+".toRegex())
+            .filter { it.isNotBlank() }
+
+        val validDuration = validSpeechSeconds.toDouble()
+
+        val validSpeechRate =
+            if (validDuration > 0) words.size / validDuration else 0.0
+
         val baselineData = hashMapOf(
-            "durationSeconds" to analysis.durationSeconds,
-            "speechRateWordsPerSecond" to analysis.speechRateWordsPerSecond,
+            "validSpeechSeconds" to validDuration,
+            "analysisDurationSeconds" to analysis.durationSeconds,
+
+            "speechRateWordsPerSecond" to validSpeechRate,
+            "analysisSpeechRateWordsPerSecond" to analysis.speechRateWordsPerSecond,
+
             "averageRms" to analysis.averageRms,
             "maxRms" to analysis.maxRms,
             "rmsVariation" to analysis.rmsVariation,
@@ -46,6 +60,32 @@ class VoiceBaselineRepository {
             .addOnFailureListener { e ->
                 Log.e("BASELINE_FIRESTORE", "Failed saving baseline", e)
                 onFailure(e)
+            }
+    }
+
+//function to check if firestore contain the voice baseline parameters - if yes skip baseline voice screen
+    fun hasBaseline(
+        onResult: (Boolean) -> Unit,
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        val userId = auth.currentUser?.uid
+
+        if (userId == null) {
+            onResult(false)
+            return
+        }
+
+        db.collection("users")
+            .document(userId)
+            .collection("voiceParameters")
+            .document("baseline")
+            .get()
+            .addOnSuccessListener { document ->
+                onResult(document.exists())
+            }
+            .addOnFailureListener { e ->
+                onFailure(e)
+                onResult(false)
             }
     }
 }
