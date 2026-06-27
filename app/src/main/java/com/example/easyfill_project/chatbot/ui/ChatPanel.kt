@@ -193,16 +193,22 @@ fun ChatPanel(
         message = ""
     }
 
-    var lastShownHandScore by remember {
+    var lastShownCombinedScore by remember {
         mutableStateOf(0)
     }
-    var distressMessageIndex by remember { mutableStateOf<Int?>(null) }
 
+    var distressMessageIndex by remember {
+        mutableStateOf<Int?>(null)
+    }
 
-    LaunchedEffect(distressSnapshot.touchScore) {
-        val currentHandScore = distressSnapshot.touchScore
+    LaunchedEffect(
+        distressSnapshot.touchScore,
+        distressSnapshot.voiceScore
+    ) {
+        val combinedScore =
+            distressSnapshot.touchScore + distressSnapshot.voiceScore
 
-        if (currentHandScore > 0 && currentHandScore != lastShownHandScore) {
+        if (combinedScore > 0 && combinedScore != lastShownCombinedScore) {
             val distressSuggestion = chatBotManager.getDistressSuggestion(botContext)
 
             if (distressSuggestion != null) {
@@ -227,12 +233,12 @@ fun ChatPanel(
                     pendingAction = distressSuggestion.action
                 }
 
-                lastShownHandScore = currentHandScore
+                lastShownCombinedScore = combinedScore
             }
         }
 
-        if (currentHandScore == 0) {
-            lastShownHandScore = 0
+        if (combinedScore == 0) {
+            lastShownCombinedScore = 0
         }
     }
 
