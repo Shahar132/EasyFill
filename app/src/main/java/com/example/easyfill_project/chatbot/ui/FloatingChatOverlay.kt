@@ -66,27 +66,48 @@ fun FloatingChatOverlay(
         mutableStateOf(false)
     }
 
-    var showDistressHighlight by remember {
+    var showAlertText by remember {
         mutableStateOf(false)
     }
 
-    var showAlertText by remember { mutableStateOf(false) }
+    // Holds the highest unread alert level.
+    // The alert level should only increase until the user opens the chat.
+    var displayedAlertLevel by remember {
+        mutableStateOf(0)
+    }
 
-    val alertScore = maxOf(
-        distressSnapshot.touchScore,
-        distressSnapshot.voiceScore
-    )
+    // Holds the snapshot that caused the highest unread alert.
+    // This allows the chat panel to show the correct message even if the current score drops later.
+    var unreadDistressSnapshot by remember {
+        mutableStateOf<DistressSnapshot?>(null)
+    }
 
+    // Holds the highest alert level that the user already opened/read.
+    // This prevents showing a lower alert after the user already saw a higher one.
+    var acknowledgedAlertLevel by remember {
+        mutableStateOf(0)
+    }
+
+    val totalDistressScore = distressSnapshot.globalScore
+
+    // Temporary testing scale:
+    // 1 = green, 2 = orange, 3 or more = red.
+    val alertLevel = when (totalDistressScore) {
+        0 -> 0
+        1 -> 1
+        2 -> 2
+        else -> 3
+    }
 
     LaunchedEffect(autoOpenOnDistress) {
         if (autoOpenOnDistress && !hasAutoOpenedForDistress) {
             hasUnreadDistressAlert = true
-            showDistressHighlight = true
+            showAlertText = true
             hasAutoOpenedForDistress = true
 
             delay(5000)
 
-            showDistressHighlight = false
+            showAlertText = false
         }
 
         if (!autoOpenOnDistress) {
@@ -94,19 +115,41 @@ fun FloatingChatOverlay(
         }
     }
 
-    LaunchedEffect(alertScore) {
-        if (alertScore > 0) {
+    LaunchedEffect(alertLevel) {
+        // If the current distress level is 0, do not clear an unread alert.
+        // The unread alert should stay until the user opens the chat.
+        if (alertLevel == 0) {
+            // Reset the acknowledged level only if there is no unread alert waiting.
+            // This allows future new alerts to appear after the previous alert was handled.
+            if (!hasUnreadDistressAlert && unreadDistressSnapshot == null) {
+                acknowledgedAlertLevel = 0
+                displayedAlertLevel = 0
+            }
+
+            return@LaunchedEffect
+        }
+
+        // Show a new alert only if it is higher than:
+        // 1. the currently displayed unread alert
+        // 2. the highest alert level the user already opened/read
+        if (alertLevel > displayedAlertLevel && alertLevel > acknowledgedAlertLevel) {
+            displayedAlertLevel = alertLevel
+            unreadDistressSnapshot = distressSnapshot
+
+            hasUnreadDistressAlert = true
             showAlertText = true
+
             delay(5000)
-            showAlertText = false
-        } else {
+
+            // Only the small text bubble disappears after 5 seconds.
+            // The exclamation mark and the saved chat message stay.
             showAlertText = false
         }
     }
 
-    // בגלל שהאפליקציה RTL:
-    // offsetX = 0 אומר צד ימין.
-    // offsetX גדול יותר מזיז שמאלה.
+    // RTL behavior:
+    // offsetX = 0 means the right side of the screen.
+    // A larger offsetX moves the bubble to the left.
     var offsetX by remember { mutableFloatStateOf(24f) }
     var offsetY by remember { mutableFloatStateOf(250f) }
 
@@ -131,18 +174,6 @@ fun FloatingChatOverlay(
         val screenWidthPx = with(density) { maxWidth.toPx() }
         val screenHeightPx = with(density) { maxHeight.toPx() }
 
-        val infiniteTransition = rememberInfiniteTransition()
-
-        val distressBorderAlpha by infiniteTransition.animateFloat(
-            initialValue = 1f,
-            targetValue = 0.15f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 450),
-                repeatMode = RepeatMode.Reverse
-            )
-        )
-
-
         LaunchedEffect(screenWidthPx, screenHeightPx) {
             if (!initialPositionSet && screenWidthPx > 0f && screenHeightPx > 0f) {
                 offsetX = 24f
@@ -150,6 +181,8 @@ fun FloatingChatOverlay(
                 initialPositionSet = true
             }
         }
+
+        val snapshotForChatPanel = unreadDistressSnapshot ?: distressSnapshot
 
         if (isChatOpen) {
             Box(
@@ -160,7 +193,9 @@ fun FloatingChatOverlay(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }
                     ) {
+                        // Close the chat when clicking outside the panel.
                         isChatOpen = false
+                        unreadDistressSnapshot = null
                     }
             )
 
@@ -191,15 +226,18 @@ fun FloatingChatOverlay(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }
                     ) {
-                        // בכוונה ריק:
-                        // זה מונע מלחיצה בתוך הבוט לסגור אותו
+                        // Empty click handler.
+                        // This prevents clicks inside the chat panel from closing it.
                     }
             ) {
                 ChatPanel(
                     currentScreen = currentScreen,
-                    onClose = { isChatOpen = false },
+                    onClose = {
+                        isChatOpen = false
+                        unreadDistressSnapshot = null
+                    },
                     onBotAction = onBotAction,
-                    distressSnapshot = distressSnapshot,
+                    distressSnapshot = snapshotForChatPanel,
                     appState = appState
                 )
             }
@@ -214,23 +252,12 @@ fun FloatingChatOverlay(
                     )
                 }
                 .zIndex(30f)
-                .size(width = 190.dp, height = 100.dp),
+                .size(width = 220.dp, height = 130.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
                     .size(bubbleSizeDp)
-                    .then(
-                        if (showDistressHighlight) {
-                            Modifier.border(
-                                width = 3.dp,
-                                color = Color.Red.copy(alpha = distressBorderAlpha),
-                                shape = CircleShape
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
                     .pointerInput(Unit) {
@@ -253,11 +280,25 @@ fun FloatingChatOverlay(
                     }
                     .clickable {
                         if (!isChatOpen) {
-                            hasUnreadDistressAlert = false
-                            showDistressHighlight = false
-                        }
+                            // Opening the chat:
+                            // The user has seen the unread alert indicator, so remove it.
+                            // Do not clear unreadDistressSnapshot here,
+                            // because the ChatPanel still needs it to display the correct distress message.
+                            acknowledgedAlertLevel = maxOf(
+                                acknowledgedAlertLevel,
+                                displayedAlertLevel
+                            )
 
-                        isChatOpen = !isChatOpen
+                            hasUnreadDistressAlert = false
+                            showAlertText = false
+                            displayedAlertLevel = 0
+                            isChatOpen = true
+                        } else {
+                            // Closing the chat by clicking the bubble:
+                            // Now it is safe to clear the unread distress snapshot.
+                            isChatOpen = false
+                            unreadDistressSnapshot = null
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -268,46 +309,42 @@ fun FloatingChatOverlay(
                 )
             }
 
-
-            if (alertScore > 0 && !isChatOpen)  {
-
-                val alertColor = when (alertScore)  {
-                    1 -> Color(0xFF4CAF50) // green
-                    2 -> Color(0xFFFFA000) // orange
-                    else -> Color.Red      // red
+            if (hasUnreadDistressAlert && displayedAlertLevel > 0 && !isChatOpen) {
+                val alertColor = when (displayedAlertLevel) {
+                    1 -> Color(0xFF4CAF50)
+                    2 -> Color(0xFFFFA000)
+                    else -> Color.Red
                 }
 
-                val alertText = when (alertScore) {
+                val alertText = when (displayedAlertLevel) {
                     1 -> "יש לי הצעה קטנה"
                     2 -> "אפשר לעזור?"
-                    3 -> "רוצה שאקל עליך?"
-                    else -> "יש אפשרויות סיוע"
+                    else -> "רוצה שאקל עליך?"
                 }
 
                 if (showAlertText) {
-                //  text bubble
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .offset(x = 55.dp, y = (-15).dp)
-                        .background(Color.White, RoundedCornerShape(12.dp))
-                        .border(1.dp, alertColor, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = alertText,
-                        color = alertColor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(x = -160.dp, y = (-32).dp)
+                            .background(Color.White, RoundedCornerShape(12.dp))
+                            .border(1.dp, alertColor, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = alertText,
+                            color = alertColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .offset(x = (-40).dp, y = (-20).dp)
+                        .offset(x = (-50).dp, y = (-40).dp)
                         .size(22.dp)
                         .clip(CircleShape)
                         .background(alertColor),
@@ -322,6 +359,5 @@ fun FloatingChatOverlay(
                 }
             }
         }
-
     }
 }

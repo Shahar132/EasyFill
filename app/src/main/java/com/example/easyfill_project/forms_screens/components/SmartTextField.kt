@@ -119,6 +119,11 @@ fun SmartTextField(
 
                             isListening = true
                             showRecorderDialog = true
+                            // Clear the previous voice distress score before starting a new recording.
+                            // The baseline remains saved in Firebase.
+                            DistressScoringManager.updateVoiceScore(0)
+
+
 
                             speechManager.startSpeechRecognition(
                                 onResult = { text ->

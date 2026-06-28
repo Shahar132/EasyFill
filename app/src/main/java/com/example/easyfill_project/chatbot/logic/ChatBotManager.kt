@@ -271,69 +271,156 @@ class ChatBotManager(
         }
     }
     // support logic - based on detected score.
-    fun getDistressSuggestion(context: BotContext): BotResponse? {
-        val handScore = context.distressSnapshot.touchScore
-        val voiceScore = context.distressSnapshot.voiceScore
-        val combinedScore = handScore + voiceScore
+//    fun getDistressSuggestion(context: BotContext): BotResponse? {
+//        val handScore = context.distressSnapshot.touchScore
+//        val voiceScore = context.distressSnapshot.voiceScore
+//        val combinedScore = handScore + voiceScore
+//
+//        val severityLevel = when (combinedScore) {
+//            0 -> 0
+//            in 1..2 -> 1
+//            in 3..4 -> 2
+//            in 5..6 -> 3
+//            else -> 4
+//        }
+//        //return boolean
+//        val voiceIsDominant = voiceScore > handScore
+//        val appState = context.appState
+//
+//        return when (severityLevel) {
+//            0 -> null
+//
+//            1 -> BotResponse(
+//                message = if (voiceIsDominant) {//voice true
+//                    "רמה 1 של קול ."
+//                } else {//false - hand is stronger
+//                    "רמה 1 של ידים."
+//                }
+//            )
+//
+//            2 -> BotResponse(
+//                message = if (voiceIsDominant) {//voice true
+//                    "רמה 2 של קול?"
+//                } else { //hand true
+//                    "רמה 2 של ידים?"
+//                },
+//                action = if (voiceIsDominant) {
+//                    BotAction.EnableAutoRead
+//                } else {
+//                    BotAction.SetFontSize(PersonalizationCatalog.largeFont)
+//                },
+//                requiresConfirmation = true
+//            )
+//
+//            3 -> BotResponse(
+//                message = if (voiceIsDominant) {//voice true
+//                    "רמה 3 של קול?"
+//                } else {//hand true
+//                    "רמה 3 של ידים?"
+//                },
+//                action = BotAction.SetContrast(PersonalizationCatalog.lowContrast),
+//                requiresConfirmation = true
+//            )
+//
+//            4 -> BotResponse(
+//                message = if (voiceIsDominant) {//voice true
+//                    "רמה 4 של קול??"
+//                } else {//hand true
+//                    "רמה 4 של ידים?"
+//                },
+//                action = BotAction.ShowEmergencyContacts,
+//                requiresConfirmation = true
+//            )
+//
+//            else -> null
+//        }
+//    }
 
-        val severityLevel = when (combinedScore) {
+
+    fun getDistressSuggestion(context: BotContext): BotResponse? {
+        val snapshot = context.distressSnapshot
+
+        val totalScore = snapshot.globalScore
+
+        val severityLevel = when (totalScore) {
             0 -> 0
-            in 1..2 -> 1
-            in 3..4 -> 2
-            in 5..6 -> 3
+            1 -> 1
+            2 -> 2
+            3 -> 3
             else -> 4
         }
-        //return boolean
-        val voiceIsDominant = voiceScore > handScore
-        val appState = context.appState
 
-        return when (severityLevel) {
-            0 -> null
-
-            1 -> BotResponse(
-                message = if (voiceIsDominant) {//voice true
-                    "שמנו לב שאולי הדיבור שלך קצת שונה מהרגיל. אפשר לקחת נשימה קצרה, להמשיך לאט, או להקליד במקום לדבר אם זה נוח יותר."
-                } else {//false - hand is stronger
-                    "שמנו לב שאולי קצת קשה לך. אפשר להניח את הטלפון על השולחן, לקחת נשימה קצרה או לעשות הפסקה קטנה ולהמשיך אחר כך."
-                }
-            )
-
-            2 -> BotResponse(
-                message = if (voiceIsDominant) {//voice true
-                    "נראה שקשה לך כרגע. אפשר לעבור להקלדה במקום דיבור, ואני יכול גם להעביר את המסך למצב רגוע יותר. רוצה שאשנה את הצבעים?"
-                } else { //hand true
-                    "נראה שאתה חווה קצת עומס. רוצה שאגדיל את הטקסט כדי שיהיה קל יותר להמשיך?"
-                },
-                action = if (voiceIsDominant) {
-                    BotAction.EnableAutoRead
-                } else {
-                    BotAction.SetFontSize(PersonalizationCatalog.largeFont)
-                },
-                requiresConfirmation = true
-            )
-
-            3 -> BotResponse(
-                message = if (voiceIsDominant) {//voice true
-                    "נראה שקשה לך כרגע. אפשר לעבור להקלדה במקום דיבור, ואני יכול גם להפעיל מוזיקת רקע, האם תרצה/י בכך?"
-                } else {//hand true
-                    "נראה שקשה לך כרגע בזמן השימוש. אפשר להניח את הטלפון, לקחת רגע, ואני פה להזכיר לך שאתה יכול להשתמש בהקלטה קולית ואינך חייב להקליד"
-                },
-                action = BotAction.SetContrast(PersonalizationCatalog.lowContrast),
-                requiresConfirmation = true
-            )
-
-            4 -> BotResponse(
-                message = if (voiceIsDominant) {//voice true
-                    "נראה שקשה לך מאוד כרגע. כדאי לעצור רגע, לנשום לאט, ולהמשיך רק כשנוח לך. רוצה שאציג אפשרויות סיוע?"
-                } else {//hand true
-                    "נראה שקשה לך מאוד כרגע. אפשר להניח את הטלפון בצד, לקחת הפסקה קצרה, ולהמשיך אחר כך. רוצה שאציג אפשרויות סיוע?"
-                },
-                action = BotAction.ShowEmergencyContacts,
-                requiresConfirmation = true
-            )
-
-            else -> null
+        if (severityLevel == 0) {
+            return null
         }
+
+        val scoresBySource = listOf(
+            "HAND" to snapshot.touchScore,
+            "VOICE" to snapshot.voiceScore,
+            "FACE" to snapshot.faceScore,
+            "TEXT" to snapshot.semanticTextScore,
+            "FORM" to snapshot.formBehaviorScore
+        )
+
+        val maxScore = scoresBySource.maxOf { it.second }
+
+        val dominantSources = scoresBySource
+            .filter { it.second == maxScore && it.second > 0 }
+            .map { it.first }
+
+        val dominantSource = when {
+            dominantSources.isEmpty() -> "NONE"
+            dominantSources.size > 1 -> "MULTIPLE"
+            else -> dominantSources.first()
+        }
+
+        val message = when (severityLevel) {
+
+            1 -> when (dominantSource) {
+                "HAND" -> "רמה 1 - ידיים"
+                "VOICE" -> "רמה 1 - קול"
+                "FACE" -> "רמה 1 - פנים"
+                "TEXT" -> "רמה 1 - טקסט"
+                "FORM" -> "רמה 1 - טופס"
+                "MULTIPLE" -> "רמה 1 - כמה מדדים"
+                else -> "רמה 1 - לא ידוע"
+            }
+
+            2 -> when (dominantSource) {
+                "HAND" -> "רמה 2 - ידיים"
+                "VOICE" -> "רמה 2 - קול"
+                "FACE" -> "רמה 2 - פנים"
+                "TEXT" -> "רמה 2 - טקסט"
+                "FORM" -> "רמה 2 - טופס"
+                "MULTIPLE" -> "רמה 2 - כמה מדדים"
+                else -> "רמה 2 - לא ידוע"
+            }
+
+            3 -> when (dominantSource) {
+                "HAND" -> "רמה 3 - ידיים"
+                "VOICE" -> "רמה 3 - קול"
+                "FACE" -> "רמה 3 - פנים"
+                "TEXT" -> "רמה 3 - טקסט"
+                "FORM" -> "רמה 3 - טופס"
+                "MULTIPLE" -> "רמה 3 - כמה מדדים"
+                else -> "רמה 3 - לא ידוע"
+            }
+
+            else -> when (dominantSource) {
+                "HAND" -> "רמה 4 - ידיים"
+                "VOICE" -> "רמה 4 - קול"
+                "FACE" -> "רמה 4 - פנים"
+                "TEXT" -> "רמה 4 - טקסט"
+                "FORM" -> "רמה 4 - טופס"
+                "MULTIPLE" -> "רמה 4 - כמה מדדים"
+                else -> "רמה 4 - לא ידוע"
+            }
+        }
+        return BotResponse(
+            message = message,
+            action = BotAction.None,
+            requiresConfirmation = false
+        )
     }
 
     private fun getScreenExplanation(currentScreen: String): String {

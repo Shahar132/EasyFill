@@ -72,12 +72,6 @@ fun ChatPanel(
         mutableStateOf<BotAction?>(null)
     }
 
-    var hasShownDistressSuggestion by remember(currentScreen) {
-        mutableStateOf(false)
-    }
-
-
-
     val context = LocalContext.current
 
     val semanticIntentDetector = remember {
@@ -113,6 +107,7 @@ fun ChatPanel(
         }
     }
 
+    // Build the current bot context from the screen, distress snapshot, and app state.
     val botContext = BotContext(
         currentScreen = currentScreen,
         distressSnapshot = distressSnapshot,
@@ -152,6 +147,7 @@ fun ChatPanel(
 
         val currentPendingAction = pendingAction
 
+        // If the bot is waiting for confirmation and the user approves, execute the pending action.
         if (currentPendingAction != null && isUserApproval(userText)) {
 
             if (currentPendingAction != BotAction.ShowEmergencyContacts) {
@@ -170,6 +166,7 @@ fun ChatPanel(
             return
         }
 
+        // If the bot is waiting for confirmation and the user rejects, cancel the pending action.
         if (currentPendingAction != null && isUserRejection(userText)) {
             messages.add(
                 ChatMessage(
@@ -183,6 +180,12 @@ fun ChatPanel(
             return
         }
 
+        // If there was a pending action but the user wrote something else,
+        // clear the pending action so a later "yes" will not trigger an old action.
+        if (currentPendingAction != null) {
+            pendingAction = null
+        }
+
         val botResponse = chatBotManager.getResponse(
             userMessage = userText,
             context = botContext
@@ -193,53 +196,87 @@ fun ChatPanel(
         message = ""
     }
 
-    var lastShownCombinedScore by remember {
-        mutableStateOf(0)
+    // Stores the last distress state shown inside the chat.
+    // This is better than only storing the global score because the dominant source can change
+    // even when the total score stays the same.
+    var lastShownDistressKey by remember {
+        mutableStateOf<String?>(null)
     }
 
+    // Stores the index of the distress message inside the chat.
+    // This allows us to replace the old distress message instead of adding many messages.
     var distressMessageIndex by remember {
         mutableStateOf<Int?>(null)
     }
 
     LaunchedEffect(
+        distressSnapshot.globalScore,
         distressSnapshot.touchScore,
-        distressSnapshot.voiceScore
+        distressSnapshot.voiceScore,
+        distressSnapshot.faceScore,
+        distressSnapshot.semanticTextScore,
+        distressSnapshot.formBehaviorScore
     ) {
-        val combinedScore =
-            distressSnapshot.touchScore + distressSnapshot.voiceScore
+        val currentGlobalScore = distressSnapshot.globalScore
 
-        if (combinedScore > 0 && combinedScore != lastShownCombinedScore) {
-            val distressSuggestion = chatBotManager.getDistressSuggestion(botContext)
+        // If there is no distress, reset the stored distress message state.
+        if (currentGlobalScore == 0) {
+            lastShownDistressKey = null
+            distressMessageIndex = null
+            return@LaunchedEffect
+        }
 
-            if (distressSuggestion != null) {
-                val index = distressMessageIndex
+        // A unique key that represents the current distress state.
+        // If any score changes, this key changes.
+        val currentDistressKey =
+            "${distressSnapshot.globalScore}-" +
+                    "${distressSnapshot.touchScore}-" +
+                    "${distressSnapshot.voiceScore}-" +
+                    "${distressSnapshot.faceScore}-" +
+                    "${distressSnapshot.semanticTextScore}-" +
+                    "${distressSnapshot.formBehaviorScore}"
 
-                if (index != null && index in messages.indices) {
-                    messages[index] = ChatMessage(
-                        text = distressSuggestion.message,
-                        isFromUser = false
-                    )
-                } else {
-                    messages.add(
-                        ChatMessage(
-                            text = distressSuggestion.message,
-                            isFromUser = false
-                        )
-                    )
-                    distressMessageIndex = messages.lastIndex
-                }
+        // Do not show the same distress message again if nothing changed.
+        if (currentDistressKey == lastShownDistressKey) {
+            return@LaunchedEffect
+        }
 
-                if (distressSuggestion.action != BotAction.None) {
-                    pendingAction = distressSuggestion.action
-                }
+        val distressSuggestion = chatBotManager.getDistressSuggestion(botContext)
+            ?: return@LaunchedEffect
 
-                lastShownCombinedScore = combinedScore
+        val index = distressMessageIndex
+
+        if (index != null && index in messages.indices) {
+            // Replace the previous distress message.
+            messages[index] = ChatMessage(
+                text = distressSuggestion.message,
+                isFromUser = false
+            )
+
+            listState.animateScrollToItem(index)
+        } else {
+            // Add the first distress message to the chat.
+            messages.add(
+                ChatMessage(
+                    text = distressSuggestion.message,
+                    isFromUser = false
+                )
+            )
+
+            distressMessageIndex = messages.lastIndex
+        }
+
+        // Automatic distress messages usually should not force the user to respond.
+        // Still, this supports actions if a future BotResponse includes one.
+        if (distressSuggestion.action != BotAction.None) {
+            if (distressSuggestion.requiresConfirmation) {
+                pendingAction = distressSuggestion.action
+            } else {
+                onBotAction(distressSuggestion.action)
             }
         }
 
-        if (combinedScore == 0) {
-            lastShownCombinedScore = 0
-        }
+        lastShownDistressKey = currentDistressKey
     }
 
     Card(
@@ -313,7 +350,7 @@ fun ChatPanel(
                     sendCurrentMessage()
                 },
                 onMicClick = {
-                    // כאן בהמשך נחבר קלט קולי / STT
+                    // STT / voice input will be connected here later.
                 }
             )
         }

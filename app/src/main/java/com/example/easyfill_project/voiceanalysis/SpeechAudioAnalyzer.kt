@@ -30,8 +30,31 @@ class SpeechAudioAnalyzer {
     private var speechEndTime = 0L
 
 
+//    fun startSpeech() {
+//        speechStartTime = System.currentTimeMillis()
+//    }
+
+//    fun startSpeech() {
+//        speechStartTime = System.currentTimeMillis()
+//        speechEndTime = 0L
+//        lastPartialTime = 0L
+//        finalText = ""
+//
+//        rmsValues.clear()
+//        pauseDurationsMs.clear()
+//    }
+
     fun startSpeech() {
+        // Start a new clean speech analysis session.
+        // This does not reset the saved baseline.
+        // It only clears data from the previous recording.
         speechStartTime = System.currentTimeMillis()
+        speechEndTime = 0L
+        lastPartialTime = 0L
+        finalText = ""
+
+        rmsValues.clear()
+        pauseDurationsMs.clear()
     }
 
     fun addRms(rms: Float) {
