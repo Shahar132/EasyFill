@@ -8,6 +8,7 @@ import com.example.easyfill_project.chatbot.model.BotContext
 import com.example.easyfill_project.chatbot.model.BotIntent
 import com.example.easyfill_project.chatbot.model.BotResponse
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
+import android.util.Log
 
 class ChatBotManager(
     private val intentDetector: IntentDetector = RuleBasedIntentDetector()

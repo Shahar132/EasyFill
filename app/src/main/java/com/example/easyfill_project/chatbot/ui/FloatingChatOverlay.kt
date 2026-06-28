@@ -46,6 +46,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.util.Log
 
 @Composable
 fun FloatingChatOverlay(
@@ -99,19 +100,76 @@ fun FloatingChatOverlay(
         else -> 3
     }
 
-    LaunchedEffect(autoOpenOnDistress) {
-        if (autoOpenOnDistress && !hasAutoOpenedForDistress) {
+
+
+//    LaunchedEffect(autoOpenOnDistress) {
+//        if (autoOpenOnDistress && !hasAutoOpenedForDistress) {
+//            hasUnreadDistressAlert = true
+//            showAlertText = true
+//            hasAutoOpenedForDistress = true
+//
+//            delay(5000)
+//
+//            showAlertText = false
+//        }
+//
+//        if (!autoOpenOnDistress) {
+//            hasAutoOpenedForDistress = false
+//        }
+//    }
+
+    LaunchedEffect(
+        alertLevel,
+        totalDistressScore,
+        distressSnapshot.touchScore,
+        distressSnapshot.voiceScore,
+        distressSnapshot.faceScore,
+        distressSnapshot.formBehaviorScore
+    ) {
+        Log.d(
+            "CHATBOT_ALERT",
+            """
+        totalDistressScore = $totalDistressScore
+        alertLevel = $alertLevel
+        hand = ${distressSnapshot.touchScore}
+        voice = ${distressSnapshot.voiceScore}
+        face = ${distressSnapshot.faceScore}
+        form = ${distressSnapshot.formBehaviorScore}
+        displayedAlertLevel = $displayedAlertLevel
+        hasUnreadDistressAlert = $hasUnreadDistressAlert
+        isChatOpen = $isChatOpen
+        """.trimIndent()
+        )
+
+        if (alertLevel == 0) {
+            if (!hasUnreadDistressAlert && unreadDistressSnapshot == null && !isChatOpen) {
+                displayedAlertLevel = 0
+            }
+
+            return@LaunchedEffect
+        }
+
+        /*
+         * Testing version:
+         * Show an alert when there is a new distress level,
+         * or when there is no unread alert currently shown.
+         *
+         * We are not using acknowledgedAlertLevel here,
+         * because it can block another red alert during testing.
+         */
+        val shouldShowAlert =
+            !hasUnreadDistressAlert || alertLevel > displayedAlertLevel
+
+        if (shouldShowAlert) {
+            displayedAlertLevel = alertLevel
+            unreadDistressSnapshot = distressSnapshot
+
             hasUnreadDistressAlert = true
             showAlertText = true
-            hasAutoOpenedForDistress = true
 
             delay(5000)
 
             showAlertText = false
-        }
-
-        if (!autoOpenOnDistress) {
-            hasAutoOpenedForDistress = false
         }
     }
 

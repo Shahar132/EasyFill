@@ -15,6 +15,9 @@ object DistressScoringManager {
     private val _faceScore = MutableStateFlow(0)
     val faceScore: StateFlow<Int> = _faceScore
 
+    private val _formBehaviorScore = MutableStateFlow(0)
+    val formBehaviorScore: StateFlow<Int> = _formBehaviorScore
+
     private val _totalScore = MutableStateFlow(0)
     val totalScore: StateFlow<Int> = _totalScore
 
@@ -33,15 +36,23 @@ object DistressScoringManager {
         updateTotal()
     }
 
+    fun updateFormBehaviorScore(score: Int) {
+        _formBehaviorScore.value = score
+        updateTotal()
+    }
+
     private fun updateTotal() {
         _totalScore.value =
-            _handScore.value + _voiceScore.value + _faceScore.value
+            _handScore.value +
+                    _voiceScore.value +
+                    _faceScore.value +
+                    _formBehaviorScore.value
 
         printStatus()
     }
 
     fun isDistressDetected(): Boolean {
-        return _totalScore.value >= 2
+        return _totalScore.value > 0
     }
 
     fun printStatus() {
@@ -51,6 +62,7 @@ object DistressScoringManager {
             Hand score = ${_handScore.value}
             Voice score = ${_voiceScore.value}
             Face score = ${_faceScore.value}
+            Form behavior score = ${_formBehaviorScore.value}
             Total score = ${_totalScore.value}
             Distress = ${isDistressDetected()}
             """.trimIndent()

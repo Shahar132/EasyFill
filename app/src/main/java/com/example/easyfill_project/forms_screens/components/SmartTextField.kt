@@ -36,6 +36,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.easyfill_project.voiceanalysis.VoiceRmsScorer
 
+import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
+
 
 @Composable
 fun SmartTextField(
@@ -44,13 +46,16 @@ fun SmartTextField(
     onValueChange: (String) -> Unit,
     ttsManager: TextToSpeechManager,
     speechManager: SpeechToTextManager,
-    maxLines: Int = 1
+    maxLines: Int = 1,
+    fieldId: String = label
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
 
     var isListening by remember { mutableStateOf(false) }
     var showRecorderDialog by remember { mutableStateOf(false) }
+    var isFieldFocused by remember { mutableStateOf(false) }
+
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -65,20 +70,52 @@ fun SmartTextField(
             speechManager.stopSpeechRecognition()
         }
     }
+    LaunchedEffect(isFieldFocused, fieldId) {
+        while (isFieldFocused) {
+            delay(5000)// Maybe change it to 10 seconds.
+            FormBehaviorTrackingController.checkCurrentFieldIdle(fieldId)
+        }
+    }
+
 
     Column {
         OutlinedTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { newValue ->
+                FormBehaviorTrackingController.onFieldValueChanged(
+                    fieldId = fieldId,
+                    oldValue = value,
+                    newValue = newValue
+                )
+
+                onValueChange(newValue)
+            },
             label = { Text(label) },
             modifier = Modifier
                 .fillMaxWidth()
                 .bringIntoViewRequester(bringIntoViewRequester)
                 .onFocusChanged { focusState ->
                     if (focusState.isFocused) {
+                        if (!isFieldFocused) {
+                            isFieldFocused = true
+
+                            FormBehaviorTrackingController.onFieldFocused(
+                                fieldId = fieldId,
+                                currentValue = value
+                            )
+                        }
+
                         scope.launch {
                             delay(300)
                             bringIntoViewRequester.bringIntoView()
+                        }
+                    } else {
+                        if (isFieldFocused) {
+                            isFieldFocused = false
+
+                            FormBehaviorTrackingController.onFieldUnfocused(
+                                fieldId = fieldId
+                            )
                         }
                     }
                 },
@@ -127,6 +164,12 @@ fun SmartTextField(
 
                             speechManager.startSpeechRecognition(
                                 onResult = { text ->
+                                    FormBehaviorTrackingController.onFieldValueChanged(
+                                        fieldId = fieldId,
+                                        oldValue = value,
+                                        newValue = text
+                                    )
+
                                     onValueChange(text)
                                 },
                                 onSpeechStarted = {
