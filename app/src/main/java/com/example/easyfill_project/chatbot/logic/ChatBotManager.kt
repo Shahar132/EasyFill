@@ -338,22 +338,96 @@ class ChatBotManager(
 //    }
 
 
+//    fun getDistressSuggestion(context: BotContext): BotResponse? {
+//        val snapshot = context.distressSnapshot
+//
+//        val totalScore = snapshot.globalScore
+//
+//        val severityLevel = when (totalScore) {
+//            0 -> 0
+//            1 -> 1
+//            2 -> 2
+//            3 -> 3
+//            else -> 4
+//        }
+//
+//        if (severityLevel == 0) {
+//            return null
+//        }
+//
+//        val scoresBySource = listOf(
+//            "HAND" to snapshot.touchScore,
+//            "VOICE" to snapshot.voiceScore,
+//            "FACE" to snapshot.faceScore,
+//            "TEXT" to snapshot.semanticTextScore,
+//            "FORM" to snapshot.formBehaviorScore
+//        )
+//
+//        val maxScore = scoresBySource.maxOf { it.second }
+//
+//        val dominantSources = scoresBySource
+//            .filter { it.second == maxScore && it.second > 0 }
+//            .map { it.first }
+//
+//        val dominantSource = when {
+//            dominantSources.isEmpty() -> "NONE"
+//            dominantSources.size > 1 -> "MULTIPLE"
+//            else -> dominantSources.first()
+//        }
+//
+//        val message = when (severityLevel) {
+//
+//            1 -> when (dominantSource) {
+//                "HAND" -> "רמה 1 - ידיים"
+//                "VOICE" -> "רמה 1 - קול"
+//                "FACE" -> "רמה 1 - פנים"
+//                "TEXT" -> "רמה 1 - טקסט"
+//                "FORM" -> "רמה 1 - טופס"
+//                "MULTIPLE" -> "רמה 1 - כמה מדדים"
+//                else -> "רמה 1 - לא ידוע"
+//            }
+//
+//            2 -> when (dominantSource) {
+//                "HAND" -> "רמה 2 - ידיים"
+//                "VOICE" -> "רמה 2 - קול"
+//                "FACE" -> "רמה 2 - פנים"
+//                "TEXT" -> "רמה 2 - טקסט"
+//                "FORM" -> "רמה 2 - טופס"
+//                "MULTIPLE" -> "רמה 2 - כמה מדדים"
+//                else -> "רמה 2 - לא ידוע"
+//            }
+//
+//            3 -> when (dominantSource) {
+//                "HAND" -> "רמה 3 - ידיים"
+//                "VOICE" -> "רמה 3 - קול"
+//                "FACE" -> "רמה 3 - פנים"
+//                "TEXT" -> "רמה 3 - טקסט"
+//                "FORM" -> "רמה 3 - טופס"
+//                "MULTIPLE" -> "רמה 3 - כמה מדדים"
+//                else -> "רמה 3 - לא ידוע"
+//            }
+//
+//            else -> when (dominantSource) {
+//                "HAND" -> "רמה 4 - ידיים"
+//                "VOICE" -> "רמה 4 - קול"
+//                "FACE" -> "רמה 4 - פנים"
+//                "TEXT" -> "רמה 4 - טקסט"
+//                "FORM" -> "רמה 4 - טופס"
+//                "MULTIPLE" -> "רמה 4 - כמה מדדים"
+//                else -> "רמה 4 - לא ידוע"
+//            }
+//        }
+//        return BotResponse(
+//            message = message,
+//            action = BotAction.None,
+//            requiresConfirmation = false
+//        )
+//    }
+
+
+
     fun getDistressSuggestion(context: BotContext): BotResponse? {
         val snapshot = context.distressSnapshot
-
-        val totalScore = snapshot.globalScore
-
-        val severityLevel = when (totalScore) {
-            0 -> 0
-            1 -> 1
-            2 -> 2
-            3 -> 3
-            else -> 4
-        }
-
-        if (severityLevel == 0) {
-            return null
-        }
 
         val scoresBySource = listOf(
             "HAND" to snapshot.touchScore,
@@ -363,67 +437,72 @@ class ChatBotManager(
             "FORM" to snapshot.formBehaviorScore
         )
 
-        val maxScore = scoresBySource.maxOf { it.second }
+        val maxSourceScore = scoresBySource.maxOf { it.second }
 
-        val dominantSources = scoresBySource
-            .filter { it.second == maxScore && it.second > 0 }
+        val severityLevel = getDistressSeverityLevelForMessage(
+            totalScore = snapshot.globalScore,
+            maxSourceScore = maxSourceScore
+        )
+
+        if (severityLevel == 0) {
+            return null
+        }
+
+        val activeSources = scoresBySource
+            .filter { it.second > 0 }
+
+        val dominantSources = activeSources
+            .filter { it.second == maxSourceScore }
             .map { it.first }
 
         val dominantSource = when {
+            activeSources.isEmpty() -> "NONE"
+            activeSources.size > 1 -> "MULTIPLE"
             dominantSources.isEmpty() -> "NONE"
-            dominantSources.size > 1 -> "MULTIPLE"
             else -> dominantSources.first()
         }
 
-        val message = when (severityLevel) {
-
-            1 -> when (dominantSource) {
-                "HAND" -> "רמה 1 - ידיים"
-                "VOICE" -> "רמה 1 - קול"
-                "FACE" -> "רמה 1 - פנים"
-                "TEXT" -> "רמה 1 - טקסט"
-                "FORM" -> "רמה 1 - טופס"
-                "MULTIPLE" -> "רמה 1 - כמה מדדים"
-                else -> "רמה 1 - לא ידוע"
-            }
-
-            2 -> when (dominantSource) {
-                "HAND" -> "רמה 2 - ידיים"
-                "VOICE" -> "רמה 2 - קול"
-                "FACE" -> "רמה 2 - פנים"
-                "TEXT" -> "רמה 2 - טקסט"
-                "FORM" -> "רמה 2 - טופס"
-                "MULTIPLE" -> "רמה 2 - כמה מדדים"
-                else -> "רמה 2 - לא ידוע"
-            }
-
-            3 -> when (dominantSource) {
-                "HAND" -> "רמה 3 - ידיים"
-                "VOICE" -> "רמה 3 - קול"
-                "FACE" -> "רמה 3 - פנים"
-                "TEXT" -> "רמה 3 - טקסט"
-                "FORM" -> "רמה 3 - טופס"
-                "MULTIPLE" -> "רמה 3 - כמה מדדים"
-                else -> "רמה 3 - לא ידוע"
-            }
-
-            else -> when (dominantSource) {
-                "HAND" -> "רמה 4 - ידיים"
-                "VOICE" -> "רמה 4 - קול"
-                "FACE" -> "רמה 4 - פנים"
-                "TEXT" -> "רמה 4 - טקסט"
-                "FORM" -> "רמה 4 - טופס"
-                "MULTIPLE" -> "רמה 4 - כמה מדדים"
-                else -> "רמה 4 - לא ידוע"
-            }
+        val sourceText = when (dominantSource) {
+            "HAND" -> "ידיים"
+            "VOICE" -> "קול"
+            "FACE" -> "פנים"
+            "TEXT" -> "טקסט"
+            "FORM" -> "טופס"
+            "MULTIPLE" -> "כמה מדדים"
+            else -> "לא ידוע"
         }
+
         return BotResponse(
-            message = message,
+            message = "רמה $severityLevel - $sourceText",
             action = BotAction.None,
             requiresConfirmation = false
         )
     }
 
+
+
+    private fun getDistressSeverityLevelForMessage(
+        totalScore: Int,
+        maxSourceScore: Int
+    ): Int {
+        val levelBySingleSource = when (maxSourceScore) {
+            0 -> 0
+            1 -> 1
+            2 -> 2
+            3 -> 3
+            else -> 4
+        }
+
+        val levelByTotalScore = when (totalScore) {
+            0 -> 0
+            in 1..2 -> 1
+            in 3..4 -> 2
+            in 5..6 -> 3
+            else -> 4
+        }
+
+        return maxOf(levelBySingleSource, levelByTotalScore)
+    }
     private fun getScreenExplanation(currentScreen: String): String {
         return ScreenHelpCatalog.getExplanation(currentScreen)
     }

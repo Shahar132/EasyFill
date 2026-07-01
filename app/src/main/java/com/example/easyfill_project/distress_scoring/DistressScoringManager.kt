@@ -68,4 +68,16 @@ object DistressScoringManager {
             """.trimIndent()
         )
     }
+
+    fun resetCurrentScoresAfterAlertRead() {
+        _handScore.value = 0
+        _voiceScore.value = 0
+        _faceScore.value = 0
+        _formBehaviorScore.value = 0
+
+        updateTotal()
+    }
+
+
+
 }

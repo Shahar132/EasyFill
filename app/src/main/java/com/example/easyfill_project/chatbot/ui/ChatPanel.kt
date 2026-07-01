@@ -221,6 +221,12 @@ fun ChatPanel(
 
         // If there is no distress, reset the stored distress message state.
         if (currentGlobalScore == 0) {
+            val index = distressMessageIndex
+
+            if (index != null && index in messages.indices) {
+                messages.removeAt(index)
+            }
+
             lastShownDistressKey = null
             distressMessageIndex = null
             return@LaunchedEffect

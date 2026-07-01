@@ -99,8 +99,13 @@ class SpeechToTextManager(val context: Context) {
             }
 
             //is Android/STT saying: i detected real speech.
+//            override fun onBeginningOfSpeech() {
+//                Log.d("STT", "Beginning of speech")
+//                onSpeechStarted()
+//            }
             override fun onBeginningOfSpeech() {
                 Log.d("STT", "Beginning of speech")
+                analyzer?.startSpeech()
                 onSpeechStarted()
             }
 
@@ -113,11 +118,19 @@ class SpeechToTextManager(val context: Context) {
                 Log.d("STT", "Buffer received")
             }
 
+//            override fun onEndOfSpeech() {
+//                Log.d("STT", "End of speech")
+//                analyzer?.stopSpeech()
+//                sendAnalysisOnce()
+//                finishOnce()
+//            }
+
             override fun onEndOfSpeech() {
                 Log.d("STT", "End of speech")
                 analyzer?.stopSpeech()
-                sendAnalysisOnce()
-                finishOnce()
+
+                // Do not send analysis here.
+                // Final recognized text usually arrives later in onResults().
             }
 
             override fun onError(error: Int) {
@@ -125,6 +138,23 @@ class SpeechToTextManager(val context: Context) {
                 sendAnalysisOnce()
                 finishOnce()
             }
+
+//            override fun onResults(results: Bundle?) {
+//                val spokenText = results
+//                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+//                    ?.firstOrNull()
+//
+//                Log.d("STT", "Final text = $spokenText")
+//
+//                if (!spokenText.isNullOrBlank()) {
+//                    val normalizedText = normalizeHebrewNumbers(spokenText)
+//                    analyzer?.updateFinalText(normalizedText)
+//                    onResult(normalizedText)
+//                }
+//
+//                sendAnalysisOnce()
+//                finishOnce()
+//            }
 
             override fun onResults(results: Bundle?) {
                 val spokenText = results
@@ -135,6 +165,7 @@ class SpeechToTextManager(val context: Context) {
 
                 if (!spokenText.isNullOrBlank()) {
                     val normalizedText = normalizeHebrewNumbers(spokenText)
+
                     analyzer?.updateFinalText(normalizedText)
                     onResult(normalizedText)
                 }
