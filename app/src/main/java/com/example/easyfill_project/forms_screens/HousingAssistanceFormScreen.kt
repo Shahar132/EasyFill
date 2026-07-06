@@ -19,6 +19,8 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 
 import com.example.easyfill_project.hand_analysis.MotionTrackingController
+import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
+
 
 @Composable
 fun HousingAssistanceFormScreen(
@@ -298,6 +300,12 @@ fun HousingAssistanceFormScreen(
                         saveFormData()
 
                         val previousStep = currentStep - 1
+
+                        FormBehaviorTrackingController.onStepChanged(
+                            fromStep = currentStep,
+                            toStep = previousStep
+                        )
+
                         saveStep(previousStep)
                         currentStep = previousStep
                     },
@@ -320,6 +328,12 @@ fun HousingAssistanceFormScreen(
 
                     if (currentStep < sections.size - 1) {
                         val nextStep = currentStep + 1
+
+                        FormBehaviorTrackingController.onStepChanged(
+                            fromStep = currentStep,
+                            toStep = nextStep
+                        )
+
                         saveStep(nextStep)
                         currentStep = nextStep
 

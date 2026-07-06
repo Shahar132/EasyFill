@@ -36,9 +36,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.easyfill_project.voiceanalysis.VoiceRmsScorer
 
+import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
+import com.example.easyfill_project.distress_scoring.DistressMode
+
 
 @Composable
 fun SmartTextField(
+    fieldId: String,
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
@@ -52,6 +56,8 @@ fun SmartTextField(
     var isListening by remember { mutableStateOf(false) }
     var showRecorderDialog by remember { mutableStateOf(false) }
 
+    var isFocused by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -63,23 +69,51 @@ fun SmartTextField(
     DisposableEffect(Unit) {
         onDispose {
             speechManager.stopSpeechRecognition()
+            DistressScoringManager.setMode(DistressMode.FORM_FILLING)
+        }
+    }
+
+    LaunchedEffect(isFocused) {
+        while (isFocused) {
+            delay(1000)
+            FormBehaviorTrackingController.checkCurrentFieldIdle(fieldId)
         }
     }
 
     Column {
         OutlinedTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { newValue ->
+
+                FormBehaviorTrackingController.onFieldValueChanged(
+                    fieldId = fieldId,
+                    oldValue = value,
+                    newValue = newValue
+                )
+
+                onValueChange(newValue)
+            },
             label = { Text(label) },
             modifier = Modifier
                 .fillMaxWidth()
                 .bringIntoViewRequester(bringIntoViewRequester)
                 .onFocusChanged { focusState ->
+                    isFocused = focusState.isFocused
+
                     if (focusState.isFocused) {
+                        DistressScoringManager.setMode(DistressMode.FORM_FILLING)
+
+                        FormBehaviorTrackingController.onFieldFocused(
+                            fieldId = fieldId,
+                            currentValue = value
+                        )
+
                         scope.launch {
                             delay(300)
                             bringIntoViewRequester.bringIntoView()
                         }
+                    } else {
+                        FormBehaviorTrackingController.onFieldUnfocused(fieldId)
                     }
                 },
             minLines = 1,
@@ -119,9 +153,19 @@ fun SmartTextField(
 
                             isListening = true
                             showRecorderDialog = true
+                            isFocused = false
+
+                            DistressScoringManager.setMode(DistressMode.VOICE_RECORDING)
+
 
                             speechManager.startSpeechRecognition(
                                 onResult = { text ->
+                                    FormBehaviorTrackingController.onFieldValueChanged(
+                                        fieldId = fieldId,
+                                        oldValue = value,
+                                        newValue = text
+                                    )
+
                                     onValueChange(text)
                                 },
                                 onSpeechStarted = {
@@ -193,6 +237,7 @@ fun SmartTextField(
                                 onFinished = {
                                     isListening = false
                                     showRecorderDialog = false
+                                    DistressScoringManager.setMode(DistressMode.FORM_FILLING)
                                 }
                             )
                         }

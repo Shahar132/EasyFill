@@ -6,7 +6,7 @@ import kotlin.math.sqrt
 // Receives raw accelerometer/gyroscope values and calculates motion features.
 class MotionAnalyzer {
 
-    private val minReliableDurationSeconds = 30.0
+    private val minReliableDurationSeconds = 10.0
 
     private var startTime = 0L
 

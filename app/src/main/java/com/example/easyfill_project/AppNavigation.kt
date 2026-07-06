@@ -573,6 +573,7 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                         val voiceScore by DistressScoringManager.voiceScore.collectAsState()
                         val faceScore by DistressScoringManager.faceScore.collectAsState()
                         val totalScore by DistressScoringManager.totalScore.collectAsState()
+                        val formBehaviorScore by DistressScoringManager.formBehaviorScore.collectAsState()
 
                         val realDistressSnapshot = DistressSnapshot(
                             globalScore = totalScore,
@@ -580,7 +581,7 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                             faceScore = faceScore,
                             voiceScore = voiceScore,
                             touchScore = handScore,
-                            formBehaviorScore = 0
+                            formBehaviorScore = formBehaviorScore
                         )
 
                         //val shouldAutoOpenChat = totalScore >= 2

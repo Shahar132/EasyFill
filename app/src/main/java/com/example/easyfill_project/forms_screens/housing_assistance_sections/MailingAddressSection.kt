@@ -36,6 +36,7 @@ fun MailingAddressSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         SmartTextField(
+            fieldId = "mailingStreet",
             label = "רחוב/תא דואר",
             value = formData["mailingStreet"].orEmpty(),
             onValueChange = { onFieldChange("mailingStreet", it) },
@@ -44,6 +45,7 @@ fun MailingAddressSection(
         )
 
         SmartTextField(
+            fieldId = "mailingHouseNumber",
             label = "מספר בית",
             value = formData["mailingHouseNumber"].orEmpty(),
             onValueChange = { onFieldChange("mailingHouseNumber", it) },
@@ -52,6 +54,7 @@ fun MailingAddressSection(
         )
 
         SmartTextField(
+            fieldId = "mailingEntrance",
             label = "כניסה",
             value = formData["mailingEntrance"].orEmpty(),
             onValueChange = { onFieldChange("mailingEntrance", it) },
@@ -60,6 +63,7 @@ fun MailingAddressSection(
         )
 
         SmartTextField(
+            fieldId = "mailingApartment",
             label = "דירה",
             value = formData["mailingApartment"].orEmpty(),
             onValueChange = { onFieldChange("mailingApartment", it) },
@@ -68,6 +72,7 @@ fun MailingAddressSection(
         )
 
         SmartTextField(
+            fieldId = "mailingCity",
             label = "ישוב",
             value = formData["mailingCity"].orEmpty(),
             onValueChange = { onFieldChange("mailingCity", it) },
@@ -76,6 +81,7 @@ fun MailingAddressSection(
         )
 
         SmartTextField(
+            fieldId = "mailingZipCode",
             label = "מיקוד",
             value = formData["mailingZipCode"].orEmpty(),
             onValueChange = { onFieldChange("mailingZipCode", it) },

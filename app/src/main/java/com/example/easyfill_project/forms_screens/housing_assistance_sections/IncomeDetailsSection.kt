@@ -36,6 +36,7 @@ fun IncomeDetailsSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         SmartTextField(
+            fieldId = "workPlace",
             label = "מקום העבודה",
             value = formData["workPlace"].orEmpty(),
             onValueChange = { onFieldChange("workPlace", it) },
@@ -44,6 +45,7 @@ fun IncomeDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "incomeSalary",
             label = "השכר שלך נטו",
             value = formData["salaryNet"].orEmpty(),
             onValueChange = { onFieldChange("salaryNet", it) },
@@ -52,6 +54,7 @@ fun IncomeDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "partnerWork",
             label = "מקום העבודה של בן/בת הזוג",
             value = formData["partnerWorkPlace"].orEmpty(),
             onValueChange = { onFieldChange("partnerWorkPlace", it) },
@@ -60,6 +63,7 @@ fun IncomeDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "partnerIncomeSalary",
             label = "שכר בן/בת הזוג נטו",
             value = formData["partnerSalaryNet"].orEmpty(),
             onValueChange = { onFieldChange("partnerSalaryNet", it) },
@@ -68,6 +72,7 @@ fun IncomeDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "additionalIncome",
             label = "פירוט הכנסות נוספות",
             value = formData["additionalIncomeDetails"].orEmpty(),
             onValueChange = { onFieldChange("additionalIncomeDetails", it) },

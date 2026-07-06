@@ -290,6 +290,7 @@ class ChatBotManager(
         return when (severityLevel) {
             0 -> null
 
+            //severity 1
             1 -> BotResponse(
                 message = if (voiceIsDominant) {//voice true
                     "שמנו לב שאולי הדיבור שלך קצת שונה מהרגיל. אפשר לקחת נשימה קצרה, להמשיך לאט, או להקליד במקום לדבר אם זה נוח יותר."
@@ -297,7 +298,7 @@ class ChatBotManager(
                     "שמנו לב שאולי קצת קשה לך. אפשר להניח את הטלפון על השולחן, לקחת נשימה קצרה או לעשות הפסקה קטנה ולהמשיך אחר כך."
                 }
             )
-
+            //severity 2
             2 -> BotResponse(
                 message = if (voiceIsDominant) {//voice true
                     "נראה שקשה לך כרגע. אפשר לעבור להקלדה במקום דיבור, ואני יכול גם להעביר את המסך למצב רגוע יותר. רוצה שאשנה את הצבעים?"
@@ -305,7 +306,7 @@ class ChatBotManager(
                     "נראה שאתה חווה קצת עומס. רוצה שאגדיל את הטקסט כדי שיהיה קל יותר להמשיך?"
                 },
                 action = if (voiceIsDominant) {
-                    BotAction.EnableAutoRead
+                    BotAction.SetContrast(PersonalizationCatalog.lowContrast)
                 } else {
                     BotAction.SetFontSize(PersonalizationCatalog.largeFont)
                 },

@@ -72,10 +72,16 @@ fun FloatingChatOverlay(
 
     var showAlertText by remember { mutableStateOf(false) }
 
-    val alertScore = maxOf(
-        distressSnapshot.touchScore,
-        distressSnapshot.voiceScore
-    )
+    val combinedScore =
+        distressSnapshot.touchScore + distressSnapshot.voiceScore
+
+    val severityLevel = when (combinedScore) {
+        0 -> 0
+        in 1..2 -> 1
+        in 3..4 -> 2
+        in 5..6 -> 3
+        else -> 4
+    }
 
 
     LaunchedEffect(autoOpenOnDistress) {
@@ -94,8 +100,9 @@ fun FloatingChatOverlay(
         }
     }
 
-    LaunchedEffect(alertScore) {
-        if (alertScore > 0) {
+
+    LaunchedEffect(severityLevel) {
+        if (severityLevel > 0) {
             showAlertText = true
             delay(5000)
             showAlertText = false
@@ -269,15 +276,17 @@ fun FloatingChatOverlay(
             }
 
 
-            if (alertScore > 0 && !isChatOpen)  {
+            if (severityLevel > 0 && !isChatOpen)  {
 
-                val alertColor = when (alertScore)  {
+
+                val alertColor = when (severityLevel) {
                     1 -> Color(0xFF4CAF50) // green
                     2 -> Color(0xFFFFA000) // orange
-                    else -> Color.Red      // red
+                    3 -> Color(0xFFFF5722) // deep orange
+                    else -> Color.Red
                 }
 
-                val alertText = when (alertScore) {
+                val alertText = when (severityLevel) {
                     1 -> "יש לי הצעה קטנה"
                     2 -> "אפשר לעזור?"
                     3 -> "רוצה שאקל עליך?"

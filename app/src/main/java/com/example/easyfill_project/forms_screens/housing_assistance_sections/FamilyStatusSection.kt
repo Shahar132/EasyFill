@@ -63,6 +63,7 @@ fun FamilyStatusSection(
         }
 
         SmartTextField(
+            fieldId = "numberOfChildren",
             label = "מספר הילדים",
             value = formData["childrenCount"].orEmpty(),
             onValueChange = { onFieldChange("childrenCount", it) },
@@ -71,6 +72,7 @@ fun FamilyStatusSection(
         )
 
         SmartTextField(
+            fieldId = "childrenAge",
             label = "גיל הילדים",
             value = formData["childrenAges"].orEmpty(),
             onValueChange = { onFieldChange("childrenAges", it) },

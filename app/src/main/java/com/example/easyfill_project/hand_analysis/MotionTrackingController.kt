@@ -28,10 +28,10 @@ class MotionTrackingController(
         job?.cancel()
 
         job = scope.launch {
-            Log.d("MOTION_FLOW", "Starting 30 sec baseline")
+            Log.d("MOTION_FLOW", "Starting 10 sec baseline")
 
             motionManager.start()
-            delay(30_000)
+            delay(10_000)
 
             val baselineResult = motionManager.stopAndAnalyze()
 
@@ -82,25 +82,44 @@ class MotionTrackingController(
                 0f
             }
 
+        // Check whether the gyroscope detected meaningful movement.
+        // This helps distinguish real hand movement from simply holding
+        // the phone at a different angle (which mainly affects the accelerometer).
+        val gyroVariationHigh =
+            current.gyroscopeVariation > baseline.gyroscopeVariation * GYRO_VARIATION_FACTOR
+
+        val gyroP95High =
+            gyroExceedRatio > GYRO_EXCEED_RATIO_THRESHOLD
+
+        val hasGyroscopeMovement =
+            gyroVariationHigh || gyroP95High
+
         var score = 0
 
-        // Rule 1: more than 10% of current values passed baseline P95.
-        if (exceedRatio > EXCEED_RATIO_THRESHOLD) {
+        // Rule 1: More than 10% of current acceleration values passed the baseline acceleration P95.
+        // Count this only if the gyroscope also detected movement.
+        // This prevents a stable phone angle or holding position from raising the score.
+        if (exceedRatio > EXCEED_RATIO_THRESHOLD && hasGyroscopeMovement) {
             score += 1
         }
 
         // Rule 2: acceleration variation is much higher than baseline.
-        if (current.accelerationVariation > baseline.accelerationVariation * ACC_VARIATION_FACTOR) {
+        // Count it only if gyroscope also detected movement,
+        // to avoid scoring stable phone angle / holding position.
+        if (
+            current.accelerationVariation > baseline.accelerationVariation * ACC_VARIATION_FACTOR &&
+            hasGyroscopeMovement
+        ) {
             score += 1
         }
 
-        // Rule 3: gyroscope variation is much higher than baseline.
-        if (current.gyroscopeVariation > baseline.gyroscopeVariation * GYRO_VARIATION_FACTOR) {
+        // Rule 3: Gyroscope variation is much higher than the user's baseline.
+        if (gyroVariationHigh) {
             score += 1
         }
 
-        // Rule 4: more than 10% of current gyroscope values passed baseline gyroscope P95.
-        if (gyroExceedRatio > GYRO_EXCEED_RATIO_THRESHOLD) {
+        // Rule 4: More than 10% of current gyroscope values passed the baseline gyroscope P95.
+        if (gyroP95High) {
             score += 1
         }
 
@@ -123,8 +142,8 @@ class MotionTrackingController(
 
         distressManager.printStatus()
 
-        if(distressManager.isDistressDetected()){
-            Log.d("DISTRESS","Distress detected")
+        if (distressManager.isDistressDetected()) {
+            Log.d("DISTRESS", "Distress detected")
         }
     }
 

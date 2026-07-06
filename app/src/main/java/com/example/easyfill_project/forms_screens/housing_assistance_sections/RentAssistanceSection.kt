@@ -44,6 +44,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "rentStreet",
             label = "רחוב",
             value = formData["rentStreet"].orEmpty(),
             onValueChange = { onFieldChange("rentStreet", it) },
@@ -52,6 +53,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "rentHouseNumber",
             label = "מספר בית",
             value = formData["rentHouseNumber"].orEmpty(),
             onValueChange = { onFieldChange("rentHouseNumber", it) },
@@ -60,6 +62,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "rentEntrance",
             label = "כניסה",
             value = formData["rentEntrance"].orEmpty(),
             onValueChange = { onFieldChange("rentEntrance", it) },
@@ -68,6 +71,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "rentApartment",
             label = "דירה",
             value = formData["rentApartment"].orEmpty(),
             onValueChange = { onFieldChange("rentApartment", it) },
@@ -76,6 +80,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "rentCity",
             label = "יישוב",
             value = formData["rentCity"].orEmpty(),
             onValueChange = { onFieldChange("rentCity", it) },
@@ -84,6 +89,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "rentZipCode",
             label = "מיקוד",
             value = formData["rentZipCode"].orEmpty(),
             onValueChange = { onFieldChange("rentZipCode", it) },
@@ -92,6 +98,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "roomsCount",
             label = "מספר חדרים",
             value = formData["roomsCount"].orEmpty(),
             onValueChange = { onFieldChange("roomsCount", it) },
@@ -100,6 +107,7 @@ fun RentAssistanceSection(
         )
 
         SmartTextField(
+            fieldId = "floor",
             label = "קומה",
             value = formData["floor"].orEmpty(),
             onValueChange = { onFieldChange("floor", it) },

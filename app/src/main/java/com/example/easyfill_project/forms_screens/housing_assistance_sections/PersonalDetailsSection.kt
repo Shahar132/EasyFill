@@ -36,6 +36,7 @@ fun PersonalDetailsSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         SmartTextField(
+            fieldId = "lastName",
             label = "שם משפחה",
             value = formData["lastName"].orEmpty(),
             onValueChange = { onFieldChange("lastName", it) },
@@ -44,6 +45,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "firstName",
             label = "שם פרטי",
             value = formData["firstName"].orEmpty(),
             onValueChange = { onFieldChange("firstName", it) },
@@ -52,6 +54,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "idNumber",
             label = "מספר תעודת זהות",
             value = formData["idNumber"].orEmpty(),
             onValueChange = { onFieldChange("idNumber", it) },
@@ -60,6 +63,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "street",
             label = "רחוב",
             value = formData["street"].orEmpty(),
             onValueChange = { onFieldChange("street", it) },
@@ -68,6 +72,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "houseNumber",
             label = "מספר בית",
             value = formData["houseNumber"].orEmpty(),
             onValueChange = { onFieldChange("houseNumber", it) },
@@ -76,6 +81,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "city",
             label = "יישוב",
             value = formData["city"].orEmpty(),
             onValueChange = { onFieldChange("city", it) },
@@ -84,6 +90,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "postcode",
             label = "מיקוד",
             value = formData["zipCode"].orEmpty(),
             onValueChange = { onFieldChange("zipCode", it) },
@@ -92,6 +99,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "phoneNumber",
             label = "טלפון נייד",
             value = formData["phone"].orEmpty(),
             onValueChange = { onFieldChange("phone", it) },
@@ -100,6 +108,7 @@ fun PersonalDetailsSection(
         )
 
         SmartTextField(
+            fieldId = "email",
             label = "דואר אלקטרוני",
             value = formData["email"].orEmpty(),
             onValueChange = { onFieldChange("email", it) },
