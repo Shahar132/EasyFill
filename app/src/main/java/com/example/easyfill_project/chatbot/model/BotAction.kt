@@ -6,38 +6,29 @@ import com.example.easyfill_project.chatbot.personalization.SoundOption
 
 sealed class BotAction {
 
+    // Represents an option that performs no app action.
     object None : BotAction()
 
+    // Reads all prepared text for the current screen.
     object ReadAloud : BotAction()
-    object StopReading : BotAction()
 
-    object EnableAutoRead : BotAction()
-    object DisableAutoRead : BotAction()
+    // Reads only the explanation of the currently focused field.
+    object ReadCurrentField : BotAction()
 
-    object OpenPersonalSettings : BotAction()
-    object OpenContrastSettings : BotAction()
-    object OpenFontSizeSettings : BotAction()
-    object OpenBackgroundSounds : BotAction()
-
-    object OpenHome : BotAction()
-    object OpenFormOptions : BotAction()
-    object OpenFormsProgress : BotAction()
-    object OpenProfile : BotAction()
-    object OpenGuidance : BotAction()
-    object OpenUploadPdf : BotAction()
-
+    // Displays the support-information message.
     object ShowEmergencyContacts : BotAction()
 
+    // Plays the sound stored inside option.
     data class PlaySound(
         val option: SoundOption
     ) : BotAction()
 
-    object StopBackgroundMusic : BotAction()
-
+    // Applies the selected color/contrast option.
     data class SetContrast(
         val option: ContrastOption
     ) : BotAction()
 
+    // Applies the selected font-size option.
     data class SetFontSize(
         val option: FontSizeOption
     ) : BotAction()

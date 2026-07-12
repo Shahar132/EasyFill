@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -22,10 +23,18 @@ import com.example.easyfill_project.hand_analysis.MotionTrackingController
 import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
 
 
+
 @Composable
 fun HousingAssistanceFormScreen(
     navController: NavHostController,
-    startStep: Int = 0
+    startStep: Int = 0,
+
+    // Sends the current step back to AppNavigation.
+    onStepChanged: (Int) -> Unit = {},
+
+
+    // Sends the selected field ID to AppNavigation.
+    onFocusedFieldChange: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val formId = "housing_assistance"
@@ -46,8 +55,16 @@ fun HousingAssistanceFormScreen(
 
     val sections = FormsRegistry.getFormById(formId).sections
 
-    var currentStep by remember {
-        mutableStateOf(startStep.coerceIn(0, sections.lastIndex))
+// Stores the currently displayed form section.
+    var currentStep by rememberSaveable(startStep, sections.lastIndex) {
+        mutableIntStateOf(
+            startStep.coerceIn(0, sections.lastIndex)
+        )
+    }
+
+// Sends the current step to AppNavigation every time it changes.
+    LaunchedEffect(currentStep) {
+        onStepChanged(currentStep)
     }
 
     var formData by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -279,12 +296,45 @@ fun HousingAssistanceFormScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         when (currentStep) {
-            0 -> PersonalDetailsSection(formData, ::updateField)
-            1 -> MailingAddressSection(formData, ::updateField)
-            2 -> FamilyStatusSection(formData, ::updateField)
-            3 -> IncomeDetailsSection(formData, ::updateField)
+            0 -> PersonalDetailsSection(
+                formData = formData,
+                onFieldChange = ::updateField,
+
+                // Forwards the selected field to AppNavigation.
+                onFocusedFieldChange = onFocusedFieldChange
+            )
+            1 -> MailingAddressSection(
+                formData = formData,
+                onFieldChange = ::updateField,
+
+                // Sends the selected income field toward AppNavigation.
+                onFocusedFieldChange = onFocusedFieldChange
+            )
+
+            2 -> FamilyStatusSection(
+                formData = formData,
+                onFieldChange = ::updateField,
+
+                // Sends the selected family-status text field upward.
+                onFocusedFieldChange = onFocusedFieldChange
+            )
+
+            3 -> IncomeDetailsSection(
+                formData = formData,
+                onFieldChange = ::updateField,
+
+                // Sends the selected income field toward AppNavigation.
+                onFocusedFieldChange = onFocusedFieldChange
+            )
             4 -> AssistanceSelectionSection(formData, ::updateField)
-            5 -> RentAssistanceSection(formData, ::updateField)
+
+            5 -> RentAssistanceSection(
+                formData = formData,
+                onFieldChange = ::updateField,
+
+                // Sends the selected rent field toward AppNavigation.
+                onFocusedFieldChange = onFocusedFieldChange
+            )
             6 -> SummarySection(navController)
         }
 

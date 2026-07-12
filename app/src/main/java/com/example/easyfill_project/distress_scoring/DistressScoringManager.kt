@@ -24,6 +24,7 @@ object DistressScoringManager {
     val formBehaviorScore: StateFlow<Int> = _formBehaviorScore
 
     // Current interaction mode:
+    // recording or form filling
     // FORM_FILLING = user is filling form fields (not using recording)
     // VOICE_RECORDING = user is recording speech
     private val _mode = MutableStateFlow(DistressMode.FORM_FILLING)
@@ -60,6 +61,8 @@ object DistressScoringManager {
 
 
     //the mode decides which analyses count right now and the weights.
+    //Combine all the distress analyses into one overall distress score with weights
+    //Make that score easy for the chatbot to use.
     private fun updateTotal() {
         val hand = _handScore.value
         val voice = _voiceScore.value
@@ -79,7 +82,7 @@ object DistressScoringManager {
                 form * 0.60 + hand * 0.40
             }
         }
-
+//chatbot receives one severity level between 0 and 4 which is the total score
         _totalScore.value = weightedScore.roundToInt().coerceIn(0, 4)
 
         printStatus()

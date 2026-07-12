@@ -1,90 +1,110 @@
 package com.example.easyfill_project
 
 import android.content.Context
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 
 // Compose state & runtime
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 
 // Modifier for layout control
 import androidx.compose.ui.Modifier
 
 // Needed to force RTL (right-to-left) for right-side drawer
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // Navigation
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 
 // Your screens
-import com.example.easyfill_project.screen.AuthScreen
-import com.example.easyfill_project.screen.BackgroundSoundsScreen
-import com.example.easyfill_project.screen.ContrastSettingsScreen
-import com.example.easyfill_project.screen.EasyFillMainScreen
-import com.example.easyfill_project.screen.FontSizeSettingsScreen
-import com.example.easyfill_project.screen.GuidanceScreen
-import com.example.easyfill_project.screen.HomeScreen
-import com.example.easyfill_project.screen.PersonalSettingScreen
-import com.example.easyfill_project.screen.ProfileScreen
-import com.example.easyfill_project.voiceanalysis.BaselineVoiceScreen
-
-import kotlinx.coroutines.launch
-import com.example.easyfill_project.screen.ContrastMode
-import com.example.easyfill_project.screen.getContrastColorScheme
-import com.example.easyfill_project.screen.FontSizeMode
-import com.example.easyfill_project.screen.RegisterScreen
-import com.example.easyfill_project.screen.UploadPdfScreen
-import com.example.easyfill_project.screen.getAppTypography
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-
-//imports regarding the TTS
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material.icons.filled.VolumeUp
 import com.example.easyfill_project.forms_screens.DemoFormsOptions
 import com.example.easyfill_project.forms_screens.HousingAssistanceFormScreen
+import com.example.easyfill_project.screen.AuthScreen
+import com.example.easyfill_project.screen.BackgroundSoundsScreen
+import com.example.easyfill_project.screen.ContrastMode
+import com.example.easyfill_project.screen.ContrastSettingsScreen
+import com.example.easyfill_project.screen.EasyFillMainScreen
+import com.example.easyfill_project.screen.FontSizeMode
+import com.example.easyfill_project.screen.FontSizeSettingsScreen
+import com.example.easyfill_project.screen.GuidanceScreen
+import com.example.easyfill_project.screen.GuidanceSlidesScreen
+import com.example.easyfill_project.screen.HomeScreen
 import com.example.easyfill_project.screen.MyFormsProgressScreen
+import com.example.easyfill_project.screen.PersonalSettingScreen
+import com.example.easyfill_project.screen.ProfileScreen
+import com.example.easyfill_project.screen.RegisterScreen
+import com.example.easyfill_project.screen.SoundManager
+import com.example.easyfill_project.screen.UploadPdfScreen
+import com.example.easyfill_project.screen.getAppTypography
+import com.example.easyfill_project.screen.getContrastColorScheme
+
+// Imports regarding the chatbot
+import com.example.easyfill_project.chatbot.help.FieldHelpCatalog
+import com.example.easyfill_project.chatbot.logic.BotSupportActionHandler
+import com.example.easyfill_project.chatbot.model.BotAppState
+import com.example.easyfill_project.chatbot.model.DistressSnapshot
+import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
+
+// Imports regarding distress scoring
+import com.example.easyfill_project.distress_scoring.DistressScoringManager
+
+// Imports regarding speech and TTS
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.texttospeech.TtsTexts
-//for delay
-import kotlinx.coroutines.delay
-import com.example.easyfill_project.screen.GuidanceSlidesScreen
-
-//for chatbot ui
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
-
-
-
-//for chatbot navigation
-import com.example.easyfill_project.chatbot.model.BotAction
-import com.example.easyfill_project.screen.SoundManager
-import com.example.easyfill_project.chatbot.navigation.BotNavigationHandler
-
-import com.example.easyfill_project.chatbot.model.DistressSnapshot
-import com.example.easyfill_project.chatbot.model.BotAppState
-
-
-import com.example.easyfill_project.distress_scoring.DistressScoringManager
+import com.example.easyfill_project.voiceanalysis.BaselineVoiceScreen
 import com.example.easyfill_project.voiceanalysis.VoiceBaselineRepository
 
+// Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+
+// Coroutines
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 // Main navigation function
@@ -116,8 +136,8 @@ fun AppNavigation() {
 
         // From here → screens with drawer
         composable("app") {
-            //when user login then go to route app that opens the home screen as first destination +side menu(inner navHost)
-            //"app" = opens the layout with drawer
+            // When user logs in, route "app" opens the home screen
+            // together with the side menu and inner NavHost.
             AppWithDrawer(navController)
         }
     }
@@ -127,7 +147,9 @@ fun AppNavigation() {
 // This function wraps screens WITH the side drawer
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppWithDrawer(mainNavController: NavHostController) {
+fun AppWithDrawer(
+    mainNavController: NavHostController
+) {
 
     // Controls whether drawer is open or closed
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -138,23 +160,40 @@ fun AppWithDrawer(mainNavController: NavHostController) {
     // This controls only screens INSIDE the app area
     val innerNavController = rememberNavController()
 
-    var contrastMode by remember { mutableStateOf(ContrastMode.DEFAULT) }
-    //for font size
-    var fontSizeMode by remember { mutableStateOf(FontSizeMode.NORMAL) }
+    // Current color/contrast mode used by the app theme
+    var contrastMode by remember {
+        mutableStateOf(ContrastMode.DEFAULT)
+    }
 
-    // for marking the current screen
-    val currentBackStackEntry by innerNavController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route
+    // Current font-size mode used by the app theme
+    var fontSizeMode by remember {
+        mutableStateOf(FontSizeMode.NORMAL)
+    }
 
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    // For marking the current screen
+    val currentBackStackEntry by
+    innerNavController.currentBackStackEntryAsState()
 
-    //regarding tts
+    val currentRoute =
+        currentBackStackEntry?.destination?.route
+
+    val screenWidth =
+        LocalConfiguration.current.screenWidthDp.dp
+
+    // Regarding TTS
     val context = LocalContext.current
-    val ttsManager = remember { TextToSpeechManager(context) }
-    val speechManager = remember { SpeechToTextManager(context) }
 
+    val ttsManager = remember {
+        TextToSpeechManager(context)
+    }
 
-    var baselineDone by remember { mutableStateOf(false) }
+    val speechManager = remember {
+        SpeechToTextManager(context)
+    }
+
+    var baselineDone by remember {
+        mutableStateOf(false)
+    }
 
     val voiceBaselineRepository = remember {
         VoiceBaselineRepository()
@@ -168,29 +207,77 @@ fun AppWithDrawer(mainNavController: NavHostController) {
         )
     }
 
-    var screenTextToRead by remember { mutableStateOf("") }
-    var isTtsSpeaking by remember { mutableStateOf(false) }
-
-
-    //for automatic reading if user pick ON toggle+shared preferences
-    val prefs = context.getSharedPreferences("user_settings", Context.MODE_PRIVATE)
-
-    var autoReadEnabled by remember {
-        mutableStateOf(prefs.getBoolean("auto_read_enabled", false))
+    // Text currently prepared for whole-screen reading
+    var screenTextToRead by remember {
+        mutableStateOf("")
     }
 
+    // Stores whether TTS is currently speaking
+    var isTtsSpeaking by remember {
+        mutableStateOf(false)
+    }
+
+    // For automatic reading if user picks ON toggle + SharedPreferences
+    val prefs = context.getSharedPreferences(
+        "user_settings",
+        Context.MODE_PRIVATE
+    )
+
+    var autoReadEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "auto_read_enabled",
+                false
+            )
+        )
+    }
+
+    // Shut down the shared TTS manager when AppWithDrawer leaves composition
     DisposableEffect(Unit) {
         onDispose {
             ttsManager.shutdown()
         }
     }
 
-    // This forces the drawer to open from RIGHT side
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    // Stores the housing-form section currently displayed.
+    var currentHousingStep by remember {
+        mutableIntStateOf(0)
+    }
 
-        MaterialTheme(//theme here
-            colorScheme = getContrastColorScheme(contrastMode) ,
-                    typography = getAppTypography(fontSizeMode)
+    // Stores the last SmartTextField selected by the user.
+    //
+    // null means that no field has been selected yet.
+    // In that case, we read the first field of the current step.
+    var focusedFieldId by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    // True only while the user is inside one of the housing-form routes.
+    val isHousingAssistanceForm =
+        currentRoute == "housingAssistanceForm" ||
+                currentRoute == "housingAssistanceForm/{startStep}"
+
+    // When the user leaves the housing form,
+    // clear the old step and focused-field information.
+    LaunchedEffect(currentRoute) {
+        if (!isHousingAssistanceForm) {
+            focusedFieldId = null
+            currentHousingStep = 0
+        }
+    }
+
+    // Observes music changes.
+    // This requires SoundManager.selectedSound to be a StateFlow<String>.
+    val selectedSound = SoundManager.selectedSound
+
+    // This forces the drawer to open from RIGHT side
+    CompositionLocalProvider(
+        LocalLayoutDirection provides LayoutDirection.Rtl
+    ) {
+
+        MaterialTheme(
+            colorScheme = getContrastColorScheme(contrastMode),
+            typography = getAppTypography(fontSizeMode)
         ) {
 
             // Main drawer component
@@ -201,8 +288,10 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                 drawerContent = {
                     ModalDrawerSheet(
                         modifier = Modifier.width(screenWidth * 0.6f),
-                        drawerContainerColor = MaterialTheme.colorScheme.surface,
-                        drawerContentColor = MaterialTheme.colorScheme.onSurface
+                        drawerContainerColor =
+                            MaterialTheme.colorScheme.surface,
+                        drawerContentColor =
+                            MaterialTheme.colorScheme.onSurface
                     ) {
 
                         // Menu title
@@ -214,7 +303,9 @@ fun AppWithDrawer(mainNavController: NavHostController) {
 
                         // Home item in menu
                         NavigationDrawerItem(
-                            label = { Text("דף הבית") },
+                            label = {
+                                Text("דף הבית")
+                            },
                             selected = currentRoute == "home",
                             icon = {
                                 Icon(
@@ -222,119 +313,171 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                     contentDescription = "Home"
                                 )
                             },
-                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
-                                // Selected (when pressed)
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                            colors =
+                                NavigationDrawerItemDefaults.colors(
+                                    // Selected
+                                    selectedContainerColor =
+                                        MaterialTheme.colorScheme.primary,
+                                    selectedTextColor =
+                                        MaterialTheme.colorScheme.onPrimary,
+                                    selectedIconColor =
+                                        MaterialTheme.colorScheme.onPrimary,
 
-                                // Unselected
-                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
-                            ),
+                                    // Unselected
+                                    unselectedContainerColor =
+                                        MaterialTheme.colorScheme.surface,
+                                    unselectedTextColor =
+                                        MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor =
+                                        MaterialTheme.colorScheme.onSurface
+                                ),
                             onClick = {
                                 // Navigate to home screen
                                 innerNavController.navigate("home")
 
                                 // Close drawer after click
-                                scope.launch { drawerState.close() }
+                                scope.launch {
+                                    drawerState.close()
+                                }
                             }
                         )
 
-                        // additional item of profile
+                        // Additional item of profile
                         NavigationDrawerItem(
-                            label = { Text("ניהול חשבון")},
+                            label = {
+                                Text("ניהול חשבון")
+                            },
                             selected = currentRoute == "profile",
-                            // it means mark down only if this is the current route
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Person,
                                     contentDescription = "Profile"
                                 )
                             },
-                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
-                                // Selected (when pressed)
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                            colors =
+                                NavigationDrawerItemDefaults.colors(
+                                    // Selected
+                                    selectedContainerColor =
+                                        MaterialTheme.colorScheme.primary,
+                                    selectedTextColor =
+                                        MaterialTheme.colorScheme.onPrimary,
+                                    selectedIconColor =
+                                        MaterialTheme.colorScheme.onPrimary,
 
-                                // Unselected
-                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
-                            ),
+                                    // Unselected
+                                    unselectedContainerColor =
+                                        MaterialTheme.colorScheme.surface,
+                                    unselectedTextColor =
+                                        MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor =
+                                        MaterialTheme.colorScheme.onSurface
+                                ),
                             onClick = {
                                 innerNavController.navigate("profile")
-                                scope.launch { drawerState.close() }
+
+                                scope.launch {
+                                    drawerState.close()
+                                }
                             }
                         )
 
                         NavigationDrawerItem(
-                            label = { Text("מדריך למשתמש") },
+                            label = {
+                                Text("מדריך למשתמש")
+                            },
                             selected = currentRoute == "Guidance",
-                            // mark only if current route is Guidance
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "User guide"
                                 )
                             },
-                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
-                                // Selected (when pressed)
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                            colors =
+                                NavigationDrawerItemDefaults.colors(
+                                    // Selected
+                                    selectedContainerColor =
+                                        MaterialTheme.colorScheme.primary,
+                                    selectedTextColor =
+                                        MaterialTheme.colorScheme.onPrimary,
+                                    selectedIconColor =
+                                        MaterialTheme.colorScheme.onPrimary,
 
-                                // Unselected
-                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
-                            ),
+                                    // Unselected
+                                    unselectedContainerColor =
+                                        MaterialTheme.colorScheme.surface,
+                                    unselectedTextColor =
+                                        MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor =
+                                        MaterialTheme.colorScheme.onSurface
+                                ),
                             onClick = {
                                 innerNavController.navigate("Guidance")
-                                scope.launch { drawerState.close() }
+
+                                scope.launch {
+                                    drawerState.close()
+                                }
                             }
                         )
 
                         NavigationDrawerItem(
-                            label = { Text("התאמה אישית")},
-                            selected = currentRoute == "Personal Settings",
+                            label = {
+                                Text("התאמה אישית")
+                            },
+                            selected =
+                                currentRoute == "Personal Settings",
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Settings,
                                     contentDescription = "Personal Settings"
                                 )
                             },
-                            colors = NavigationDrawerItemDefaults.colors(//defines colors when item menu is pressed/not
-                                // Selected (when pressed)
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                            colors =
+                                NavigationDrawerItemDefaults.colors(
+                                    // Selected
+                                    selectedContainerColor =
+                                        MaterialTheme.colorScheme.primary,
+                                    selectedTextColor =
+                                        MaterialTheme.colorScheme.onPrimary,
+                                    selectedIconColor =
+                                        MaterialTheme.colorScheme.onPrimary,
 
-                                // Unselected
-                                unselectedContainerColor = MaterialTheme.colorScheme.surface,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurface
-                            ),
-
+                                    // Unselected
+                                    unselectedContainerColor =
+                                        MaterialTheme.colorScheme.surface,
+                                    unselectedTextColor =
+                                        MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor =
+                                        MaterialTheme.colorScheme.onSurface
+                                ),
                             onClick = {
-                                innerNavController.navigate("Personal Settings")
-                                scope.launch { drawerState.close() }
+                                innerNavController.navigate(
+                                    "Personal Settings"
+                                )
+
+                                scope.launch {
+                                    drawerState.close()
+                                }
                             }
                         )
                     }
                 }
             ) {
 
-                // Return layout direction to normal (LTR) for content
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                // Return layout direction to RTL for content
+                CompositionLocalProvider(
+                    LocalLayoutDirection provides LayoutDirection.Rtl
+                ) {
 
-                    //this part is taking the current uid and extract full name
-                    var userName by remember { mutableStateOf("") }
+                    // This part takes the current uid and extracts full name
+                    var userName by remember {
+                        mutableStateOf("")
+                    }
 
                     LaunchedEffect(Unit) {
-                        val userId = FirebaseAuth.getInstance().currentUser?.uid
+                        val userId =
+                            FirebaseAuth.getInstance()
+                                .currentUser
+                                ?.uid
 
                         if (userId != null) {
                             FirebaseFirestore.getInstance()
@@ -342,21 +485,19 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                 .document(userId)
                                 .get()
                                 .addOnSuccessListener { document ->
-                                    userName = document.getString("fullName") ?: ""
+                                    userName =
+                                        document.getString("fullName")
+                                            ?: ""
                                 }
                         }
                     }
 
-                    // Scaffold = basic screen layout (top bar, content, etc.)
+                    // Scaffold = basic screen layout
                     Scaffold(
-                        // about the colors - > scaffold automatically check background color
 
                         // Top bar that appears on ALL drawer screens
                         topBar = {
                             TopAppBar(
-                                // automatic colors as well takes surface
-
-                                // App title at the upper bar and name for user
                                 title = {
                                     Column {
                                         Text("EasyFill")
@@ -369,313 +510,526 @@ fun AppWithDrawer(mainNavController: NavHostController) {
                                         }
                                     }
                                 },
-                                // Menu button (top-left visually, but opens RIGHT drawer)
+
+                                // Menu button
                                 navigationIcon = {
                                     IconButton(
                                         onClick = {
-                                            // Open the drawer
-                                            scope.launch { drawerState.open() }
+                                            scope.launch {
+                                                drawerState.open()
+                                            }
                                         }
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Menu,
-                                            contentDescription = "Open menu"
+                                            imageVector =
+                                                Icons.Default.Menu,
+                                            contentDescription =
+                                                "Open menu"
                                         )
                                     }
-
                                 },
+
                                 actions = {
                                     IconButton(
                                         onClick = {
                                             if (isTtsSpeaking) {
+                                                // Stop active TTS.
                                                 ttsManager.stop()
                                                 isTtsSpeaking = false
-                                            } else {
-                                                ttsManager.speak(screenTextToRead)
+
+                                            } else if (
+                                                screenTextToRead.isNotBlank()
+                                            ) {
+                                                // Start reading only when
+                                                // valid text exists.
+                                                ttsManager.speak(
+                                                    screenTextToRead
+                                                )
                                                 isTtsSpeaking = true
                                             }
                                         }
                                     ) {
                                         Icon(
-                                            imageVector = if (isTtsSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                            contentDescription = if (isTtsSpeaking) "עצירת הקראה" else "הקראת טקסט"
+                                            imageVector =
+                                                if (isTtsSpeaking) {
+                                                    Icons.Default.VolumeOff
+                                                } else {
+                                                    Icons.Default.VolumeUp
+                                                },
+                                            contentDescription =
+                                                if (isTtsSpeaking) {
+                                                    "עצירת הקראה"
+                                                } else {
+                                                    "הקראת טקסט"
+                                                }
                                         )
                                     }
                                 }
-
                             )
                         }
                     ) { innerPadding ->
 
-                        //helper function for ether manual or auto
+                        // Helper function for either manual or auto reading
                         fun updateScreenText(text: String) {
+
+                            // Stop text from the previous screen.
                             ttsManager.stop()
                             isTtsSpeaking = false
 
+                            // Save the new current-screen text.
                             screenTextToRead = text
 
-                            if (autoReadEnabled) {//for auto reading
+                            // Automatically read only when enabled
+                            // and when the supplied text is not blank.
+                            if (
+                                autoReadEnabled &&
+                                text.isNotBlank()
+                            ) {
                                 scope.launch {
-                                    delay(400)//delay
+                                    delay(400)
                                     ttsManager.speak(text)
                                     isTtsSpeaking = true
                                 }
                             }
                         }
 
-                        NavHost(
-                            navController = innerNavController,
-                            startDestination = "home",
-                            modifier = Modifier.padding(innerPadding)
+                        // Box places the chatbot overlay above
+                        // the currently displayed navigation screen.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
                         ) {
-                            composable("home") {
-                                LaunchedEffect(Unit) {
-                                    updateScreenText(TtsTexts.HOME)
-                                }
 
+                            NavHost(
+                                navController = innerNavController,
+                                startDestination = "home",
 
-                                HomeScreen(
-                                    navController = innerNavController, baselineDone = baselineDone)
-                            }
+                                // innerPadding is already applied
+                                // by the parent Box.
+                                modifier = Modifier.fillMaxSize()
+                            ) {
 
-                            composable("profile") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.PROFILE)}
-                                ProfileScreen(
-                                    navController = mainNavController,
-                                    onNameUpdated = { updatedName ->
-                                        userName = updatedName
+                                composable("home") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.HOME)
                                     }
-                                )
-                            }
 
-                            composable("Guidance") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.GUIDANCE)}
-                                GuidanceScreen()
-                            }
-
-                            composable("Personal Settings") {
-                                LaunchedEffect(Unit) {
-                                    updateScreenText(TtsTexts.PERSONAL_SETTINGS)
+                                    HomeScreen(
+                                        navController =
+                                            innerNavController,
+                                        baselineDone = baselineDone
+                                    )
                                 }
 
-                                PersonalSettingScreen(
-                                    innerNavController,
-                                    autoReadEnabled = autoReadEnabled,
-                                    onAutoReadChange = { enabled ->
-                                        autoReadEnabled = enabled
+                                composable("profile") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.PROFILE)
+                                    }
 
-                                        if (enabled) {
-                                            scope.launch {
-                                                delay(400)
-                                                ttsManager.speak(screenTextToRead)
-                                                isTtsSpeaking = true
+                                    ProfileScreen(
+                                        navController =
+                                            mainNavController,
+                                        onNameUpdated = { updatedName ->
+                                            userName = updatedName
+                                        }
+                                    )
+                                }
+
+                                composable("Guidance") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.GUIDANCE
+                                        )
+                                    }
+
+                                    GuidanceScreen()
+                                }
+
+                                composable("Personal Settings") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.PERSONAL_SETTINGS
+                                        )
+                                    }
+
+                                    PersonalSettingScreen(
+                                        innerNavController,
+                                        autoReadEnabled =
+                                            autoReadEnabled,
+                                        onAutoReadChange = { enabled ->
+
+                                            autoReadEnabled = enabled
+
+                                            prefs.edit()
+                                                .putBoolean(
+                                                    "auto_read_enabled",
+                                                    enabled
+                                                )
+                                                .apply()
+
+                                            if (
+                                                enabled &&
+                                                screenTextToRead.isNotBlank()
+                                            ) {
+                                                scope.launch {
+                                                    delay(400)
+                                                    ttsManager.speak(
+                                                        screenTextToRead
+                                                    )
+                                                    isTtsSpeaking = true
+                                                }
+                                            } else if (!enabled) {
+                                                ttsManager.stop()
+                                                isTtsSpeaking = false
                                             }
-                                        } else {
-                                            ttsManager.stop()
-                                            isTtsSpeaking = false
                                         }
+                                    )
+                                }
+
+                                composable("backgroundSounds") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(TtsTexts.SOUND)
                                     }
-                                )
-                            }
 
-                            composable("backgroundSounds") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.SOUND)}
-                                BackgroundSoundsScreen(innerNavController)
-                            }
+                                    BackgroundSoundsScreen(
+                                        innerNavController
+                                    )
+                                }
 
-                            composable("contrastSettings") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.CONTRAST)}
-                                ContrastSettingsScreen(
-                                    selectedMode = contrastMode,
-                                    onModeSelected = { contrastMode = it },
-                                    navController = innerNavController
-                                )
-                            }
-
-                            composable("fontSizeSettings") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.FONT_SIZE)}
-                                FontSizeSettingsScreen(
-                                    selectedMode = fontSizeMode,
-                                    onModeSelected = { fontSizeMode = it },
-                                    navController = innerNavController
-                                )
-                            }
-                            //screen of audio baseline
-                            composable("baselineVoice") {
-                                BaselineVoiceScreen(
-                                    speechManager = speechManager,
-                                    onBaselineFinished = {
-
-                                        baselineDone = true
-
-                                        innerNavController.navigate("uploadPdf") {
-                                            popUpTo("baselineVoice") { inclusive = true }
-                                        }
+                                composable("contrastSettings") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.CONTRAST
+                                        )
                                     }
-                                )
-                            }
 
-                            //navigate to screen upload file to extract data from it
-                            composable("uploadPdf") {
-                                LaunchedEffect(Unit) {
-                                updateScreenText(TtsTexts.UPLOAD_PDF)}
-                                UploadPdfScreen(navController = innerNavController)
-                            }
-                            //navigate to form options screen
-                            composable("demoFormOptions") {
-                                DemoFormsOptions(navController = innerNavController)
-                                LaunchedEffect(Unit) {
-                                    updateScreenText(TtsTexts.FORM_OPTIONS)}
-                            }
-                            //navigate to first form
-                            composable("housingAssistanceForm") {
-                                HousingAssistanceFormScreen(
-                                    navController = innerNavController,
-                                    startStep = 0
-                                )
-                            }
+                                    ContrastSettingsScreen(
+                                        selectedMode = contrastMode,
+                                        onModeSelected = {
+                                            contrastMode = it
+                                        },
+                                        navController =
+                                            innerNavController
+                                    )
+                                }
 
-                            composable("housingAssistanceForm/{startStep}") { backStackEntry ->
-                                val startStep = backStackEntry.arguments
-                                    ?.getString("startStep")
-                                    ?.toIntOrNull()
-                                    ?: 0
+                                composable("fontSizeSettings") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.FONT_SIZE
+                                        )
+                                    }
 
-                                HousingAssistanceFormScreen(
-                                    navController = innerNavController,
-                                    startStep = startStep
-                                )
-                            }
+                                    FontSizeSettingsScreen(
+                                        selectedMode = fontSizeMode,
+                                        onModeSelected = {
+                                            fontSizeMode = it
+                                        },
+                                        navController =
+                                            innerNavController
+                                    )
+                                }
 
-                            composable("myFormsProgress") {
-                                MyFormsProgressScreen(navController = innerNavController)
-                            }
+                                // Screen of audio baseline
+                                composable("baselineVoice") {
 
-                            composable("guidanceSlides") {
-                                GuidanceSlidesScreen(navController = innerNavController)
-                            }
+                                    // Updates the text used by
+                                    // the top-bar reading button.
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.BASELINE_VOICE
+                                        )
+                                    }
 
-                            //navigate to second form
-                            composable("bankDetailsForm") {
-                                // BankDetailsFormScreen(navController)
-                            }
+                                    BaselineVoiceScreen(
+                                        speechManager = speechManager,
+                                        onBaselineFinished = {
+                                            baselineDone = true
 
-                        }
-
-
-                        // for chatbot
-                        val handScore by DistressScoringManager.handScore.collectAsState()
-                        val voiceScore by DistressScoringManager.voiceScore.collectAsState()
-                        val faceScore by DistressScoringManager.faceScore.collectAsState()
-                        val totalScore by DistressScoringManager.totalScore.collectAsState()
-                        val formBehaviorScore by DistressScoringManager.formBehaviorScore.collectAsState()
-
-                        val realDistressSnapshot = DistressSnapshot(
-                            globalScore = totalScore,
-                            semanticTextScore = 0,
-                            faceScore = faceScore,
-                            voiceScore = voiceScore,
-                            touchScore = handScore,
-                            formBehaviorScore = formBehaviorScore
-                        )
-
-                        //val shouldAutoOpenChat = totalScore >= 2
-
-                        val botAppState = BotAppState(
-                            isMusicPlaying = SoundManager.selectedSound != "none",
-                            selectedSound = SoundManager.selectedSound,
-                            isTtsSpeaking = isTtsSpeaking,
-                            autoReadEnabled = autoReadEnabled,
-                            fontSizeMode = fontSizeMode.name,
-                            contrastMode = contrastMode.name
-                        )
-
-                        FloatingChatOverlay(
-                            currentScreen = currentRoute ?: "לא ידוע",
-                            autoOpenOnDistress = false,
-                            distressSnapshot = realDistressSnapshot,
-                            appState = botAppState,
-                            onBotAction = { action ->
-
-                                val navigationHandled = BotNavigationHandler.handle(
-                                    action = action,
-                                    navController = innerNavController
-                                )
-
-                                if (!navigationHandled) {
-                                    when (action) {
-
-                                        BotAction.ReadAloud -> {
-                                            ttsManager.speak(screenTextToRead)
-                                            isTtsSpeaking = true
+                                            innerNavController.navigate(
+                                                "uploadPdf"
+                                            ) {
+                                                popUpTo(
+                                                    "baselineVoice"
+                                                ) {
+                                                    inclusive = true
+                                                }
+                                            }
                                         }
+                                    )
+                                }
 
-                                        BotAction.StopReading -> {
-                                            ttsManager.stop()
-                                            isTtsSpeaking = false
-                                        }
+                                // Navigate to screen upload file
+                                // to extract data from it
+                                composable("uploadPdf") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.UPLOAD_PDF
+                                        )
+                                    }
 
-                                        BotAction.EnableAutoRead -> {
-                                            autoReadEnabled = true
+                                    UploadPdfScreen(
+                                        navController =
+                                            innerNavController
+                                    )
+                                }
 
-                                            prefs.edit()
-                                                .putBoolean("auto_read_enabled", true)
-                                                .apply()
+                                // Navigate to form options screen
+                                composable("demoFormOptions") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.FORM_OPTIONS
+                                        )
+                                    }
 
-                                            ttsManager.speak(screenTextToRead)
-                                            isTtsSpeaking = true
-                                        }
+                                    DemoFormsOptions(
+                                        navController =
+                                            innerNavController
+                                    )
+                                }
 
-                                        BotAction.DisableAutoRead -> {
-                                            autoReadEnabled = false
+                                // Navigate to first form
+                                composable("housingAssistanceForm") {
+                                    HousingAssistanceFormScreen(
+                                        navController =
+                                            innerNavController,
+                                        startStep = 0,
 
-                                            prefs.edit()
-                                                .putBoolean("auto_read_enabled", false)
-                                                .apply()
+                                        // Receives the new form step
+                                        // whenever the user presses
+                                        // Continue or Back.
+                                        onStepChanged = { newStep ->
 
-                                            ttsManager.stop()
-                                            isTtsSpeaking = false
-                                        }
+                                            // Store the current step
+                                            // for FieldHelpCatalog.
+                                            currentHousingStep =
+                                                newStep
 
-                                        is BotAction.PlaySound -> {
-                                            SoundManager.play(
-                                                context = context,
-                                                soundName = action.option.key,
-                                                soundRes = action.option.soundRes
+                                            // The previously focused
+                                            // field belongs to the
+                                            // previous step, so clear it.
+                                            focusedFieldId = null
+
+                                            // Update the full-screen
+                                            // text for ReadAloud.
+                                            updateScreenText(
+                                                TtsTexts
+                                                    .getHousingAssistanceStepText(
+                                                        newStep
+                                                    )
                                             )
+                                        },
+
+                                        // Receives the fieldId reported
+                                        // by SmartTextField.
+                                        onFocusedFieldChange = {
+                                                fieldId ->
+                                            focusedFieldId = fieldId
                                         }
+                                    )
+                                }
 
-                                        BotAction.StopBackgroundMusic -> {
-                                            SoundManager.stop()
+                                composable(
+                                    "housingAssistanceForm/{startStep}"
+                                ) { backStackEntry ->
+
+                                    // Reads the requested starting step
+                                    // from the navigation route.
+                                    val startStep =
+                                        backStackEntry.arguments
+                                            ?.getString("startStep")
+                                            ?.toIntOrNull()
+                                            ?: 0
+
+                                    HousingAssistanceFormScreen(
+                                        navController =
+                                            innerNavController,
+                                        startStep = startStep,
+
+                                        onStepChanged = { newStep ->
+                                            currentHousingStep =
+                                                newStep
+
+                                            focusedFieldId = null
+
+                                            updateScreenText(
+                                                TtsTexts
+                                                    .getHousingAssistanceStepText(
+                                                        newStep
+                                                    )
+                                            )
+                                        },
+
+                                        onFocusedFieldChange = {
+                                                fieldId ->
+                                            focusedFieldId = fieldId
                                         }
+                                    )
+                                }
 
-                                        is BotAction.SetContrast -> {
-                                            contrastMode = action.option.mode
-                                        }
-
-                                        is BotAction.SetFontSize -> {
-                                            fontSizeMode = action.option.mode
-                                        }
-
-                                        BotAction.None -> Unit
-
-                                        else -> Unit
+                                // View progress forms
+                                composable("myFormsProgress") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.FORMS_PROGRESS
+                                        )
                                     }
+
+                                    MyFormsProgressScreen(
+                                        navController =
+                                            innerNavController
+                                    )
+                                }
+
+                                // Guidance slides
+                                composable("guidanceSlides") {
+                                    LaunchedEffect(Unit) {
+                                        updateScreenText(
+                                            TtsTexts.GUIDANCE_SLIDES
+                                        )
+                                    }
+
+                                    GuidanceSlidesScreen(
+                                        navController =
+                                            innerNavController
+                                    )
                                 }
                             }
-                        )
-                    }
-                }
+
+                            // Text used by BotAction.ReadCurrentField.
+                            val currentFieldTextToRead =
+                                if (isHousingAssistanceForm) {
+
+                                    // Try to read the field most recently
+                                    // selected by the user.
+                                    //
+                                    // If no field was selected, or its ID
+                                    // was not found, use the first
+                                    // explanation of the current step.
+                                    focusedFieldId
+                                        ?.let { selectedFieldId ->
+                                            FieldHelpCatalog
+                                                .getFieldExplanation(
+                                                    step =
+                                                        currentHousingStep,
+                                                    fieldId =
+                                                        selectedFieldId
+                                                )
+                                        }
+                                        ?: FieldHelpCatalog
+                                            .getFirstFieldExplanation(
+                                                step =
+                                                    currentHousingStep
+                                            )
+
+                                } else {
+                                    // There is no form field
+                                    // on other app screens.
+                                    ""
+                                }
+
+                            // This listens to the live scores
+                            // from DistressScoringManager
+                            val handScore by
+                            DistressScoringManager
+                                .handScore
+                                .collectAsState()
+
+                            val voiceScore by
+                            DistressScoringManager
+                                .voiceScore
+                                .collectAsState()
+
+                            val faceScore by
+                            DistressScoringManager
+                                .faceScore
+                                .collectAsState()
+
+                            val totalScore by
+                            DistressScoringManager
+                                .totalScore
+                                .collectAsState()
+
+                            val formBehaviorScore by
+                            DistressScoringManager
+                                .formBehaviorScore
+                                .collectAsState()
+
+                            val distressMode by
+                            DistressScoringManager
+                                .mode
+                                .collectAsState()
+
+                            // Packs all scores into one object
+                            // so the chatbot can receive them.
+                            val realDistressSnapshot =
+                                DistressSnapshot(
+                                    globalScore = totalScore,
+                                    semanticTextScore = 0,
+                                    faceScore = faceScore,
+                                    voiceScore = voiceScore,
+                                    touchScore = handScore,
+                                    formBehaviorScore =
+                                        formBehaviorScore
+                                )
+
+                            // Stores current app settings:
+                            // music, TTS, font size and contrast.
+                            val botAppState = BotAppState(
+                                isMusicPlaying =
+                                    selectedSound != "none",
+                                selectedSound = selectedSound,
+                                isTtsSpeaking = isTtsSpeaking,
+                                autoReadEnabled =
+                                    autoReadEnabled,
+                                fontSizeMode =
+                                    fontSizeMode.name,
+                                contrastMode =
+                                    contrastMode.name
+                            )
+
+                            // The overlay is declared after NavHost,
+                            // so it is displayed above the current screen.
+                            FloatingChatOverlay(
+                                modifier = Modifier.fillMaxSize(),
+                                distressSnapshot =
+                                    realDistressSnapshot,
+                                distressMode = distressMode,
+                                appState = botAppState,
+                                onBotAction = { action ->
+
+                                    BotSupportActionHandler.handle(
+                                        action = action,
+                                        context = context,
+                                        ttsManager = ttsManager,
+
+                                        // Text for the complete
+                                        // current screen.
+                                        screenTextToRead =
+                                            screenTextToRead,
+
+                                        // Explanation of the currently
+                                        // focused form field.
+                                        currentFieldTextToRead =
+                                            currentFieldTextToRead,
+
+                                        onTtsSpeakingChange = {
+                                            isTtsSpeaking = it
+                                        },
+                                        onContrastModeChange = {
+                                            contrastMode = it
+                                        },
+                                        onFontSizeModeChange = {
+                                            fontSizeMode = it
+                                        }
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
-
-
-
-
+    }
+}

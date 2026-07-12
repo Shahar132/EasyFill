@@ -48,7 +48,10 @@ fun SmartTextField(
     onValueChange: (String) -> Unit,
     ttsManager: TextToSpeechManager,
     speechManager: SpeechToTextManager,
-    maxLines: Int = 1
+    maxLines: Int = 1,
+    // Reports which field the user most recently selected.
+    onFocusedFieldChange: (String) -> Unit = {}
+
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
@@ -98,24 +101,28 @@ fun SmartTextField(
                 .fillMaxWidth()
                 .bringIntoViewRequester(bringIntoViewRequester)
                 .onFocusChanged { focusState ->
-                    isFocused = focusState.isFocused
+                isFocused = focusState.isFocused
 
-                    if (focusState.isFocused) {
-                        DistressScoringManager.setMode(DistressMode.FORM_FILLING)
+                if (focusState.isFocused) {
+                    DistressScoringManager.setMode(DistressMode.FORM_FILLING)
 
-                        FormBehaviorTrackingController.onFieldFocused(
-                            fieldId = fieldId,
-                            currentValue = value
-                        )
+                    // Sends the current field ID to the parent screen.
+                    // Example: "firstName", "idNumber", "mailingCity".
+                    onFocusedFieldChange(fieldId)
 
-                        scope.launch {
-                            delay(300)
-                            bringIntoViewRequester.bringIntoView()
-                        }
-                    } else {
-                        FormBehaviorTrackingController.onFieldUnfocused(fieldId)
+                    FormBehaviorTrackingController.onFieldFocused(
+                        fieldId = fieldId,
+                        currentValue = value
+                    )
+
+                    scope.launch {
+                        delay(300)
+                        bringIntoViewRequester.bringIntoView()
                     }
-                },
+                } else {
+                    FormBehaviorTrackingController.onFieldUnfocused(fieldId)
+                }
+            },
             minLines = 1,
             maxLines = maxLines,
             trailingIcon = {
