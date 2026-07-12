@@ -1,6 +1,7 @@
 package com.example.easyfill_project.pdf_export
 
 import android.content.Context
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.text.Layout
@@ -25,10 +26,37 @@ object PdfExportManager {
             "לא התקבלו שדות ליצירת PDF"
         }
 
+        /*
+         * מכינים מראש רק את החלקים והשדות שבאמת מכילים מידע.
+         */
+        val visibleSections = HousingAssistancePdfSchema.sections.mapNotNull { section ->
+
+            val visibleFields = section.fields.filter { field ->
+                val value = firebaseFields[field.firebaseKey].orEmpty()
+
+                when (field.displayType) {
+                    PdfFieldDisplayType.TEXT ->
+                        value.isNotBlank()
+
+                    PdfFieldDisplayType.SELECTED_OPTION ->
+                        isSelectedOption(value)
+                }
+            }
+
+            if (visibleFields.isEmpty()) {
+                null
+            } else {
+                section to visibleFields
+            }
+        }
+
+        require(visibleSections.isNotEmpty()) {
+            "לא נמצאו שדות מתאימים ליצירת PDF"
+        }
+
         val pdfDocument = PdfDocument()
 
         var pageNumber = 1
-
         var page = pdfDocument.startPage(
             createPageInfo(pageNumber)
         )
@@ -37,6 +65,8 @@ object PdfExportManager {
         var currentY = PAGE_MARGIN.toFloat()
 
         val availableWidth = PAGE_WIDTH - (PAGE_MARGIN * 2)
+        val bottomLimit = PAGE_HEIGHT - PAGE_MARGIN
+        val usablePageHeight = PAGE_HEIGHT - (PAGE_MARGIN * 2)
 
         val documentTitlePaint = TextPaint().apply {
             textSize = 24f
@@ -56,7 +86,16 @@ object PdfExportManager {
             isAntiAlias = true
         }
 
-        val bodyPaint = TextPaint().apply {
+        val fieldLabelPaint = TextPaint().apply {
+            textSize = 15f
+            typeface = Typeface.create(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+            )
+            isAntiAlias = true
+        }
+
+        val fieldValuePaint = TextPaint().apply {
             textSize = 16f
             typeface = Typeface.create(
                 Typeface.DEFAULT,
@@ -65,11 +104,49 @@ object PdfExportManager {
             isAntiAlias = true
         }
 
+        val selectedOptionPaint = TextPaint().apply {
+            textSize = 16f
+            typeface = Typeface.create(
+                Typeface.DEFAULT,
+                Typeface.NORMAL
+            )
+            isAntiAlias = true
+        }
+
+        val dividerPaint = Paint().apply {
+            strokeWidth = 1f
+            alpha = 50
+            isAntiAlias = true
+        }
+
+        fun containsHebrew(text: String): Boolean {
+            return text.any { character ->
+                character in '\u0590'..'\u05FF'
+            }
+        }
+
         fun createTextLayout(
             text: String,
             paint: TextPaint,
-            alignment: Layout.Alignment
+            isValue: Boolean = false
         ): StaticLayout {
+
+            val isHebrewText = containsHebrew(text)
+
+            val textDirection = if (isHebrewText) {
+                TextDirectionHeuristics.RTL
+            } else {
+                TextDirectionHeuristics.LTR
+            }
+
+            val alignment = if (isHebrewText) {
+                // תחילת שורת RTL היא הצד הימני
+                Layout.Alignment.ALIGN_NORMAL
+            } else {
+                // סוף שורת LTR הוא הצד הימני
+                Layout.Alignment.ALIGN_OPPOSITE
+            }
+
             return StaticLayout.Builder
                 .obtain(
                     text,
@@ -79,11 +156,13 @@ object PdfExportManager {
                     availableWidth
                 )
                 .setAlignment(alignment)
-                .setTextDirection(TextDirectionHeuristics.RTL)
+                .setTextDirection(textDirection)
                 .setIncludePad(false)
                 .setLineSpacing(4f, 1f)
                 .build()
         }
+
+
 
         fun startNewPage() {
             pdfDocument.finishPage(page)
@@ -98,29 +177,12 @@ object PdfExportManager {
             currentY = PAGE_MARGIN.toFloat()
         }
 
-        fun drawTextBlock(
-            text: String,
-            paint: TextPaint,
-            spacingAfter: Float,
-            alignment: Layout.Alignment =
-                Layout.Alignment.ALIGN_OPPOSITE
+        fun drawLayout(
+            layout: StaticLayout,
+            spacingAfter: Float
         ) {
-            var layout = createTextLayout(
-                text = text,
-                paint = paint,
-                alignment = alignment
-            )
-
-            val bottomLimit = PAGE_HEIGHT - PAGE_MARGIN
-
             if (currentY + layout.height > bottomLimit) {
                 startNewPage()
-
-                layout = createTextLayout(
-                    text = text,
-                    paint = paint,
-                    alignment = alignment
-                )
             }
 
             canvas.save()
@@ -137,65 +199,164 @@ object PdfExportManager {
             currentY += layout.height + spacingAfter
         }
 
+        fun estimateFieldHeight(
+            field: PdfFieldDefinition
+        ): Int {
+
+            val value = firebaseFields[
+                field.firebaseKey
+            ].orEmpty()
+
+            return when (field.displayType) {
+
+                PdfFieldDisplayType.TEXT -> {
+                    val labelLayout = createTextLayout(
+                        text = field.displayName,
+                        paint = fieldLabelPaint
+                    )
+
+                    val valueLayout = createTextLayout(
+                        text = value,
+                        paint = fieldValuePaint,
+                        isValue = true
+                    )
+
+                    labelLayout.height +
+                            valueLayout.height +
+                            18
+                }
+
+                PdfFieldDisplayType.SELECTED_OPTION -> {
+                    val selectedLayout = createTextLayout(
+                        text = "• ${field.displayName}",
+                        paint = selectedOptionPaint
+                    )
+
+                    selectedLayout.height + 14
+                }
+            }
+        }
+
         try {
-            drawTextBlock(
+            val documentTitleLayout = createTextLayout(
                 text = "טופס בקשה לסיוע בדיור",
-                paint = documentTitlePaint,
-                spacingAfter = 32f,
-                alignment = Layout.Alignment.ALIGN_CENTER
+                paint = documentTitlePaint
             )
 
-            HousingAssistancePdfSchema.sections.forEach { section ->
+            drawLayout(
+                layout = documentTitleLayout,
+                spacingAfter = 32f
+            )
 
-                val visibleFields = section.fields.filter { field ->
+            visibleSections.forEach { (section, visibleFields) ->
+
+                val sectionTitleLayout = createTextLayout(
+                    text = section.title,
+                    paint = sectionTitlePaint
+                )
+
+                val fieldsHeight = visibleFields.sumOf { field ->
+                    estimateFieldHeight(field)
+                }
+
+                val estimatedSectionHeight =
+                    sectionTitleLayout.height +
+                            fieldsHeight +
+                            42
+
+                val firstFieldHeight = visibleFields
+                    .firstOrNull()
+                    ?.let(::estimateFieldHeight)
+                    ?: 0
+
+                /*
+                 * אם כל החלק יכול להיכנס בעמוד אחד,
+                 * אבל אין לו מקום בעמוד הנוכחי —
+                 * מעבירים את כולו לעמוד הבא.
+                 */
+                if (
+                    estimatedSectionHeight <= usablePageHeight &&
+                    currentY + estimatedSectionHeight > bottomLimit
+                ) {
+                    startNewPage()
+                }
+
+                /*
+                 * אם החלק גדול מעמוד שלם,
+                 * לפחות לא משאירים כותרת לבדה בתחתית העמוד.
+                 */
+                if (
+                    currentY +
+                    sectionTitleLayout.height +
+                    firstFieldHeight +
+                    24 > bottomLimit
+                ) {
+                    startNewPage()
+                }
+
+                drawLayout(
+                    layout = sectionTitleLayout,
+                    spacingAfter = 8f
+                )
+
+                canvas.drawLine(
+                    PAGE_MARGIN.toFloat(),
+                    currentY,
+                    (PAGE_WIDTH - PAGE_MARGIN).toFloat(),
+                    currentY,
+                    dividerPaint
+                )
+
+                currentY += 14f
+
+                visibleFields.forEach { field ->
+
                     val value = firebaseFields[
                         field.firebaseKey
                     ].orEmpty()
 
                     when (field.displayType) {
-                        PdfFieldDisplayType.TEXT ->
-                            value.isNotBlank()
 
-                        PdfFieldDisplayType.SELECTED_OPTION ->
-                            isSelectedOption(value)
-                    }
-                }
+                        PdfFieldDisplayType.TEXT -> {
 
-                if (visibleFields.isNotEmpty()) {
+                            val labelLayout = createTextLayout(
+                                text = field.displayName,
+                                paint = fieldLabelPaint
+                            )
 
-                    drawTextBlock(
-                        text = section.title,
-                        paint = sectionTitlePaint,
-                        spacingAfter = 16f
-                    )
+                            val valueLayout = createTextLayout(
+                                text = value,
+                                paint = fieldValuePaint,
+                                isValue = true
+                            )
 
-                    visibleFields.forEach { field ->
+                            drawLayout(
+                                layout = labelLayout,
+                                spacingAfter = 2f
+                            )
 
-                        val value = firebaseFields[
-                            field.firebaseKey
-                        ].orEmpty()
-
-                        val textToDraw = when (
-                            field.displayType
-                        ) {
-                            PdfFieldDisplayType.TEXT -> {
-                                "${field.displayName}: $value"
-                            }
-
-                            PdfFieldDisplayType.SELECTED_OPTION -> {
-                                "• ${field.displayName}"
-                            }
+                            drawLayout(
+                                layout = valueLayout,
+                                spacingAfter = 14f
+                            )
                         }
 
-                        drawTextBlock(
-                            text = textToDraw,
-                            paint = bodyPaint,
-                            spacingAfter = 12f
-                        )
-                    }
+                        PdfFieldDisplayType.SELECTED_OPTION -> {
 
-                    currentY += 16f
+                            val selectedLayout = createTextLayout(
+                                text = "• ${field.displayName}",
+                                paint = selectedOptionPaint
+                            )
+
+                            drawLayout(
+                                layout = selectedLayout,
+                                spacingAfter = 12f
+                            )
+                        }
+                    }
                 }
+
+                currentY += 18f
             }
 
             pdfDocument.finishPage(page)
