@@ -8,12 +8,14 @@ enum class PdfFieldDisplayType {
 data class PdfFieldDefinition(
     val firebaseKey: String,
     val displayName: String,
-    val displayType: PdfFieldDisplayType = PdfFieldDisplayType.TEXT
+    val displayType: PdfFieldDisplayType = PdfFieldDisplayType.TEXT,
+    val isRequired: Boolean = false
 )
 
 data class PdfSectionDefinition(
     val title: String,
-    val fields: List<PdfFieldDefinition>
+    val fields: List<PdfFieldDefinition>,
+    val showWhenSelectedKey: String? = null
 )
 
 object HousingAssistancePdfSchema {
@@ -25,15 +27,18 @@ object HousingAssistancePdfSchema {
             fields = listOf(
                 PdfFieldDefinition(
                     firebaseKey = "lastName",
-                    displayName = "שם משפחה"
+                    displayName = "שם משפחה",
+                    isRequired = true
                 ),
                 PdfFieldDefinition(
                     firebaseKey = "firstName",
-                    displayName = "שם פרטי"
+                    displayName = "שם פרטי",
+                    isRequired = true
                 ),
                 PdfFieldDefinition(
                     firebaseKey = "idNumber",
-                    displayName = "מספר תעודת זהות"
+                    displayName = "מספר תעודת זהות",
+                    isRequired = true
                 ),
                 PdfFieldDefinition(
                     firebaseKey = "street",
@@ -175,6 +180,7 @@ object HousingAssistancePdfSchema {
         ),
         PdfSectionDefinition(
             title = "פרטי הדירה בשכירות",
+            showWhenSelectedKey = "rentAssistance",
             fields = listOf(
                 PdfFieldDefinition(
                     firebaseKey = "rentStreet",
