@@ -30,11 +30,11 @@ object BotActionMessageProvider {
 
             // Shown after the selected color theme is applied.
             is BotAction.SetContrast ->
-                "שיניתי את צבעי המסך ל־${action.option.displayName}. מקווה שעכשיו יהיה לך נוח יותר לקרוא."
+                "שיניתי את צבעי המסך ל${action.option.displayName}. מקווה שעכשיו יהיה לך נוח יותר לקרוא."
 
             // Shown after the selected font size is applied.
             is BotAction.SetFontSize ->
-                "שיניתי את גודל הטקסט ל־${action.option.displayName}. מקווה שעכשיו הטקסט ברור ונוח יותר."
+                "שיניתי את גודל הטקסט ל${action.option.displayName}. מקווה שעכשיו הטקסט ברור ונוח יותר."
 
             // Displays support information inside the chatbot card.
             BotAction.ShowEmergencyContacts ->

@@ -1,5 +1,6 @@
 package com.example.easyfill_project.chatbot.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,12 +21,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +55,9 @@ import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.distress_scoring.DistressMode
 
+import kotlinx.coroutines.delay
+
+
 @Composable
 fun FloatingChatOverlay(
     modifier: Modifier = Modifier,
@@ -73,10 +76,6 @@ fun FloatingChatOverlay(
 
     var lastAddedScore by remember {
         mutableStateOf(0)
-    }
-
-    var userAnsweredCurrentSuggestion by remember {
-        mutableStateOf(false)
     }
 
     var successMessage by remember {
@@ -115,6 +114,30 @@ fun FloatingChatOverlay(
     val currentSuggestion =
         suggestionQueue.firstOrNull()
 
+    // Never keep the popup open without an available suggestion.
+    LaunchedEffect(currentSuggestion) {
+        if (currentSuggestion == null) {
+            isChatOpen = false
+        }
+    }
+
+
+    // After showing a successful action message,
+    // close the popup and remove the completed suggestion.
+    LaunchedEffect(successMessage) {
+        if (successMessage != null) {
+            delay(4000)
+
+            if (suggestionQueue.isNotEmpty()) {
+                suggestionQueue.removeAt(0)
+            }
+
+            successMessage = null
+            isChatOpen = false
+            lastAddedScore = 0
+        }
+    }
+
     val alertColor =
         when (severityLevel) {
             0 -> Color.Transparent
@@ -146,7 +169,10 @@ fun FloatingChatOverlay(
                     MaterialTheme.colorScheme.primary
                 )
                 .clickable {
-                    isChatOpen = !isChatOpen
+                    // Open the window only when a suggestion already exists.
+                    if (currentSuggestion != null) {
+                        isChatOpen = !isChatOpen
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -163,7 +189,9 @@ fun FloatingChatOverlay(
         // Alert layout — unchanged.
         if (
             !isChatOpen &&
-            currentSuggestion != null
+            currentSuggestion != null &&
+            severityLevel > 0 &&
+            alertText.isNotBlank()
         ) {
             CompositionLocalProvider(
                 LocalLayoutDirection provides
@@ -236,10 +264,6 @@ fun FloatingChatOverlay(
             }
         }
 
-        /*
-         * DropdownMenu uses a popup window.
-         * It is therefore displayed above the form fields.
-         */
         DropdownMenu(
             expanded =
                 isChatOpen &&
@@ -247,110 +271,129 @@ fun FloatingChatOverlay(
             onDismissRequest = {
                 isChatOpen = false
             },
-            modifier = Modifier.width(270.dp),
+            modifier = Modifier.width(260.dp),
             offset = DpOffset(
                 x = 24.dp,
                 y = 8.dp
             ),
             shape = RoundedCornerShape(20.dp),
-            containerColor = Color(0xFFF1ECF4),
-            shadowElevation = 12.dp
+            containerColor =
+                MaterialTheme.colorScheme.surface,
+            shadowElevation = 12.dp,
+            border = BorderStroke(
+                2.dp,
+                MaterialTheme.colorScheme.secondary
+            )
         ) {
             if (currentSuggestion != null) {
                 Column(
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(12.dp)
                 ) {
                     if (successMessage != null) {
+                        // After an action is completed,
+                        // show only the success message.
                         Text(
-                            text =
-                                successMessage.orEmpty(),
-                            style =
-                                MaterialTheme.typography
-                                    .bodyMedium
+                            text = successMessage.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     } else {
                         Text(
-                            text =
-                                currentSuggestion.message,
-                            style =
-                                MaterialTheme.typography
-                                    .bodyMedium
+                            text = currentSuggestion.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(
-                            modifier =
-                                Modifier.height(8.dp)
+                            modifier = Modifier.height(8.dp)
                         )
 
+                        // Action buttons.
                         Column(
                             verticalArrangement =
                                 Arrangement.spacedBy(4.dp)
                         ) {
-                            currentSuggestion.options
-                                .forEach { option ->
-                                    Button(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .height(40.dp),
-                                        onClick = {
-                                            onBotAction(
+                            currentSuggestion.options.forEach { option ->
+                                OutlinedButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        onBotAction(option.action)
+
+                                        successMessage =
+                                            BotActionMessageProvider.getMessage(
                                                 option.action
                                             )
+                                    },
+                                    border = BorderStroke(
+                                        width = 2.dp,
+                                        color =
+                                            MaterialTheme.colorScheme.secondary
+                                    ),
+                                    colors =
+                                        ButtonDefaults.outlinedButtonColors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme.primary,
+                                            contentColor =
+                                                MaterialTheme.colorScheme.secondary
+                                        )
+                                ) {
+                                    Text(
+                                        text = option.label,
+                                        color =
+                                            MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                            }
+                        }
 
-                                            successMessage =
-                                                BotActionMessageProvider
-                                                    .getMessage(
-                                                        option.action
-                                                    )
+                        Spacer(
+                            modifier = Modifier.height(4.dp)
+                        )
 
-                                            userAnsweredCurrentSuggestion =
-                                                true
+                        // Show "לא עכשיו" only before an action is selected.
+                        CompositionLocalProvider(
+                            LocalLayoutDirection provides LayoutDirection.Ltr
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (suggestionQueue.isNotEmpty()) {
+                                            suggestionQueue.removeAt(0)
                                         }
+
+                                        successMessage = null
+                                        isChatOpen = false
+                                        lastAddedScore = 0
+                                    },
+                                    border = BorderStroke(
+                                        width = 2.dp,
+                                        color =
+                                            MaterialTheme.colorScheme.secondary
+                                    ),
+                                    colors =
+                                        ButtonDefaults.outlinedButtonColors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme.primary,
+                                            contentColor =
+                                                MaterialTheme.colorScheme.onPrimary
+                                        )
+                                ) {
+                                    CompositionLocalProvider(
+                                        LocalLayoutDirection provides
+                                                LayoutDirection.Rtl
                                     ) {
-                                        Text(option.label)
+                                        Text(
+                                            text = "לא עכשיו",
+                                            color =
+                                                MaterialTheme.colorScheme.onPrimary
+                                        )
                                     }
                                 }
-
-                            OutlinedButton(
-                                modifier =
-                                    Modifier.fillMaxWidth()
-                                .height(40.dp),
-                                onClick = {
-                                    successMessage =
-                                        "אין בעיה, לא ביצעתי שינוי."
-
-                                    userAnsweredCurrentSuggestion =
-                                        true
-                                }
-                            ) {
-                                Text("לא עכשיו")
                             }
                         }
-                    }
-
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
-                    TextButton(
-                        onClick = {
-                            if (
-                                userAnsweredCurrentSuggestion &&
-                                suggestionQueue.isNotEmpty()
-                            ) {
-                                suggestionQueue.removeAt(0)
-
-                                userAnsweredCurrentSuggestion =
-                                    false
-
-                                successMessage = null
-                            }
-
-                            isChatOpen = false
-                        }
-                    ) {
-                        Text("סגור")
                     }
                 }
             }
