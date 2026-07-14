@@ -9,23 +9,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -36,8 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -50,69 +55,36 @@ import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.distress_scoring.DistressMode
 
-
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.foundation.layout.absoluteOffset
-import androidx.compose.foundation.layout.widthIn
-
-/**
- * Displays the chatbot icon beside the current form-section headline.
- *
- * The component always reserves only 48.dp of layout space.
- * The alert and opened card are drawn outside that fixed area,
- * so they do not cause the section headline to move to another line.
- */
 @Composable
 fun FloatingChatOverlay(
     modifier: Modifier = Modifier,
     distressSnapshot: DistressSnapshot = DistressSnapshot(),
-
-    // Tells the suggestion builder whether the user is currently
-    // filling a form or using another distress-analysis mode.
     distressMode: DistressMode = DistressMode.FORM_FILLING,
-
-    // Current app settings used when creating chatbot suggestions.
     appState: BotAppState = BotAppState(),
-
-    // Sends the selected chatbot action back to AppNavigation.
     onBotAction: (BotAction) -> Unit = {}
 ) {
-    // True when the suggestion card is open.
     var isChatOpen by remember {
         mutableStateOf(false)
     }
 
-    // Stores suggestions waiting for the user.
     val suggestionQueue = remember {
         mutableStateListOf<BotSuggestion>()
     }
 
-    // Prevents repeatedly adding a suggestion for the same score.
     var lastAddedScore by remember {
         mutableStateOf(0)
     }
 
-    // True after the user selects an option or presses "לא עכשיו".
     var userAnsweredCurrentSuggestion by remember {
         mutableStateOf(false)
     }
 
-    // Message shown after an action is selected.
     var successMessage by remember {
         mutableStateOf<String?>(null)
     }
 
-    // Current total distress level.
     val severityLevel = distressSnapshot.globalScore
 
-    /**
-     * Creates a new suggestion when:
-     * - the distress score is greater than zero;
-     * - the score changed;
-     * - the suggestion builder returned a valid suggestion.
-     */
     LaunchedEffect(
         severityLevel,
         distressMode,
@@ -135,28 +107,23 @@ fun FloatingChatOverlay(
             }
         }
 
-        // Allows the same distress level to create a future
-        // suggestion after the score first returns to zero.
         if (severityLevel == 0) {
             lastAddedScore = 0
         }
     }
 
-    // Only the first waiting suggestion is currently displayed.
     val currentSuggestion =
         suggestionQueue.firstOrNull()
 
-    // Alert color according to the current distress level.
     val alertColor =
         when (severityLevel) {
             0 -> Color.Transparent
-            1 -> Color(0xFF4CAF50) // Green
-            2 -> Color(0xFFE1CC13) // Yellow
-            3 -> Color(0xFFFF5722) // Orange
-            else -> Color(0xFFB92014) // Red
+            1 -> Color(0xFF4CAF50)
+            2 -> Color(0xFFE1CC13)
+            3 -> Color(0xFFFF5722)
+            else -> Color(0xFFB92014)
         }
 
-    // Short alert text displayed above the chatbot.
     val alertText =
         when (severityLevel) {
             0 -> ""
@@ -166,14 +133,6 @@ fun FloatingChatOverlay(
             else -> "יש אפשרויות סיוע"
         }
 
-    /**
-     * Fixed-size chatbot container.
-     *
-     * It always occupies exactly 48.dp, even when the alert
-     * or full suggestion card is visible.
-     */// The chatbot always reserves only 48.dp.
-// The alert and card can draw outside this area
-// without changing the section headline width.
     Box(
         modifier = modifier.size(48.dp),
         contentAlignment = Alignment.Center
@@ -183,7 +142,9 @@ fun FloatingChatOverlay(
             modifier = Modifier
                 .matchParentSize()
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(
+                    MaterialTheme.colorScheme.primary
+                )
                 .clickable {
                     isChatOpen = !isChatOpen
                 },
@@ -193,25 +154,20 @@ fun FloatingChatOverlay(
                 painter = painterResource(
                     id = R.drawable.chatbot_icon
                 ),
-                contentDescription = "פתיחת צ'אטבוט EasyFill",
+                contentDescription =
+                    "פתיחת צ'אטבוט EasyFill",
                 modifier = Modifier.size(56.dp)
             )
         }
 
-        /*
-         * Alert above the chatbot.
-         *
-         * The Row uses LTR only for positioning:
-         * - the text is placed first, on the left;
-         * - the ! badge stays fixed on the right;
-         * - longer text expands toward the left.
-         */
+        // Alert layout — unchanged.
         if (
             !isChatOpen &&
             currentSuggestion != null
         ) {
             CompositionLocalProvider(
-                LocalLayoutDirection provides LayoutDirection.Ltr
+                LocalLayoutDirection provides
+                        LayoutDirection.Ltr
             ) {
                 Row(
                     modifier = Modifier
@@ -225,22 +181,24 @@ fun FloatingChatOverlay(
                             y = (-26).dp
                         )
                         .zIndex(2f),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment =
+                        Alignment.CenterVertically,
                     horizontalArrangement =
                         Arrangement.spacedBy(6.dp)
                 ) {
-                    // Alert message expands toward the left.
                     Box(
                         modifier = Modifier
                             .widthIn(max = 190.dp)
                             .background(
                                 color = Color.White,
-                                shape = RoundedCornerShape(12.dp)
+                                shape =
+                                    RoundedCornerShape(12.dp)
                             )
                             .border(
                                 width = 1.dp,
                                 color = alertColor,
-                                shape = RoundedCornerShape(12.dp)
+                                shape =
+                                    RoundedCornerShape(12.dp)
                             )
                             .padding(
                                 horizontal = 8.dp,
@@ -251,26 +209,27 @@ fun FloatingChatOverlay(
                             text = alertText,
                             color = alertColor,
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight =
+                                FontWeight.Medium,
                             maxLines = 2
                         )
                     }
 
-                    // ! badge stays on the right,
-                    // directly above the chatbot.
                     Box(
                         modifier = Modifier
                             .offset(y = 8.dp)
                             .size(22.dp)
                             .clip(CircleShape)
                             .background(alertColor),
-                        contentAlignment = Alignment.Center
+                        contentAlignment =
+                            Alignment.Center
                     ) {
                         Text(
                             text = "!",
                             color = Color.White,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight =
+                                FontWeight.Bold
                         )
                     }
                 }
@@ -278,79 +237,85 @@ fun FloatingChatOverlay(
         }
 
         /*
-         * Open chatbot card.
-         *
-         * It is also unbounded, so opening it does not
-         * change the width of the section headline.
+         * DropdownMenu uses a popup window.
+         * It is therefore displayed above the form fields.
          */
-        if (
-            isChatOpen &&
-            currentSuggestion != null
+        DropdownMenu(
+            expanded =
+                isChatOpen &&
+                        currentSuggestion != null,
+            onDismissRequest = {
+                isChatOpen = false
+            },
+            modifier = Modifier.width(270.dp),
+            offset = DpOffset(
+                x = 24.dp,
+                y = 8.dp
+            ),
+            shape = RoundedCornerShape(20.dp),
+            containerColor = Color(0xFFF1ECF4),
+            shadowElevation = 12.dp
         ) {
-            Card(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .wrapContentSize(
-                        align = Alignment.TopEnd,
-                        unbounded = true
-                    )
-                    .absoluteOffset(
-                        x = 0.dp,
-                        y = 56.dp
-                    )
-                    .width(300.dp)
-                    .zIndex(3f),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFF1ECF4)
-                )
-            ) {
+            if (currentSuggestion != null) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(10.dp)
                 ) {
                     if (successMessage != null) {
                         Text(
-                            text = successMessage.orEmpty(),
+                            text =
+                                successMessage.orEmpty(),
                             style =
-                                MaterialTheme.typography.bodyMedium
+                                MaterialTheme.typography
+                                    .bodyMedium
                         )
                     } else {
                         Text(
-                            text = currentSuggestion.message,
+                            text =
+                                currentSuggestion.message,
                             style =
-                                MaterialTheme.typography.bodyMedium
+                                MaterialTheme.typography
+                                    .bodyMedium
                         )
 
                         Spacer(
-                            modifier = Modifier.height(16.dp)
+                            modifier =
+                                Modifier.height(8.dp)
                         )
 
                         Column(
                             verticalArrangement =
-                                Arrangement.spacedBy(8.dp)
+                                Arrangement.spacedBy(4.dp)
                         ) {
-                            currentSuggestion.options.forEach { option ->
-                                Button(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        onBotAction(option.action)
+                            currentSuggestion.options
+                                .forEach { option ->
+                                    Button(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .height(40.dp),
+                                        onClick = {
+                                            onBotAction(
+                                                option.action
+                                            )
 
-                                        successMessage =
-                                            BotActionMessageProvider
-                                                .getMessage(
-                                                    option.action
-                                                )
+                                            successMessage =
+                                                BotActionMessageProvider
+                                                    .getMessage(
+                                                        option.action
+                                                    )
 
-                                        userAnsweredCurrentSuggestion =
-                                            true
+                                            userAnsweredCurrentSuggestion =
+                                                true
+                                        }
+                                    ) {
+                                        Text(option.label)
                                     }
-                                ) {
-                                    Text(option.label)
                                 }
-                            }
 
                             OutlinedButton(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                .height(40.dp),
                                 onClick = {
                                     successMessage =
                                         "אין בעיה, לא ביצעתי שינוי."
@@ -365,7 +330,7 @@ fun FloatingChatOverlay(
                     }
 
                     Spacer(
-                        modifier = Modifier.height(8.dp)
+                        modifier = Modifier.height(4.dp)
                     )
 
                     TextButton(
@@ -375,7 +340,10 @@ fun FloatingChatOverlay(
                                 suggestionQueue.isNotEmpty()
                             ) {
                                 suggestionQueue.removeAt(0)
-                                userAnsweredCurrentSuggestion = false
+
+                                userAnsweredCurrentSuggestion =
+                                    false
+
                                 successMessage = null
                             }
 

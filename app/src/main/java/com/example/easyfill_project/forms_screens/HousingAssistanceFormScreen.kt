@@ -330,6 +330,7 @@ fun HousingAssistanceFormScreen(
             )
         }
 
+
         when (currentStep) {
             0 -> PersonalDetailsSection(
                 formData = formData,
