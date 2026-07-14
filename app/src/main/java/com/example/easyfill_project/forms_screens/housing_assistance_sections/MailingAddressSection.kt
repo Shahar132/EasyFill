@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.easyfill_project.forms_screens.FormSectionHeader
 import com.example.easyfill_project.forms_screens.components.SmartTextField
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
@@ -27,7 +28,9 @@ fun MailingAddressSection(
 
     // Sends the ID of the field that the user selected.
     // Example: "mailingStreet" or "mailingCity".
-    onFocusedFieldChange: (String) -> Unit
+    onFocusedFieldChange: (String) -> Unit,
+    // Displays the chatbot beside the section headline.
+    chatbotContent: @Composable () -> Unit
 ) {
     // Android context is needed for TTS and speech-to-text.
     val context = LocalContext.current
@@ -53,12 +56,11 @@ fun MailingAddressSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "כתובת למשלוח דואר",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
 
+        FormSectionHeader(
+            title = "כתובת למשלוח דואר",
+            chatbotContent = chatbotContent
+        )
         Spacer(modifier = Modifier.height(12.dp))
 
         SmartTextField(

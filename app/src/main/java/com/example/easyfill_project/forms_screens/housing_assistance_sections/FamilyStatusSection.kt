@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.easyfill_project.forms_screens.FormSectionHeader
 import com.example.easyfill_project.forms_screens.components.RadioOption
 import com.example.easyfill_project.forms_screens.components.SmartTextField
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
@@ -29,7 +30,10 @@ fun FamilyStatusSection(
 
     // Reports which SmartTextField the user most recently selected.
     // This is forwarded to AppNavigation for field-help reading.
-    onFocusedFieldChange: (String) -> Unit
+    onFocusedFieldChange: (String) -> Unit,
+
+    // Displays the chatbot beside the section headline.
+    chatbotContent: @Composable () -> Unit
 ) {
     // Android context is required for TTS and speech-to-text.
     val context = LocalContext.current
@@ -58,10 +62,10 @@ fun FamilyStatusSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "מצב משפחתי",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
+
+        FormSectionHeader(
+            title = "מצב משפחתי",
+            chatbotContent = chatbotContent
         )
 
         // Marital-status options.

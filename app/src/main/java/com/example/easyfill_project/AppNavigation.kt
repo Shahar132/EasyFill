@@ -86,7 +86,6 @@ import com.example.easyfill_project.chatbot.help.FieldHelpCatalog
 import com.example.easyfill_project.chatbot.logic.BotSupportActionHandler
 import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
-import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
 
 // Imports regarding distress scoring
 import com.example.easyfill_project.distress_scoring.DistressScoringManager
@@ -593,6 +592,62 @@ fun AppWithDrawer(
                             }
                         }
 
+                        // Text used when the chatbot reads the current form field.
+                        val currentFieldTextToRead =
+                            if (isHousingAssistanceForm) {
+                                focusedFieldId
+                                    ?.let { selectedFieldId ->
+                                        FieldHelpCatalog.getFieldExplanation(
+                                            step = currentHousingStep,
+                                            fieldId = selectedFieldId
+                                        )
+                                    }
+                                    ?: FieldHelpCatalog.getFirstFieldExplanation(
+                                        step = currentHousingStep
+                                    )
+                            } else {
+                                ""
+                            }
+
+// Listen to the current distress scores.
+                        val handScore by
+                        DistressScoringManager.handScore.collectAsState()
+
+                        val voiceScore by
+                        DistressScoringManager.voiceScore.collectAsState()
+
+                        val faceScore by
+                        DistressScoringManager.faceScore.collectAsState()
+
+                        val totalScore by
+                        DistressScoringManager.totalScore.collectAsState()
+
+                        val formBehaviorScore by
+                        DistressScoringManager.formBehaviorScore.collectAsState()
+
+                        val distressMode by
+                        DistressScoringManager.mode.collectAsState()
+
+// Combine the distress scores into the object used by the chatbot.
+                        val realDistressSnapshot = DistressSnapshot(
+                            globalScore = totalScore,
+                            semanticTextScore = 0,
+                            faceScore = faceScore,
+                            voiceScore = voiceScore,
+                            touchScore = handScore,
+                            formBehaviorScore = formBehaviorScore
+                        )
+
+// Current application settings used by chatbot suggestions.
+                        val botAppState = BotAppState(
+                            isMusicPlaying = selectedSound != "none",
+                            selectedSound = selectedSound,
+                            isTtsSpeaking = isTtsSpeaking,
+                            autoReadEnabled = autoReadEnabled,
+                            fontSizeMode = fontSizeMode.name,
+                            contrastMode = contrastMode.name
+                        )
+
                         // Box places the chatbot overlay above
                         // the currently displayed navigation screen.
                         Box(
@@ -789,42 +844,69 @@ fun AppWithDrawer(
                                     )
                                 }
 
-                                // Navigate to first form
+                                // Navigate to the housing-assistance form from the first section.
                                 composable("housingAssistanceForm") {
                                     HousingAssistanceFormScreen(
-                                        navController =
-                                            innerNavController,
+                                        navController = innerNavController,
                                         startStep = 0,
 
-                                        // Receives the new form step
-                                        // whenever the user presses
-                                        // Continue or Back.
-                                        onStepChanged = { newStep ->
+                                        // Pass the live distress scores to the chatbot
+                                        // displayed inside HousingAssistanceFormScreen.
+                                        distressSnapshot = realDistressSnapshot,
 
-                                            // Store the current step
-                                            // for FieldHelpCatalog.
-                                            currentHousingStep =
-                                                newStep
+                                        // Pass the current distress-analysis mode.
+                                        distressMode = distressMode,
 
-                                            // The previously focused
-                                            // field belongs to the
-                                            // previous step, so clear it.
-                                            focusedFieldId = null
+                                        // Pass the current music, TTS, font and contrast settings.
+                                        botAppState = botAppState,
 
-                                            // Update the full-screen
-                                            // text for ReadAloud.
-                                            updateScreenText(
-                                                TtsTexts
-                                                    .getHousingAssistanceStepText(
-                                                        newStep
-                                                    )
+                                        // Handle chatbot button actions in AppNavigation,
+                                        // where the TTS and app-setting state are stored.
+                                        onBotAction = { action ->
+                                            BotSupportActionHandler.handle(
+                                                action = action,
+                                                context = context,
+                                                ttsManager = ttsManager,
+
+                                                // Text representing the complete current form section.
+                                                screenTextToRead = screenTextToRead,
+
+                                                // Explanation of the currently selected form field.
+                                                currentFieldTextToRead = currentFieldTextToRead,
+
+                                                onTtsSpeakingChange = { speaking ->
+                                                    isTtsSpeaking = speaking
+                                                },
+
+                                                onContrastModeChange = { newMode ->
+                                                    contrastMode = newMode
+                                                },
+
+                                                onFontSizeModeChange = { newMode ->
+                                                    fontSizeMode = newMode
+                                                }
                                             )
                                         },
 
-                                        // Receives the fieldId reported
-                                        // by SmartTextField.
-                                        onFocusedFieldChange = {
-                                                fieldId ->
+                                        // Receives the new form step whenever
+                                        // the user presses Continue or Back.
+                                        onStepChanged = { newStep ->
+
+                                            // Store the current step for FieldHelpCatalog.
+                                            currentHousingStep = newStep
+
+                                            // The previously focused field belongs
+                                            // to the previous section.
+                                            focusedFieldId = null
+
+                                            // Update the text used by whole-screen TTS.
+                                            updateScreenText(
+                                                TtsTexts.getHousingAssistanceStepText(newStep)
+                                            )
+                                        },
+
+                                        // Receives the field ID reported by SmartTextField.
+                                        onFocusedFieldChange = { fieldId ->
                                             focusedFieldId = fieldId
                                         }
                                     )
@@ -834,8 +916,7 @@ fun AppWithDrawer(
                                     "housingAssistanceForm/{startStep}"
                                 ) { backStackEntry ->
 
-                                    // Reads the requested starting step
-                                    // from the navigation route.
+                                    // Reads the requested starting step from the navigation route.
                                     val startStep =
                                         backStackEntry.arguments
                                             ?.getString("startStep")
@@ -843,26 +924,55 @@ fun AppWithDrawer(
                                             ?: 0
 
                                     HousingAssistanceFormScreen(
-                                        navController =
-                                            innerNavController,
+                                        navController = innerNavController,
                                         startStep = startStep,
 
-                                        onStepChanged = { newStep ->
-                                            currentHousingStep =
-                                                newStep
+                                        // Pass the live distress information to the chatbot.
+                                        distressSnapshot = realDistressSnapshot,
 
-                                            focusedFieldId = null
+                                        // Pass the current distress mode.
+                                        distressMode = distressMode,
 
-                                            updateScreenText(
-                                                TtsTexts
-                                                    .getHousingAssistanceStepText(
-                                                        newStep
-                                                    )
+                                        // Pass the current app settings used by chatbot suggestions.
+                                        botAppState = botAppState,
+
+                                        // Handle chatbot actions in AppNavigation.
+                                        onBotAction = { action ->
+                                            BotSupportActionHandler.handle(
+                                                action = action,
+                                                context = context,
+                                                ttsManager = ttsManager,
+                                                screenTextToRead = screenTextToRead,
+                                                currentFieldTextToRead = currentFieldTextToRead,
+
+                                                onTtsSpeakingChange = { speaking ->
+                                                    isTtsSpeaking = speaking
+                                                },
+
+                                                onContrastModeChange = { newMode ->
+                                                    contrastMode = newMode
+                                                },
+
+                                                onFontSizeModeChange = { newMode ->
+                                                    fontSizeMode = newMode
+                                                }
                                             )
                                         },
 
-                                        onFocusedFieldChange = {
-                                                fieldId ->
+                                        // Receives the current form section.
+                                        onStepChanged = { newStep ->
+                                            currentHousingStep = newStep
+
+                                            // Clear the field selected in the previous section.
+                                            focusedFieldId = null
+
+                                            updateScreenText(
+                                                TtsTexts.getHousingAssistanceStepText(newStep)
+                                            )
+                                        },
+
+                                        // Receives the field selected by SmartTextField.
+                                        onFocusedFieldChange = { fieldId ->
                                             focusedFieldId = fieldId
                                         }
                                     )
@@ -897,135 +1007,6 @@ fun AppWithDrawer(
                                 }
                             }
 
-                            // Text used by BotAction.ReadCurrentField.
-                            val currentFieldTextToRead =
-                                if (isHousingAssistanceForm) {
-
-                                    // Try to read the field most recently
-                                    // selected by the user.
-                                    //
-                                    // If no field was selected, or its ID
-                                    // was not found, use the first
-                                    // explanation of the current step.
-                                    focusedFieldId
-                                        ?.let { selectedFieldId ->
-                                            FieldHelpCatalog
-                                                .getFieldExplanation(
-                                                    step =
-                                                        currentHousingStep,
-                                                    fieldId =
-                                                        selectedFieldId
-                                                )
-                                        }
-                                        ?: FieldHelpCatalog
-                                            .getFirstFieldExplanation(
-                                                step =
-                                                    currentHousingStep
-                                            )
-
-                                } else {
-                                    // There is no form field
-                                    // on other app screens.
-                                    ""
-                                }
-
-                            // This listens to the live scores
-                            // from DistressScoringManager
-                            val handScore by
-                            DistressScoringManager
-                                .handScore
-                                .collectAsState()
-
-                            val voiceScore by
-                            DistressScoringManager
-                                .voiceScore
-                                .collectAsState()
-
-                            val faceScore by
-                            DistressScoringManager
-                                .faceScore
-                                .collectAsState()
-
-                            val totalScore by
-                            DistressScoringManager
-                                .totalScore
-                                .collectAsState()
-
-                            val formBehaviorScore by
-                            DistressScoringManager
-                                .formBehaviorScore
-                                .collectAsState()
-
-                            val distressMode by
-                            DistressScoringManager
-                                .mode
-                                .collectAsState()
-
-                            // Packs all scores into one object
-                            // so the chatbot can receive them.
-                            val realDistressSnapshot =
-                                DistressSnapshot(
-                                    globalScore = totalScore,
-                                    semanticTextScore = 0,
-                                    faceScore = faceScore,
-                                    voiceScore = voiceScore,
-                                    touchScore = handScore,
-                                    formBehaviorScore =
-                                        formBehaviorScore
-                                )
-
-                            // Stores current app settings:
-                            // music, TTS, font size and contrast.
-                            val botAppState = BotAppState(
-                                isMusicPlaying =
-                                    selectedSound != "none",
-                                selectedSound = selectedSound,
-                                isTtsSpeaking = isTtsSpeaking,
-                                autoReadEnabled =
-                                    autoReadEnabled,
-                                fontSizeMode =
-                                    fontSizeMode.name,
-                                contrastMode =
-                                    contrastMode.name
-                            )
-
-                            // The overlay is declared after NavHost,
-                            // so it is displayed above the current screen.
-                            FloatingChatOverlay(
-                                modifier = Modifier.fillMaxSize(),
-                                distressSnapshot =
-                                    realDistressSnapshot,
-                                distressMode = distressMode,
-                                appState = botAppState,
-                                onBotAction = { action ->
-
-                                    BotSupportActionHandler.handle(
-                                        action = action,
-                                        context = context,
-                                        ttsManager = ttsManager,
-
-                                        // Text for the complete
-                                        // current screen.
-                                        screenTextToRead =
-                                            screenTextToRead,
-
-                                        // Explanation of the currently
-                                        // focused form field.
-                                        currentFieldTextToRead =
-                                            currentFieldTextToRead,
-
-                                        onTtsSpeakingChange = {
-                                            isTtsSpeaking = it
-                                        },
-                                        onContrastModeChange = {
-                                            contrastMode = it
-                                        },
-                                        onFontSizeModeChange = {
-                                            fontSizeMode = it
-                                        }
-                                    )
-                                }
-                            )
                         }
                     }
                 }

@@ -6,13 +6,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.easyfill_project.forms_screens.FormSectionHeader
 import com.example.easyfill_project.forms_screens.components.CheckBoxOption
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AssistanceSelectionSection(
     formData: Map<String, String>,
-    onFieldChange: (String, String) -> Unit
+    onFieldChange: (String, String) -> Unit,
+    // Displays the chatbot beside the section headline.
+    chatbotContent: @Composable () -> Unit
 ) {
     fun isChecked(key: String): Boolean {
         val value = formData[key]
@@ -23,10 +26,10 @@ fun AssistanceSelectionSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "בחירת הסיוע בדיור",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
+
+        FormSectionHeader(
+            title = "בחירת הסיוע בדיור",
+            chatbotContent = chatbotContent
         )
 
         Text(

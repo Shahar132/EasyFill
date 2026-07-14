@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.easyfill_project.forms_screens.FormSectionHeader
 import com.example.easyfill_project.forms_screens.components.SmartTextField
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
@@ -16,7 +17,9 @@ fun PersonalDetailsSection(
 
     // Sends the ID of the field currently selected by the user
     // back to HousingAssistanceFormScreen.
-    onFocusedFieldChange: (String) -> Unit
+    onFocusedFieldChange: (String) -> Unit,
+    // Displays the chatbot beside the section headline.
+    chatbotContent: @Composable () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -39,10 +42,10 @@ fun PersonalDetailsSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "פרטים אישיים",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
+
+        FormSectionHeader(
+            title = "פרטים אישיים",
+            chatbotContent = chatbotContent
         )
 
         Spacer(modifier = Modifier.height(12.dp))

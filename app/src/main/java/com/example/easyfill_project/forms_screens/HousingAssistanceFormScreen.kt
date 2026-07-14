@@ -23,6 +23,14 @@ import com.example.easyfill_project.hand_analysis.MotionTrackingController
 import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
 
 
+import com.example.easyfill_project.chatbot.model.BotAction
+import com.example.easyfill_project.chatbot.model.BotAppState
+import com.example.easyfill_project.chatbot.model.DistressSnapshot
+import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
+import com.example.easyfill_project.distress_scoring.DistressMode
+
+
+
 
 @Composable
 fun HousingAssistanceFormScreen(
@@ -32,9 +40,20 @@ fun HousingAssistanceFormScreen(
     // Sends the current step back to AppNavigation.
     onStepChanged: (Int) -> Unit = {},
 
-
     // Sends the selected field ID to AppNavigation.
-    onFocusedFieldChange: (String) -> Unit = {}
+    onFocusedFieldChange: (String) -> Unit = {},
+
+    // Current distress information used by the chatbot.
+    distressSnapshot: DistressSnapshot,
+
+    // Current activity mode, such as form filling or voice recording.
+    distressMode: DistressMode,
+
+    // Current application settings used by chatbot suggestions.
+    botAppState: BotAppState,
+
+    // Sends the selected chatbot action back to AppNavigation.
+    onBotAction: (BotAction) -> Unit
 ) {
     val context = LocalContext.current
     val formId = "housing_assistance"
@@ -291,9 +310,25 @@ fun HousingAssistanceFormScreen(
             .imePadding()
             .verticalScroll(rememberScrollState())
     ) {
-        FormProgressBar(currentStep = currentStep, sections = sections)
 
-        Spacer(modifier = Modifier.height(20.dp))
+        FormProgressBar(
+            currentStep = currentStep,
+            sections = sections
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+
+// Reusable chatbot UI shown beside each section headline.
+        val sectionChatbot: @Composable () -> Unit = {
+            FloatingChatOverlay(
+                modifier = Modifier.wrapContentSize(),
+                distressSnapshot = distressSnapshot,
+                distressMode = distressMode,
+                appState = botAppState,
+                onBotAction = onBotAction
+            )
+        }
 
         when (currentStep) {
             0 -> PersonalDetailsSection(
@@ -301,14 +336,16 @@ fun HousingAssistanceFormScreen(
                 onFieldChange = ::updateField,
 
                 // Forwards the selected field to AppNavigation.
-                onFocusedFieldChange = onFocusedFieldChange
+                onFocusedFieldChange = onFocusedFieldChange,
+                chatbotContent = sectionChatbot
             )
             1 -> MailingAddressSection(
                 formData = formData,
                 onFieldChange = ::updateField,
 
                 // Sends the selected income field toward AppNavigation.
-                onFocusedFieldChange = onFocusedFieldChange
+                onFocusedFieldChange = onFocusedFieldChange,
+                chatbotContent = sectionChatbot
             )
 
             2 -> FamilyStatusSection(
@@ -316,7 +353,8 @@ fun HousingAssistanceFormScreen(
                 onFieldChange = ::updateField,
 
                 // Sends the selected family-status text field upward.
-                onFocusedFieldChange = onFocusedFieldChange
+                onFocusedFieldChange = onFocusedFieldChange,
+                chatbotContent = sectionChatbot
             )
 
             3 -> IncomeDetailsSection(
@@ -324,16 +362,18 @@ fun HousingAssistanceFormScreen(
                 onFieldChange = ::updateField,
 
                 // Sends the selected income field toward AppNavigation.
-                onFocusedFieldChange = onFocusedFieldChange
+                onFocusedFieldChange = onFocusedFieldChange,
+                chatbotContent = sectionChatbot
             )
-            4 -> AssistanceSelectionSection(formData, ::updateField)
+            4 -> AssistanceSelectionSection(formData, ::updateField,chatbotContent = sectionChatbot)
 
             5 -> RentAssistanceSection(
                 formData = formData,
                 onFieldChange = ::updateField,
 
                 // Sends the selected rent field toward AppNavigation.
-                onFocusedFieldChange = onFocusedFieldChange
+                onFocusedFieldChange = onFocusedFieldChange,
+                chatbotContent = sectionChatbot
             )
             6 -> SummarySection(navController)
         }

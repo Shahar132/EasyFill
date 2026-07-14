@@ -27,6 +27,8 @@ import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.distress_scoring.DistressMode
+import androidx.compose.ui.zIndex
+
 
 
 //This file now only handles UI
@@ -89,9 +91,9 @@ fun FloatingChatOverlay(
     val alertColor = when (severityLevel) {
         0 -> Color.Transparent
         1 -> Color(0xFF4CAF50) // green - low
-        2 -> Color(0xFFFFC107) // yellow - medium
-        3 -> Color(0xFFFF9800) // orange - high
-        else -> Color(0xFFF44336) // red - very high
+        2 -> Color(0xFFE1CC13) // yellow - medium
+        3 -> Color(0xFFFF5722) // orange - high
+        else -> Color(0xFFB92014) // red - very high
     }
 
 
@@ -104,15 +106,13 @@ fun FloatingChatOverlay(
         else -> "יש אפשרויות סיוע"
     }
 
-    // Full-screen overlay container.
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(start = 16.dp, bottom = 24.dp),
-        contentAlignment = Alignment.BottomStart
+        modifier = modifier.wrapContentSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.Start) {
-
+        Column(
+            horizontalAlignment = Alignment.End
+        ) {
             // Show card only if icon opened and suggestion exists.
             if (isChatOpen && currentSuggestion != null) {
                 Card(
@@ -199,58 +199,74 @@ fun FloatingChatOverlay(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Show small alert bubble only when card is closed.
-            if (!isChatOpen && currentSuggestion != null) {
+            // Contains the chatbot icon and the alert above it.
+            Box(
+                modifier = Modifier.wrapContentSize(),
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                // Chatbot icon stays underneath the alert.
                 Box(
                     modifier = Modifier
-                        .background(Color.White, RoundedCornerShape(12.dp))
-                        .border(1.dp, alertColor, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable {
+                            isChatOpen = !isChatOpen
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = alertText,
-                        color = alertColor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
+                    Image(
+                        painter = painterResource(id = R.drawable.chatbot_icon),
+                        contentDescription = "פתיחת צ'אטבוט EasyFill",
+                        modifier = Modifier.size(56.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-            }
-
-            // Fixed chatbot icon.
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable {
-                        isChatOpen = !isChatOpen
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.chatbot_icon),
-                    contentDescription = "פתיחת צ'אטבוט EasyFill",
-                    modifier = Modifier.size(80.dp)
-                )
-
-                // Show ! badge if there is pending suggestion.
-                if (currentSuggestion != null) {
-                    Box(
+                // Alert is drawn above the chatbot icon.
+                if (!isChatOpen && currentSuggestion != null) {
+                    Row(
                         modifier = Modifier
+                            // Moves the alert upward so the ! appears above the chatbot.
                             .align(Alignment.TopEnd)
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(alertColor),
-                        contentAlignment = Alignment.Center
+                            .offset(
+                                x = 10.dp,
+                                y = (-23).dp
+                            )
+                            // Makes sure the alert is drawn above the chatbot image.
+                            .zIndex(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "!",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // ! badge FIRST
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(alertColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "!",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Alert text SECOND
+                        Box(
+                            modifier = Modifier
+                                .background(Color.White, RoundedCornerShape(12.dp))
+                                .border(1.dp, alertColor, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = alertText,
+                                color = alertColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

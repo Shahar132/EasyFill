@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.easyfill_project.forms_screens.FormSectionHeader
 import com.example.easyfill_project.forms_screens.components.CheckBoxOption
 import com.example.easyfill_project.forms_screens.components.SmartTextField
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
@@ -31,7 +32,9 @@ fun RentAssistanceSection(
     // Reports which SmartTextField the user most recently selected.
     // The field ID is sent upward to HousingAssistanceFormScreen
     // and then to AppNavigation.
-    onFocusedFieldChange: (String) -> Unit
+    onFocusedFieldChange: (String) -> Unit,
+    // Displays the chatbot beside the section headline.
+    chatbotContent: @Composable () -> Unit
 ) {
     // Android context is required for TTS and speech-to-text managers.
     val context = LocalContext.current
@@ -60,10 +63,9 @@ fun RentAssistanceSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "סיוע בשכר דירה",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
+        FormSectionHeader(
+            title = "סיוע בשכר דירה",
+            chatbotContent = chatbotContent
         )
 
         Text(

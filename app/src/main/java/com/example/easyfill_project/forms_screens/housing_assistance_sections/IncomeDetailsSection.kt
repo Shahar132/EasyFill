@@ -5,14 +5,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.easyfill_project.forms_screens.FormSectionHeader
 import com.example.easyfill_project.forms_screens.components.SmartTextField
 import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
@@ -27,7 +26,9 @@ fun IncomeDetailsSection(
 
     // Reports which SmartTextField the user most recently selected.
     // The field ID is passed upward until AppNavigation stores it.
-    onFocusedFieldChange: (String) -> Unit
+    onFocusedFieldChange: (String) -> Unit,
+    // Displays the chatbot beside the section headline.
+    chatbotContent: @Composable () -> Unit
 ) {
     // Android context is required for TTS and speech-to-text.
     val context = LocalContext.current
@@ -53,10 +54,10 @@ fun IncomeDetailsSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "פירוט הכנסות",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
+
+        FormSectionHeader(
+            title = "פירוט הכנסות",
+            chatbotContent = chatbotContent
         )
 
         Spacer(modifier = Modifier.height(8.dp))
