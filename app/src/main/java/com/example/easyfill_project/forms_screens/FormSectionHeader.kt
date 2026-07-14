@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+
 @Composable
 fun FormSectionHeader(
     title: String,
@@ -30,8 +31,12 @@ fun FormSectionHeader(
             modifier = Modifier.weight(1f)
         )
 
+        // The chatbot always occupies the same width.
         Box(
-            modifier = Modifier.padding(end = 10.dp)
+            modifier = Modifier
+                .width(118.dp) // // 48.dp icon + 70.dp padding
+                .padding(end = 70.dp),
+            contentAlignment = Alignment.Center
         ) {
             chatbotContent()
         }
