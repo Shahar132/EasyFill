@@ -84,6 +84,7 @@ import com.example.easyfill_project.screen.getContrastColorScheme
 // Imports regarding the chatbot
 import com.example.easyfill_project.chatbot.help.FieldHelpCatalog
 import com.example.easyfill_project.chatbot.logic.BotSupportActionHandler
+import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 
@@ -104,6 +105,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 // Coroutines
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
+
+
 
 
 // Main navigation function
@@ -648,6 +653,73 @@ fun AppWithDrawer(
                             contrastMode = contrastMode.name
                         )
 
+                        // Restores the setting that existed before
+// the chatbot performed the selected action.
+                        val undoBotAction: (BotAction, BotAppState) -> Unit =
+                            { action, previousState ->
+
+                                when (action) {
+
+                                    is BotAction.SetContrast -> {
+                                        // Restore the previous contrast/color mode.
+                                        contrastMode = runCatching {
+                                            ContrastMode.valueOf(
+                                                previousState.contrastMode
+                                            )
+                                        }.getOrDefault(
+                                            ContrastMode.DEFAULT
+                                        )
+                                    }
+
+                                    is BotAction.SetFontSize -> {
+                                        // Restore the previous font-size mode.
+                                        fontSizeMode = runCatching {
+                                            FontSizeMode.valueOf(
+                                                previousState.fontSizeMode
+                                            )
+                                        }.getOrDefault(
+                                            FontSizeMode.NORMAL
+                                        )
+                                    }
+
+                                    is BotAction.PlaySound -> {
+                                        // "none" means no sound was playing
+                                        // before the chatbot action.
+                                        if (
+                                            previousState.selectedSound == "none"
+                                        ) {
+                                            SoundManager.stop()
+                                        } else {
+                                            // Find the old sound using its saved key.
+                                            val previousSound =
+                                                PersonalizationCatalog.sounds
+                                                    .firstOrNull { sound ->
+                                                        sound.key ==
+                                                                previousState.selectedSound
+                                                    }
+
+                                            if (previousSound != null) {
+                                                // Restore the exact sound that
+                                                // was playing before the action.
+                                                SoundManager.play(
+                                                    context = context,
+                                                    soundName = previousSound.key,
+                                                    soundRes = previousSound.soundRes
+                                                )
+                                            } else {
+                                                // Safe fallback if the saved key
+                                                // does not exist in the catalog.
+                                                SoundManager.stop()
+                                            }
+                                        }
+                                    }
+
+                                    // These actions do not change contrast,
+                                    // font size, or background music.
+                                    else -> Unit
+                                }
+                            }
+
                         // Box places the chatbot overlay above
                         // the currently displayed navigation screen.
                         Box(
@@ -888,6 +960,11 @@ fun AppWithDrawer(
                                             )
                                         },
 
+                                        // Restores the previous color, font size,
+                                        // or background sound.
+                                        onUndoBotAction = undoBotAction,
+
+
                                         // Receives the new form step whenever
                                         // the user presses Continue or Back.
                                         onStepChanged = { newStep ->
@@ -958,6 +1035,9 @@ fun AppWithDrawer(
                                                 }
                                             )
                                         },
+                                        // Use the same undo behavior for this route.
+                                        onUndoBotAction = undoBotAction,
+
 
                                         // Receives the current form section.
                                         onStepChanged = { newStep ->

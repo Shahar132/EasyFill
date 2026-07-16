@@ -53,7 +53,13 @@ fun HousingAssistanceFormScreen(
     botAppState: BotAppState,
 
     // Sends the selected chatbot action back to AppNavigation.
-    onBotAction: (BotAction) -> Unit
+    onBotAction: (BotAction) -> Unit,
+
+    // Sends an undo request back to AppNavigation.
+    onUndoBotAction: (
+        BotAction,
+        BotAppState
+    ) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val formId = "housing_assistance"
@@ -320,13 +326,32 @@ fun HousingAssistanceFormScreen(
 
 
 // Reusable chatbot UI shown beside each section headline.
+        // Reusable chatbot UI shown beside each section headline.
         val sectionChatbot: @Composable () -> Unit = {
             FloatingChatOverlay(
                 modifier = Modifier.wrapContentSize(),
                 distressSnapshot = distressSnapshot,
                 distressMode = distressMode,
                 appState = botAppState,
-                onBotAction = onBotAction
+                onBotAction = onBotAction,
+
+                // Navigate to the existing contrast/color settings screen.
+                onNavigateToColorSettings = {
+                    navController.navigate("contrastSettings")
+                },
+
+                // Navigate to the existing font-size settings screen.
+                onNavigateToFontSettings = {
+                    navController.navigate("fontSizeSettings")
+                },
+
+                // Navigate to the existing background-sound settings screen.
+                onNavigateToMusicSettings = {
+                    navController.navigate("backgroundSounds")
+                },
+
+                // Forward the undo request to AppNavigation.
+                onUndoAction = onUndoBotAction
             )
         }
 

@@ -57,6 +57,16 @@ import com.example.easyfill_project.distress_scoring.DistressMode
 
 import kotlinx.coroutines.delay
 
+//SetContrast → color settings
+//SetFontSize → font settings
+//PlaySound → music settings
+//ReadAloud / ReadCurrentField / emergency contacts → no settings button
+private enum class SettingsDestination {
+    COLOR,
+    FONT_SIZE,
+    MUSIC
+}
+
 
 @Composable
 fun FloatingChatOverlay(
@@ -64,7 +74,20 @@ fun FloatingChatOverlay(
     distressSnapshot: DistressSnapshot = DistressSnapshot(),
     distressMode: DistressMode = DistressMode.FORM_FILLING,
     appState: BotAppState = BotAppState(),
-    onBotAction: (BotAction) -> Unit = {}
+    onBotAction: (BotAction) -> Unit = {},
+
+    // Navigates from the chatbot to the color-settings screen if user wishes to return back from his action.
+    //This keeps navigation outside the chatbot UI.
+    // The chatbot only reports that the user pressed the settings button
+    onNavigateToColorSettings: () -> Unit = {},
+    onNavigateToFontSettings: () -> Unit = {},
+    onNavigateToMusicSettings: () -> Unit = {},
+    // Restores the application state from before the selected action.
+    //Called when the user presses "החזר לקודם".
+    onUndoAction: (
+        action: BotAction,
+        previousState: BotAppState
+    ) -> Unit = { _, _ -> }
 ) {
     var isChatOpen by remember {
         mutableStateOf(false)
@@ -82,6 +105,20 @@ fun FloatingChatOverlay(
         mutableStateOf<String?>(null)
     }
 
+
+    var settingsDestination by remember {
+        mutableStateOf<SettingsDestination?>(null)
+    }
+
+    // Stores the application settings before the action was executed.
+    var previousAppState by remember {
+        mutableStateOf<BotAppState?>(null)
+    }
+
+// Stores the exact action that was executed.
+    var lastExecutedAction by remember {
+        mutableStateOf<BotAction?>(null)
+    }
     val severityLevel = distressSnapshot.globalScore
 
     LaunchedEffect(
@@ -124,18 +161,39 @@ fun FloatingChatOverlay(
 
     // After showing a successful action message,
     // close the popup and remove the completed suggestion.
-    LaunchedEffect(successMessage) {
-        if (successMessage != null) {
+    LaunchedEffect(
+        successMessage,
+        settingsDestination
+    ) {
+
+        if (
+            successMessage != null &&
+            settingsDestination == null
+        ) {
+            //meaning If the action is NOT configurable (for example, "Call emergency contact"), then:
+            //successMessage != null
+            //settingsDestination == null
+            //The condition is true.
+            //The success message is shown for 4 seconds, then the popup closes automatically.
             delay(4000)
 
             if (suggestionQueue.isNotEmpty()) {
                 suggestionQueue.removeAt(0)
             }
 
+            // Clear all temporary chatbot state.
             successMessage = null
+            settingsDestination = null
+            previousAppState = null
+            lastExecutedAction = null
             isChatOpen = false
             lastAddedScore = 0
         }
+        //If the action IS configurable (for example, changing the color, font size, or music), then:
+        //successMessage != null
+        //settingsDestination == SettingsDestination.COLOR (or FONT_SIZE / MUSIC)
+        // The condition is false.
+        //The delay(4000) is never executed.
     }
 
     val alertColor =
@@ -268,7 +326,20 @@ fun FloatingChatOverlay(
             expanded =
                 isChatOpen &&
                         currentSuggestion != null,
+
             onDismissRequest = {
+                if (successMessage != null) {
+                    if (suggestionQueue.isNotEmpty()) {
+                        suggestionQueue.removeAt(0)
+                    }
+
+                    successMessage = null
+                    settingsDestination = null
+                    previousAppState = null
+                    lastExecutedAction = null
+                    lastAddedScore = 0
+                }
+
                 isChatOpen = false
             },
             modifier = Modifier.width(260.dp),
@@ -290,14 +361,250 @@ fun FloatingChatOverlay(
                     modifier = Modifier.padding(12.dp)
                 ) {
                     if (successMessage != null) {
-                        // After an action is completed,
-                        // show only the success message.
+                        // Display the success message after the chatbot action
+                        // (for example: "Color changed successfully").
                         Text(
                             text = successMessage.orEmpty(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+
+                        // Build an explanation message according to the action.
+                        // If the action is not configurable, this stays null.
+                        val settingsExplanation = when (settingsDestination) {
+
+                            // User changed the color theme.
+                            SettingsDestination.COLOR ->
+                                "אם תרצה לשנות לצבע אחר, תוכל לעבור לדף הגדרות הצבע."
+
+                            // User changed the font size.
+                            SettingsDestination.FONT_SIZE ->
+                                "אם תרצה לשנות לגודל טקסט אחר, תוכל לעבור לדף הגדרות גודל טקסט."
+
+                            // User changed the music.
+                            SettingsDestination.MUSIC ->
+                                "אם תרצה לבחור במוזיקה אחרת או לבטל, תוכל לעבור לדף הגדרות מוזיקת רקע."
+
+                            // No settings screen is related to this action.
+                            null -> null
+                        }
+
+                        // Build the text that will appear on the navigation button.
+                        // only configurable actions receive a button.
+                        val settingsButtonText = when (settingsDestination) {
+
+                            SettingsDestination.COLOR ->
+                                "מעבר להגדרות צבע"
+
+                            SettingsDestination.FONT_SIZE ->
+                                "מעבר להגדרות טקסט"
+
+                            SettingsDestination.MUSIC ->
+                                "מעבר להגדרות מוזיקה"
+
+                            null -> null
+                        }
+
+                        // Only show the extra explanation and navigation button
+                        // when this action has a related settings screen.
+                        if (
+                            settingsExplanation != null &&
+                            settingsButtonText != null
+                        ) {
+
+                            Spacer(
+                                modifier = Modifier.height(8.dp)
+                            )
+
+                            // Explain to the user that they can always
+                            // change this setting later manually.
+                            Text(
+                                text = settingsExplanation,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Spacer(
+                                modifier = Modifier.height(8.dp)
+                            )
+
+                            // Button that navigates directly to the relevant
+                            // settings screen.
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth(),
+
+                                onClick = {
+
+                                    // Save the destination because we are about
+                                    // to clear it before navigating.
+                                    val destination = settingsDestination
+
+                                    // Remove the completed chatbot suggestion.
+                                    if (suggestionQueue.isNotEmpty()) {
+                                        suggestionQueue.removeAt(0)
+                                    }
+
+                                    // Reset chatbot state.
+                                    successMessage = null
+                                    settingsDestination = null
+                                    isChatOpen = false
+                                    lastAddedScore = 0
+                                    previousAppState = null
+                                    lastExecutedAction = null
+
+
+                                    // Navigate to the correct settings screen.
+                                    when (destination) {
+
+                                        SettingsDestination.COLOR ->
+                                            onNavigateToColorSettings()
+
+                                        SettingsDestination.FONT_SIZE ->
+                                            onNavigateToFontSettings()
+
+                                        SettingsDestination.MUSIC ->
+                                            onNavigateToMusicSettings()
+
+                                        null -> Unit
+                                    }
+                                },
+
+                                border = BorderStroke(
+                                    width = 2.dp,
+                                    color = MaterialTheme.colorScheme.secondary
+                                ),
+
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor =
+                                        MaterialTheme.colorScheme.primary,
+                                    contentColor =
+                                        MaterialTheme.colorScheme.secondary
+                                )
+                            ) {
+
+                                Text(
+                                    text = settingsButtonText,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+
+                            Spacer(
+                                modifier = Modifier.height(8.dp)
+                            )
+
+                            // Use LTR only for physical placement:
+                            // undo button on the left and close button on the right.
+                            CompositionLocalProvider(
+                                LocalLayoutDirection provides LayoutDirection.Ltr
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Undo the action and restore the previous app state.
+                                    OutlinedButton(
+                                        onClick = {
+                                            val action = lastExecutedAction
+                                            val oldState = previousAppState
+
+                                            // Undo only when both required values exist.
+                                            if (
+                                                action != null &&
+                                                oldState != null
+                                            ) {
+                                                onUndoAction(
+                                                    action,
+                                                    oldState
+                                                )
+                                            }
+
+                                            // Remove the completed suggestion.
+                                            if (suggestionQueue.isNotEmpty()) {
+                                                suggestionQueue.removeAt(0)
+                                            }
+
+                                            // Clear all temporary chatbot state.
+                                            successMessage = null
+                                            settingsDestination = null
+                                            previousAppState = null
+                                            lastExecutedAction = null
+                                            isChatOpen = false
+                                            lastAddedScore = 0
+
+                                        },
+                                        border = BorderStroke(
+                                            width = 2.dp,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        ),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme.primary,
+                                            contentColor =
+                                                MaterialTheme.colorScheme.secondary
+                                        )
+                                    ) {
+                                        CompositionLocalProvider(
+                                            LocalLayoutDirection provides LayoutDirection.Rtl
+                                        ) {
+                                            Text(
+                                                text = "החזר לקודם",
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                        }
+                                    }
+
+                                    // Close the popup without undoing the action.
+                                    OutlinedButton(
+                                        onClick = {
+                                            // Remove the completed suggestion.
+                                            if (suggestionQueue.isNotEmpty()) {
+                                                suggestionQueue.removeAt(0)
+                                            }
+
+                                            // Keep the performed action, but clear chatbot state.
+                                            successMessage = null
+                                            settingsDestination = null
+                                            previousAppState = null
+                                            lastExecutedAction = null
+                                            isChatOpen = false
+                                            lastAddedScore = 0
+                                        },
+                                        border = BorderStroke(
+                                            width = 2.dp,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        ),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme.primary,
+                                            contentColor =
+                                                MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        CompositionLocalProvider(
+                                            LocalLayoutDirection provides LayoutDirection.Rtl
+                                        ) {
+                                            Text(
+                                                text = "סגור",
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                     } else {
+
+                        // This part is executed BEFORE the user chooses an action.
+                        // Here you show:
+                        // - the chatbot suggestion text
+                        // - the action buttons
+                        // - the "לא עכשיו" button
+                        // After the user presses one of the action buttons,
+                        // successMessage becomes non-null, so execution enters
+                        // the first branch above instead.
+
                         Text(
                             text = currentSuggestion.message,
                             style = MaterialTheme.typography.bodyMedium,
@@ -317,12 +624,36 @@ fun FloatingChatOverlay(
                                 OutlinedButton(
                                     modifier = Modifier.fillMaxWidth(),
                                     onClick = {
+                                        // Determine whether the action supports settings and undo.
+                                        settingsDestination = when (option.action) {
+                                            is BotAction.SetContrast ->
+                                                SettingsDestination.COLOR
+
+                                            is BotAction.SetFontSize ->
+                                                SettingsDestination.FONT_SIZE
+
+                                            is BotAction.PlaySound ->
+                                                SettingsDestination.MUSIC
+
+                                            else -> null
+                                        }
+
+                                        if (settingsDestination != null) {
+                                            // Save the state before changing it so undo can restore it.
+                                            previousAppState = appState
+                                            lastExecutedAction = option.action
+                                        } else {
+                                            // Normal actions do not need undo information.
+                                            previousAppState = null
+                                            lastExecutedAction = null
+                                        }
+
+                                        // Perform the selected action.
                                         onBotAction(option.action)
 
+                                        // Show the matching confirmation message.
                                         successMessage =
-                                            BotActionMessageProvider.getMessage(
-                                                option.action
-                                            )
+                                            BotActionMessageProvider.getMessage(option.action)
                                     },
                                     border = BorderStroke(
                                         width = 2.dp,
@@ -364,7 +695,11 @@ fun FloatingChatOverlay(
                                             suggestionQueue.removeAt(0)
                                         }
 
+                                        // Clear all temporary chatbot state.
                                         successMessage = null
+                                        settingsDestination = null
+                                        previousAppState = null
+                                        lastExecutedAction = null
                                         isChatOpen = false
                                         lastAddedScore = 0
                                     },
