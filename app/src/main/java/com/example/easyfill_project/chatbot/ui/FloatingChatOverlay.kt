@@ -54,6 +54,7 @@ import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.distress_scoring.DistressMode
+import com.example.easyfill_project.distress_scoring.DistressUiEvent
 
 import kotlinx.coroutines.delay
 
@@ -74,16 +75,29 @@ fun FloatingChatOverlay(
     distressSnapshot: DistressSnapshot = DistressSnapshot(),
     distressMode: DistressMode = DistressMode.FORM_FILLING,
     appState: BotAppState = BotAppState(),
+
+    // Event created by DistressConfirmationManager.
+    distressUiEvent: DistressUiEvent? = null,
+
     onBotAction: (BotAction) -> Unit = {},
 
-    // Navigates from the chatbot to the color-settings screen if user wishes to return back from his action.
-    //This keeps navigation outside the chatbot UI.
-    // The chatbot only reports that the user pressed the settings button
+    // Reports that an action button was selected.
+    onSuggestionAccepted: () -> Unit = {},
+
+    // Reports that the success message shown after an accepted action
+// has been closed or completed.
+    onAcceptedActionMessageClosed: () -> Unit = {},
+
+    // Reports that the user pressed "לא עכשיו".
+    onSuggestionDismissed: (BotSuggestion) -> Unit = {},
+
+    // Reports that a general calming message was closed.
+    onCalmingMessageClosed: () -> Unit = {},
+
     onNavigateToColorSettings: () -> Unit = {},
     onNavigateToFontSettings: () -> Unit = {},
     onNavigateToMusicSettings: () -> Unit = {},
-    // Restores the application state from before the selected action.
-    //Called when the user presses "החזר לקודם".
+
     onUndoAction: (
         action: BotAction,
         previousState: BotAppState
@@ -97,9 +111,6 @@ fun FloatingChatOverlay(
         mutableStateListOf<BotSuggestion>()
     }
 
-    var lastAddedScore by remember {
-        mutableStateOf(0)
-    }
 
     var successMessage by remember {
         mutableStateOf<String?>(null)
@@ -121,35 +132,107 @@ fun FloatingChatOverlay(
     }
     val severityLevel = distressSnapshot.globalScore
 
-    LaunchedEffect(
-        severityLevel,
-        distressMode,
-        appState
-    ) {
-        if (
-            severityLevel > 0 &&
-            severityLevel != lastAddedScore
-        ) {
-            val suggestion =
-                BotSuggestionBuilder.buildSuggestion(
-                    severityLevel = severityLevel,
-                    distressMode = distressMode,
-                    appState = appState
+    /**
+     * Listen only to events created by DistressConfirmationManager.
+     *
+     * The overlay no longer decides whether the distress level is stable.
+     * It only converts a manager event into something that can be displayed.
+     */
+    /**
+     * Handle every manager event exactly once.
+     *
+     * eventId is unique, so a new event restarts this effect.
+     * Changes to app settings should not process the same event again.
+     */
+    LaunchedEffect(distressUiEvent?.eventId) {
+        when (val event = distressUiEvent) {
+
+            /**
+             * Build the normal default action belonging to the confirmed level.
+             */
+            is DistressUiEvent.ShowDefaultSuggestion -> {
+                val suggestion =
+                    BotSuggestionBuilder.buildSuggestion(
+                        severityLevel = event.level,
+                        distressMode = distressMode,
+                        appState = appState
+                    )
+
+                suggestionQueue.clear()
+
+                if (suggestion != null) {
+                    suggestionQueue.add(suggestion)
+                }
+
+                successMessage = null
+                settingsDestination = null
+                previousAppState = null
+                lastExecutedAction = null
+                isChatOpen = false
+            }
+
+            /**
+             * Repeat the exact suggestion that was previously dismissed.
+             */
+            is DistressUiEvent.ShowExactSuggestion -> {
+                suggestionQueue.clear()
+                suggestionQueue.add(event.suggestion)
+
+                successMessage = null
+                settingsDestination = null
+                previousAppState = null
+                lastExecutedAction = null
+                isChatOpen = false
+            }
+
+            /**
+             * Convert a calming message into a BotSuggestion without options.
+             *
+             * Empty options tell the UI that this is a message,
+             * not an action suggestion.
+             */
+            is DistressUiEvent.ShowCalmingMessage -> {
+                suggestionQueue.clear()
+
+                suggestionQueue.add(
+                    BotSuggestion(
+                        id = "calming_${event.eventId}",
+                        level = event.level,
+                        message = event.message,
+                        options = emptyList()
+                    )
                 )
 
-            if (suggestion != null) {
-                suggestionQueue.add(suggestion)
-                lastAddedScore = severityLevel
+                successMessage = null
+                settingsDestination = null
+                previousAppState = null
+                lastExecutedAction = null
+                isChatOpen = false
             }
-        }
 
-        if (severityLevel == 0) {
-            lastAddedScore = 0
+            is DistressUiEvent.Reset -> {
+                suggestionQueue.clear()
+
+                successMessage = null
+                settingsDestination = null
+                previousAppState = null
+                lastExecutedAction = null
+                isChatOpen = false
+            }
+
+            null -> Unit
         }
     }
 
     val currentSuggestion =
         suggestionQueue.firstOrNull()
+
+    /**
+     * Calming messages contain no action options.
+     */
+    val isCalmingMessage =
+        currentSuggestion != null &&
+                currentSuggestion.options.isEmpty()
 
     // Never keep the popup open without an available suggestion.
     LaunchedEffect(currentSuggestion) {
@@ -187,7 +270,14 @@ fun FloatingChatOverlay(
             previousAppState = null
             lastExecutedAction = null
             isChatOpen = false
-            lastAddedScore = 0
+
+
+            /**
+             * The success message finished automatically.
+             * The manager may now begin the five-second cooldown
+             * before showing a calming message.
+             */
+            onAcceptedActionMessageClosed()
         }
         //If the action IS configurable (for example, changing the color, font size, or music), then:
         //successMessage != null
@@ -328,19 +418,49 @@ fun FloatingChatOverlay(
                         currentSuggestion != null,
 
             onDismissRequest = {
-                if (successMessage != null) {
-                    if (suggestionQueue.isNotEmpty()) {
-                        suggestionQueue.removeAt(0)
+                when {
+                    /**
+                     * Closing a calming message by tapping outside should
+                     * behave exactly like pressing its "סגור" button.
+                     */
+                    isCalmingMessage -> {
+                        if (suggestionQueue.isNotEmpty()) {
+                            suggestionQueue.removeAt(0)
+                        }
+
+                        isChatOpen = false
+                        onCalmingMessageClosed()
                     }
 
-                    successMessage = null
-                    settingsDestination = null
-                    previousAppState = null
-                    lastExecutedAction = null
-                    lastAddedScore = 0
-                }
+                    /**
+                     * A success card may be dismissed after an action.
+                     */
+                    successMessage != null -> {
+                        if (suggestionQueue.isNotEmpty()) {
+                            suggestionQueue.removeAt(0)
+                        }
 
-                isChatOpen = false
+                        successMessage = null
+                        settingsDestination = null
+                        previousAppState = null
+                        lastExecutedAction = null
+                        isChatOpen = false
+
+
+                        /**
+                         * Tapping outside the success card also counts as closing it.
+                         */
+                        onAcceptedActionMessageClosed()
+                    }
+
+                    /**
+                     * For a normal action suggestion, only close the popup.
+                     * Keep the suggestion available on the chatbot icon.
+                     */
+                    else -> {
+                        isChatOpen = false
+                    }
+                }
             },
             modifier = Modifier.width(260.dp),
             offset = DpOffset(
@@ -448,9 +568,13 @@ fun FloatingChatOverlay(
                                     successMessage = null
                                     settingsDestination = null
                                     isChatOpen = false
-                                    lastAddedScore = 0
                                     previousAppState = null
                                     lastExecutedAction = null
+
+                                    /**
+                                     * The accepted-action success card is now finished.
+                                     */
+                                    onAcceptedActionMessageClosed()
 
 
                                     // Navigate to the correct settings screen.
@@ -530,7 +654,12 @@ fun FloatingChatOverlay(
                                             previousAppState = null
                                             lastExecutedAction = null
                                             isChatOpen = false
-                                            lastAddedScore = 0
+
+                                            /**
+                                             * Even though the user undid the setting, the success card
+                                             * has been handled and closed.
+                                             */
+                                            onAcceptedActionMessageClosed()
 
                                         },
                                         border = BorderStroke(
@@ -568,7 +697,11 @@ fun FloatingChatOverlay(
                                             previousAppState = null
                                             lastExecutedAction = null
                                             isChatOpen = false
-                                            lastAddedScore = 0
+
+                                            /**
+                                             * The success card was closed manually.
+                                             */
+                                            onAcceptedActionMessageClosed()
                                         },
                                         border = BorderStroke(
                                             width = 2.dp,
@@ -647,6 +780,9 @@ fun FloatingChatOverlay(
                                             previousAppState = null
                                             lastExecutedAction = null
                                         }
+                                        // Report that the action was accepted.
+                                        // The confirmation manager will start the 5-second cooldown.
+                                        onSuggestionAccepted()
 
                                         // Perform the selected action.
                                         onBotAction(option.action)
@@ -677,58 +813,150 @@ fun FloatingChatOverlay(
                             }
                         }
 
+                        // Show "לא עכשיו" only for action suggestions.
+                        // Calming messages receive a normal Close button instead.
                         Spacer(
                             modifier = Modifier.height(4.dp)
                         )
 
-                        // Show "לא עכשיו" only before an action is selected.
-                        CompositionLocalProvider(
-                            LocalLayoutDirection provides LayoutDirection.Ltr
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
+                        /**
+                         * Normal action suggestion:
+                         *
+                         * Show "לא עכשיו" because the user is deciding
+                         * whether to perform one of the suggested actions.
+                         */
+                        if (!isCalmingMessage) {
+                            CompositionLocalProvider(
+                                LocalLayoutDirection provides LayoutDirection.Ltr
                             ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        if (suggestionQueue.isNotEmpty()) {
-                                            suggestionQueue.removeAt(0)
-                                        }
-
-                                        // Clear all temporary chatbot state.
-                                        successMessage = null
-                                        settingsDestination = null
-                                        previousAppState = null
-                                        lastExecutedAction = null
-                                        isChatOpen = false
-                                        lastAddedScore = 0
-                                    },
-                                    border = BorderStroke(
-                                        width = 2.dp,
-                                        color =
-                                            MaterialTheme.colorScheme.secondary
-                                    ),
-                                    colors =
-                                        ButtonDefaults.outlinedButtonColors(
-                                            containerColor =
-                                                MaterialTheme.colorScheme.primary,
-                                            contentColor =
-                                                MaterialTheme.colorScheme.onPrimary
-                                        )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
                                 ) {
-                                    CompositionLocalProvider(
-                                        LocalLayoutDirection provides
-                                                LayoutDirection.Rtl
-                                    ) {
-                                        Text(
-                                            text = "לא עכשיו",
+                                    OutlinedButton(
+                                        onClick = {
+
+                                            /**
+                                             * Report the exact dismissed suggestion
+                                             * to DistressConfirmationManager.
+                                             *
+                                             * The manager will:
+                                             * 1. Wait 5 seconds.
+                                             * 2. Show a calming message.
+                                             * 3. Later repeat this exact suggestion.
+                                             */
+                                            currentSuggestion?.let { suggestion ->
+                                                onSuggestionDismissed(suggestion)
+                                            }
+
+                                            // Remove the currently displayed suggestion.
+                                            if (suggestionQueue.isNotEmpty()) {
+                                                suggestionQueue.removeAt(0)
+                                            }
+
+                                            // Clear local UI state.
+                                            successMessage = null
+                                            settingsDestination = null
+                                            previousAppState = null
+                                            lastExecutedAction = null
+                                            isChatOpen = false
+                                        },
+                                        border = BorderStroke(
+                                            width = 2.dp,
                                             color =
-                                                MaterialTheme.colorScheme.onPrimary
-                                        )
+                                                MaterialTheme.colorScheme.secondary
+                                        ),
+                                        colors =
+                                            ButtonDefaults.outlinedButtonColors(
+                                                containerColor =
+                                                    MaterialTheme.colorScheme.primary,
+                                                contentColor =
+                                                    MaterialTheme.colorScheme.onPrimary
+                                            )
+                                    ) {
+                                        CompositionLocalProvider(
+                                            LocalLayoutDirection provides
+                                                    LayoutDirection.Rtl
+                                        ) {
+                                            Text(
+                                                text = "לא עכשיו",
+                                                color =
+                                                    MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+
+                        /**
+                         * Calming message:
+                         *
+                         * Calming messages contain no BotAction options.
+                         * Therefore, instead of "לא עכשיו", show one simple
+                         * close button.
+                         */
+                        if (isCalmingMessage) {
+                            CompositionLocalProvider(
+                                LocalLayoutDirection provides LayoutDirection.Ltr
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+
+                                            // Remove the calming message from the local queue.
+                                            if (suggestionQueue.isNotEmpty()) {
+                                                suggestionQueue.removeAt(0)
+                                            }
+
+                                            // Close the chatbot popup.
+                                            isChatOpen = false
+
+                                            /**
+                                             * Tell DistressConfirmationManager that
+                                             * the calming message was closed.
+                                             *
+                                             * The manager then decides what comes next:
+                                             *
+                                             * After an accepted action:
+                                             * → wait and show another calming message.
+                                             *
+                                             * After "לא עכשיו":
+                                             * → wait and repeat the dismissed action suggestion.
+                                             */
+                                            onCalmingMessageClosed()
+                                        },
+                                        border = BorderStroke(
+                                            width = 2.dp,
+                                            color =
+                                                MaterialTheme.colorScheme.secondary
+                                        ),
+                                        colors =
+                                            ButtonDefaults.outlinedButtonColors(
+                                                containerColor =
+                                                    MaterialTheme.colorScheme.primary,
+                                                contentColor =
+                                                    MaterialTheme.colorScheme.onPrimary
+                                            )
+                                    ) {
+                                        CompositionLocalProvider(
+                                            LocalLayoutDirection provides
+                                                    LayoutDirection.Rtl
+                                        ) {
+                                            Text(
+                                                text = "סגור",
+                                                color =
+                                                    MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                     }
                 }
             }

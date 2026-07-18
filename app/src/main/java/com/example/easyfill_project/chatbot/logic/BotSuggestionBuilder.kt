@@ -18,11 +18,28 @@ data class BotSuggestionOption(
 
 // One full suggestion card.
 //This represents the whole popup - meaning the suggested message + option buttons.
+/**
+ * One complete action suggestion displayed by the chatbot.
+ *
+ * id:
+ * A stable identifier that allows us to remember which suggestion
+ * was accepted or dismissed.
+ *
+ * level:
+ * The confirmed distress level for which the suggestion was created.
+ *
+ * message:
+ * The explanatory text displayed to the user.
+ *
+ * options:
+ * The action buttons displayed below the message.
+ */
 data class BotSuggestion(
+    val id: String,
+    val level: Int,
     val message: String,
-    val options: List<BotSuggestionOption>//this is the other data class.
+    val options: List<BotSuggestionOption>
 )
-
 object BotSuggestionBuilder {
 
 
@@ -75,30 +92,30 @@ object BotSuggestionBuilder {
 
     //Check Current font state
     //Offer other options.
-    private fun buildFontSuggestion(appState: BotAppState): BotSuggestion {
+    private fun buildFontSuggestion(
+        appState: BotAppState,
+        level: Int = 4
+    ): BotSuggestion {
 
-        // All font size options that exist in the app:
-        // small, normal, large.
-        val allFontOptions = PersonalizationCatalog.fontSizes
+        val allFontOptions =
+            PersonalizationCatalog.fontSizes
 
-        // Remove the font size the user already has now.
-        // This prevents offering the same current size again.
-        val alternativeFontOptions = allFontOptions.filter { fontOption ->
-            fontOption.mode.name != appState.fontSizeMode
-        }
+        val alternativeFontOptions =
+            allFontOptions.filter { fontOption ->
+                fontOption.mode.name != appState.fontSizeMode
+            }
 
-        // Turn each available alternative into a button.
-        // Example:
-        // label = "טקסט גדול"
-        // action = change font to LARGE
-        val buttons = alternativeFontOptions.map { fontOption ->
-            BotSuggestionOption(
-                label = fontOption.displayName,
-                action = BotAction.SetFontSize(fontOption)
-            )
-        }
+        val buttons =
+            alternativeFontOptions.map { fontOption ->
+                BotSuggestionOption(
+                    label = fontOption.displayName,
+                    action = BotAction.SetFontSize(fontOption)
+                )
+            }
 
         return BotSuggestion(
+            id = "level_${level}_font_support",
+            level = level,
             message = "רוצה לשנות את גודל הטקסט? תבחר באפשרות שנוחה לך",
             options = buttons
         )
@@ -128,6 +145,8 @@ object BotSuggestionBuilder {
         }
 
         return BotSuggestion(
+            id = "level_2_color_support",
+            level = 2,
             message = "רוצה לשנות את צבעי המסך לצבעים אחרים? תוכל/י לבחור באופציה הרצויה",
             options = buttons
         )
@@ -167,6 +186,8 @@ object BotSuggestionBuilder {
         }
 
         return BotSuggestion(
+            id = "level_3_music_support",
+            level = 3,
             message = message,
             options = buttons
         )
@@ -206,6 +227,8 @@ object BotSuggestionBuilder {
         }
 
         return BotSuggestion(
+            id = "level_1_reading_support",
+            level = 1,
             message = message,
             options = listOf(
                 BotSuggestionOption(
@@ -230,12 +253,15 @@ object BotSuggestionBuilder {
         appState: BotAppState
     ): BotSuggestion {
 
-        // Build font buttons that are different from the current font.
-        val fontSuggestion = buildFontSuggestion(appState)
+        val fontSuggestion =
+            buildFontSuggestion(
+                appState = appState,
+                level = 4
+            )
 
-        val options = fontSuggestion.options.toMutableList()
+        val options =
+            fontSuggestion.options.toMutableList()
 
-        // Add an additional support-information button.
         options.add(
             BotSuggestionOption(
                 label = "הצג אפשרויות סיוע",
@@ -244,6 +270,8 @@ object BotSuggestionBuilder {
         )
 
         return BotSuggestion(
+            id = "level_4_font_and_emergency_support",
+            level = 4,
             message = """
             נראה שקשה לך כרגע.
             אפשר לשנות את גודל הטקסט או להציג אפשרויות סיוע.

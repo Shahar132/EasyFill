@@ -138,7 +138,14 @@ class MotionTrackingController(
                     "gyroVarThreshold=${baseline.gyroscopeVariation * GYRO_VARIATION_FACTOR}"
         )
 
+        // First update the hand score.
+        // This also recalculates the current combined total score.
         distressManager.updateHandScore(score)
+
+        // Report that one complete 5-second measurement window has ended.
+        // This must be called after updateHandScore(), because the confirmation
+        // manager needs the newly calculated combined total score.
+        distressManager.completeMeasurementWindow()
 
         distressManager.printStatus()
 

@@ -107,8 +107,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
-
-
+import com.example.easyfill_project.distress_scoring.DistressConfirmationManager
 
 
 // Main navigation function
@@ -160,6 +159,31 @@ fun AppWithDrawer(
 
     // Coroutine scope required for drawer actions (open/close)
     val scope = rememberCoroutineScope()
+
+    /**
+     * Holds the distress-confirmation and chatbot follow-up state.
+     *
+     * remember ensures that the manager is not recreated during every
+     * Compose recomposition.
+     */
+    val distressConfirmationManager = remember(scope) {
+        DistressConfirmationManager(
+            scope = scope,
+            requiredMatchingWindows = 2,
+            cooldownMillis = 5_000L
+        )
+    }
+
+    /**
+     * Receive every completed distress-measurement window.
+     *
+     * This collector receives repeated equal levels as separate events.
+     */
+    LaunchedEffect(Unit) {
+        DistressScoringManager.completedWindows.collect { window ->
+            distressConfirmationManager.processWindow(window)
+        }
+    }
 
     // This controls only screens INSIDE the app area
     val innerNavController = rememberNavController()
@@ -633,9 +657,34 @@ fun AppWithDrawer(
                         val distressMode by
                         DistressScoringManager.mode.collectAsState()
 
+                        /**
+                         * Stable distress level after the same level appeared
+                         * in the required number of measurement windows.
+                         */
+                        val confirmedDistressLevel by
+                        distressConfirmationManager.confirmedLevel.collectAsState()
+
+                        /**
+                         * The current chatbot event selected by the confirmation manager.
+                         *
+                         * This may request:
+                         * - A default action suggestion
+                         * - A calming message
+                         * - A previously dismissed suggestion
+                         * - A reset
+                         */
+                        val distressUiEvent by
+                        distressConfirmationManager.uiEvent.collectAsState()
+
 // Combine the distress scores into the object used by the chatbot.
+                        /**
+                         * Combine the distress scores into the object used by the chatbot.
+                         *
+                         * Important:
+                         * globalScore uses the confirmed level, not the raw total score.
+                         */
                         val realDistressSnapshot = DistressSnapshot(
-                            globalScore = totalScore,
+                            globalScore = confirmedDistressLevel,
                             semanticTextScore = 0,
                             faceScore = faceScore,
                             voiceScore = voiceScore,
@@ -932,6 +981,28 @@ fun AppWithDrawer(
                                         // Pass the current music, TTS, font and contrast settings.
                                         botAppState = botAppState,
 
+
+                                        distressUiEvent = distressUiEvent,
+
+                                        onSuggestionAccepted = {
+                                            distressConfirmationManager.onActionAccepted()
+                                        },
+
+
+                                        onAcceptedActionMessageClosed = {
+                                            distressConfirmationManager.onAcceptedActionMessageClosed()
+                                        },
+
+                                        onSuggestionDismissed = { suggestion ->
+                                            distressConfirmationManager.onSuggestionDismissed(
+                                                suggestion = suggestion
+                                            )
+                                        },
+
+                                        onCalmingMessageClosed = {
+                                            distressConfirmationManager.onCalmingMessageClosed()
+                                        },
+
                                         // Handle chatbot button actions in AppNavigation,
                                         // where the TTS and app-setting state are stored.
                                         onBotAction = { action ->
@@ -1012,6 +1083,27 @@ fun AppWithDrawer(
 
                                         // Pass the current app settings used by chatbot suggestions.
                                         botAppState = botAppState,
+
+                                        distressUiEvent = distressUiEvent,
+
+                                        onSuggestionAccepted = {
+                                            distressConfirmationManager.onActionAccepted()
+                                        },
+
+
+                                        onAcceptedActionMessageClosed = {
+                                            distressConfirmationManager.onAcceptedActionMessageClosed()
+                                        },
+
+                                        onSuggestionDismissed = { suggestion ->
+                                            distressConfirmationManager.onSuggestionDismissed(
+                                                suggestion = suggestion
+                                            )
+                                        },
+
+                                        onCalmingMessageClosed = {
+                                            distressConfirmationManager.onCalmingMessageClosed()
+                                        },
 
                                         // Handle chatbot actions in AppNavigation.
                                         onBotAction = { action ->

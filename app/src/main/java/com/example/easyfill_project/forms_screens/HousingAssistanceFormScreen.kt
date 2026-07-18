@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.easyfill_project.chatbot.logic.BotSuggestion
 import com.example.easyfill_project.forms_screens.housing_assistance_sections.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -28,8 +29,7 @@ import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
 import com.example.easyfill_project.distress_scoring.DistressMode
-
-
+import com.example.easyfill_project.distress_scoring.DistressUiEvent
 
 
 @Composable
@@ -52,10 +52,29 @@ fun HousingAssistanceFormScreen(
     // Current application settings used by chatbot suggestions.
     botAppState: BotAppState,
 
-    // Sends the selected chatbot action back to AppNavigation.
+    // Event created by DistressConfirmationManager.
+// It tells the chatbot which suggestion or calming message to show.
+    distressUiEvent: DistressUiEvent? = null,
+
+// Sends the selected chatbot action back to AppNavigation.
     onBotAction: (BotAction) -> Unit,
 
-    // Sends an undo request back to AppNavigation.
+// Reports that the user accepted one of the suggested actions.
+    onSuggestionAccepted: () -> Unit = {},
+
+    // Reports that the accepted-action success message has finished.
+    onAcceptedActionMessageClosed: () -> Unit = {},
+
+// Reports that the user pressed "לא עכשיו".
+//
+// We send the exact BotSuggestion so the same suggestion
+// can be shown again later.
+    onSuggestionDismissed: (BotSuggestion) -> Unit = {},
+
+// Reports that the user closed a calming message.
+    onCalmingMessageClosed: () -> Unit = {},
+
+// Sends an undo request back to AppNavigation.
     onUndoBotAction: (
         BotAction,
         BotAppState
@@ -330,10 +349,33 @@ fun HousingAssistanceFormScreen(
         val sectionChatbot: @Composable () -> Unit = {
             FloatingChatOverlay(
                 modifier = Modifier.wrapContentSize(),
+
+                // Current confirmed distress information.
                 distressSnapshot = distressSnapshot,
+
+                // Current analysis mode.
                 distressMode = distressMode,
+
+                // Current app settings.
                 appState = botAppState,
+
+                // The event created by DistressConfirmationManager.
+                distressUiEvent = distressUiEvent,
+
+                // Executes the selected chatbot action.
                 onBotAction = onBotAction,
+
+                // Notifies the manager that the user accepted an action.
+                onSuggestionAccepted = onSuggestionAccepted,
+
+                onAcceptedActionMessageClosed =
+                    onAcceptedActionMessageClosed,
+
+                // Notifies the manager that the user pressed "לא עכשיו".
+                onSuggestionDismissed = onSuggestionDismissed,
+
+                // Notifies the manager that a calming message was closed.
+                onCalmingMessageClosed = onCalmingMessageClosed,
 
                 // Navigate to the existing contrast/color settings screen.
                 onNavigateToColorSettings = {

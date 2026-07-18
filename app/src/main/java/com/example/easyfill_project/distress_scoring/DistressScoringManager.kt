@@ -1,38 +1,65 @@
 package com.example.easyfill_project.distress_scoring
 
 import android.util.Log
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.math.roundToInt
 
 object DistressScoringManager {
 
-    // Hand movement score: 0–4
+    // Hand movement score: 0–4.
     private val _handScore = MutableStateFlow(0)
     val handScore: StateFlow<Int> = _handScore
 
-    // Voice analysis score: 0–4
+    // Voice analysis score: 0–4.
     private val _voiceScore = MutableStateFlow(0)
     val voiceScore: StateFlow<Int> = _voiceScore
 
-    // Face score: currently not used, but kept for future use
+    // Face score: currently not used, but kept for future use.
     private val _faceScore = MutableStateFlow(0)
     val faceScore: StateFlow<Int> = _faceScore
 
-    // Field behavior score: 0–4
+    // Field-behavior score: 0–4.
     private val _formBehaviorScore = MutableStateFlow(0)
     val formBehaviorScore: StateFlow<Int> = _formBehaviorScore
 
-    // Current interaction mode:
-    // recording or form filling
-    // FORM_FILLING = user is filling form fields (not using recording)
-    // VOICE_RECORDING = user is recording speech
+    /**
+     * Current interaction mode.
+     *
+     * FORM_FILLING:
+     * The user fills fields without voice recording.
+     *
+     * VOICE_RECORDING:
+     * The user is currently recording speech.
+     */
     private val _mode = MutableStateFlow(DistressMode.FORM_FILLING)
     val mode: StateFlow<DistressMode> = _mode
 
-    // Final combined distress score: 0–4
+    // Current combined distress score: 0–4.
     private val _totalScore = MutableStateFlow(0)
     val totalScore: StateFlow<Int> = _totalScore
+
+    /**
+     * Emits one event for every completed measurement window.
+     *
+     * This is different from totalScore.
+     *
+     * totalScore stores the current value.
+     * completedWindows reports that another measurement window has ended.
+     *
+     * SharedFlow is used because two consecutive windows may contain
+     * the exact same distress level.
+     */
+    private val _completedWindows =
+        MutableSharedFlow<DistressWindowResult>(
+            extraBufferCapacity = 10
+        )
+
+    val completedWindows: SharedFlow<DistressWindowResult> =
+        _completedWindows.asSharedFlow()
 
     fun updateHandScore(score: Int) {
         _handScore.value = score.coerceIn(0, 4)
@@ -59,10 +86,12 @@ object DistressScoringManager {
         updateTotal()
     }
 
-
-    //the mode decides which analyses count right now and the weights.
-    //Combine all the distress analyses into one overall distress score with weights
-    //Make that score easy for the chatbot to use.
+    /**
+     * Recalculates the current combined distress level.
+     *
+     * This function updates the current StateFlow value,
+     * but it does not count as a completed measurement window.
+     */
     private fun updateTotal() {
         val hand = _handScore.value
         val voice = _voiceScore.value
@@ -70,22 +99,59 @@ object DistressScoringManager {
 
         val weightedScore = when (_mode.value) {
 
-            // When user is recording:
-            // Voice is the main signal, hand is supporting.
+            // Voice is the main signal while recording.
             DistressMode.VOICE_RECORDING -> {
                 voice * 0.60 + hand * 0.40
             }
 
-            // When user is filling the form without speech:
-            // Field behavior is the main signal, hand is supporting.
+            // Form behavior is the main signal while filling fields.
             DistressMode.FORM_FILLING -> {
                 form * 0.60 + hand * 0.40
             }
         }
-//chatbot receives one severity level between 0 and 4 which is the total score
-        _totalScore.value = weightedScore.roundToInt().coerceIn(0, 4)
+
+        _totalScore.value =
+            weightedScore
+                .roundToInt()
+                .coerceIn(0, 4)
 
         printStatus()
+    }
+
+    /**
+     * Call this function exactly once when a real measurement window ends.
+     *
+     * At the moment, MotionTrackingController calls it after every
+     * completed 5-second hand-motion window.
+     *
+     * Do not call this function from updateTotal(), because updateTotal()
+     * may run several times inside one measurement period.
+     */
+    fun completeMeasurementWindow() {
+        val result = DistressWindowResult(
+            level = _totalScore.value,
+            handScore = _handScore.value,
+            voiceScore = _voiceScore.value,
+            formBehaviorScore = _formBehaviorScore.value,
+            faceScore = _faceScore.value,
+            mode = _mode.value
+        )
+
+        val emitted = _completedWindows.tryEmit(result)
+
+        Log.d(
+            "DISTRESS_WINDOW",
+            """
+            Completed window:
+            level=${result.level}
+            hand=${result.handScore}
+            voice=${result.voiceScore}
+            form=${result.formBehaviorScore}
+            face=${result.faceScore}
+            mode=${result.mode}
+            emitted=$emitted
+            """.trimIndent()
+        )
     }
 
     fun isDistressDetected(): Boolean {
