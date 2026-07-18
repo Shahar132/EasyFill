@@ -11,6 +11,10 @@ import androidx.lifecycle.LifecycleOwner
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+/**
+ * Manages the front camera and sends camera frames
+ * to MediaPipe at the selected maximum frame rate.
+ */
 class FaceCameraManager(
     context: Context,
     private val lifecycleOwner: LifecycleOwner,
@@ -18,7 +22,7 @@ class FaceCameraManager(
 
     /*
      * Maximum number of frames sent to MediaPipe per second.
-     * This value can be changed easily when creating the manager.
+     * This value can be changed when creating the manager.
      */
     private val targetFps: Int = DEFAULT_TARGET_FPS
 ) {
@@ -37,6 +41,16 @@ class FaceCameraManager(
 
     private var imageAnalysis: ImageAnalysis? = null
 
+    init {
+        /*
+         * The FPS value must be validated before calculating
+         * the interval between processed frames.
+         */
+        require(targetFps in MINIMUM_FPS..MAXIMUM_FPS) {
+            "targetFps must be between $MINIMUM_FPS and $MAXIMUM_FPS"
+        }
+    }
+
     /*
      * Minimum time that must pass between two processed frames.
      *
@@ -49,12 +63,6 @@ class FaceCameraManager(
         MILLISECONDS_PER_SECOND / targetFps
 
     private var lastProcessedFrameTimeMs: Long = 0L
-
-    init {
-        require(targetFps in MINIMUM_FPS..MAXIMUM_FPS) {
-            "targetFps must be between $MINIMUM_FPS and $MAXIMUM_FPS"
-        }
-    }
 
     /**
      * Opens the front camera and starts frame analysis.
@@ -143,7 +151,7 @@ class FaceCameraManager(
 
         try {
             /*
-             * Prevents duplicate bindings when startCamera
+             * Prevents duplicate bindings when startCamera()
              * is called more than once.
              */
             provider.unbindAll()
@@ -201,11 +209,8 @@ class FaceCameraManager(
     }
 
     companion object {
-        private const val TAG = "FACE_CAMERA"
 
-        /*
-         * Change this value to change the default processing rate.
-         */
+        private const val TAG = "FACE_CAMERA"
 
         // Default maximum number of camera frames
         // sent to MediaPipe every second.
@@ -218,7 +223,7 @@ class FaceCameraManager(
         private const val MAXIMUM_FPS = 60
 
         // Number of milliseconds in one second.
-        // Used to calculate the time interval between processed frames.
+        // Used to calculate the interval between processed frames.
         private const val MILLISECONDS_PER_SECOND = 1000L
     }
 }

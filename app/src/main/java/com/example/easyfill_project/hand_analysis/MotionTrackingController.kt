@@ -121,7 +121,7 @@ class MotionTrackingController(
 
         distressManager.updateHandScore(score)
 
-        distressManager.printStatus()
+        //distressManager.printStatus()
 
         if(distressManager.isDistressDetected()){
             Log.d("DISTRESS","Distress detected")

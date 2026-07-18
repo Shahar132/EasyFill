@@ -13,13 +13,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -29,15 +29,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.mediapipe.tasks.components.containers.Category
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import com.example.easyfill_project.distress_scoring.DistressScoringManager
 import java.util.Locale
 
+/**
+ * Temporary screen for testing
+ * the complete facial-analysis pipeline.
+ */
 @Composable
 fun FaceDetectionTestScreen() {
 
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val context =
+        LocalContext.current
+
+    val lifecycleOwner =
+        LocalLifecycleOwner.current
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -48,60 +54,49 @@ fun FaceDetectionTestScreen() {
         )
     }
 
-    var statusMessage by remember {
-        mutableStateOf("Waiting for camera permission")
+    var detectionStatus by remember {
+        mutableStateOf(
+            FaceDetectionStatus(
+                faceDetected = false,
+                landmarkCount = 0,
+                message =
+                    if (hasCameraPermission) {
+                        "Preparing face detection"
+                    } else {
+                        "Camera permission is required"
+                    }
+            )
+        )
     }
 
-    var faceDetected by remember {
-        mutableStateOf(false)
+    var analysisState by remember {
+        mutableStateOf(
+            FaceAnalysisState()
+        )
     }
 
-    var landmarkCount by remember {
-        mutableIntStateOf(0)
+    var distressResult by remember {
+        mutableStateOf<FaceDistressResult?>(
+            null
+        )
     }
 
-    // Eye measurements
-    var eyeBlinkLeft by remember {
-        mutableFloatStateOf(0f)
+    var displayedValues by remember {
+        mutableStateOf(
+            DisplayedFaceValues()
+        )
     }
 
-    var eyeBlinkRight by remember {
-        mutableFloatStateOf(0f)
-    }
-
-    // Eyebrow measurements
-    var browDownLeft by remember {
-        mutableFloatStateOf(0f)
-    }
-
-    var browDownRight by remember {
-        mutableFloatStateOf(0f)
-    }
-
-    val cameraPermissionLauncher =
+    val permissionLauncher =
         rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission()
+            contract =
+                ActivityResultContracts.RequestPermission()
         ) { granted ->
 
-            hasCameraPermission = granted
-
-            statusMessage =
-                if (granted) {
-                    "Camera permission granted"
-                } else {
-                    "Camera permission denied"
-                }
-
-            Log.d(
-                TAG,
-                "Camera permission granted: $granted"
-            )
+            hasCameraPermission =
+                granted
         }
 
-    /*
-     * Creates CameraX and MediaPipe only while
-     * the test screen is active.
-     */
     DisposableEffect(
         hasCameraPermission,
         lifecycleOwner
@@ -109,7 +104,13 @@ fun FaceDetectionTestScreen() {
 
         if (!hasCameraPermission) {
 
-            statusMessage = "Camera permission is required"
+            detectionStatus =
+                FaceDetectionStatus(
+                    faceDetected = false,
+                    landmarkCount = 0,
+                    message =
+                        "Camera permission is required"
+                )
 
             onDispose {
                 // No camera resources were created.
@@ -118,229 +119,166 @@ fun FaceDetectionTestScreen() {
         } else {
 
             val mainHandler =
-                Handler(Looper.getMainLooper())
+                Handler(
+                    Looper.getMainLooper()
+                )
 
-            val faceLandmarkerHelper =
-                FaceLandmarkerHelper(
+            var screenActive =
+                true
+
+            var lastDebugUiTimestampMs =
+                0L
+
+            fun postToUi(
+                action: () -> Unit
+            ) {
+
+                if (!screenActive) {
+                    return
+                }
+
+                mainHandler.post {
+
+                    if (screenActive) {
+                        action()
+                    }
+                }
+            }
+
+            val session =
+                FaceMonitoringSession(
                     context = context,
-                    listener = object :
-                        FaceLandmarkerHelper.FaceLandmarkerListener {
+                    lifecycleOwner =
+                        lifecycleOwner,
 
-                        override fun onFrameData(
-                            frameData: FaceFrameData
-                        ) {
-                            Log.d(
-                                TAG,
-                                                        """
-                                FaceFrameData received
-                                timestamp: ${frameData.timestampMs}
-                        
-                                eyeBlinkLeft: ${frameData.eyeBlinkLeft}
-                                eyeBlinkRight: ${frameData.eyeBlinkRight}
-                        
-                                eyeSquintLeft: ${frameData.eyeSquintLeft}
-                                eyeSquintRight: ${frameData.eyeSquintRight}
-                        
-                                eyeWideLeft: ${frameData.eyeWideLeft}
-                                eyeWideRight: ${frameData.eyeWideRight}
-                        
-                                browDownLeft: ${frameData.browDownLeft}
-                                browDownRight: ${frameData.browDownRight}
-                        
-                                browInnerUp: ${frameData.browInnerUp}
-                        
-                                browOuterUpLeft: ${frameData.browOuterUpLeft}
-                                browOuterUpRight: ${frameData.browOuterUpRight}
-                                """.trimIndent()
-                            )
+                    onAnalysisStateChanged = { state ->
+
+                        postToUi {
+                            analysisState = state
                         }
+                    },
 
+                    onDistressResult = { result ->
 
+                        Log.d(
+                            FACE_RESULT_TAG,
+                            "score=${formatScore(result.score)} | " +
+                                    "level=${result.level} | " +
+                                    "reliable=${result.isReliable} | " +
+                                    "eyes=${formatScore(result.eyesScore)} | " +
+                                    "brows=${formatScore(result.browsScore)} | " +
+                                    "activity=${formatScore(result.activityScore)} | " +
+                                    "top=${result.topContributor}"
+                        )
 
-                        override fun onResult(
-                            result: FaceLandmarkerResult,
-                            imageWidth: Int,
-                            imageHeight: Int
-                        ) {
-
-                            val currentLandmarkCount =
-                                result.faceLandmarks()
-                                    .firstOrNull()
-                                    ?.size
-                                    ?: 0
-
-                            /*
-                             * faceBlendshapes contains one list
-                             * of blendshape categories for each face.
-                             */
-                            val blendshapes =
-                                result.faceBlendshapes()
-                                    .orElse(emptyList())
-                                    .firstOrNull()
-                                    .orEmpty()
-
-                            val currentEyeBlinkLeft =
-                                findBlendshapeScore(
-                                    blendshapes = blendshapes,
-                                    categoryName = "eyeBlinkLeft"
-                                )
-
-                            val currentEyeBlinkRight =
-                                findBlendshapeScore(
-                                    blendshapes = blendshapes,
-                                    categoryName = "eyeBlinkRight"
-                                )
-
-                            val currentBrowDownLeft =
-                                findBlendshapeScore(
-                                    blendshapes = blendshapes,
-                                    categoryName = "browDownLeft"
-                                )
-
-                            val currentBrowDownRight =
-                                findBlendshapeScore(
-                                    blendshapes = blendshapes,
-                                    categoryName = "browDownRight"
-                                )
-
-
-                            /*
-                             * MediaPipe callbacks are asynchronous,
-                             * so Compose state is updated on the main thread.
-                             */
-                            mainHandler.post {
-
-                                faceDetected = true
-                                landmarkCount = currentLandmarkCount
-
-                                eyeBlinkLeft =
-                                    currentEyeBlinkLeft
-
-                                eyeBlinkRight =
-                                    currentEyeBlinkRight
-
-                                browDownLeft =
-                                    currentBrowDownLeft
-
-                                browDownRight =
-                                    currentBrowDownRight
-
-                                statusMessage =
-                                    "Face detection is working"
-                            }
-
-                            Log.d(
-                                TAG,
-                                """
-                                Face detected
-                                Landmarks: $currentLandmarkCount
-                                eyeBlinkLeft: $currentEyeBlinkLeft
-                                eyeBlinkRight: $currentEyeBlinkRight
-                                browDownLeft: $currentBrowDownLeft
-                                browDownRight: $currentBrowDownRight
-                                """.trimIndent()
-                            )
+                        postToUi {
+                            distressResult = result
                         }
+                    },
 
-                        override fun onNoFaceDetected(
-                            timestampMs: Long
-                        ) {
+                    onScoreReady = { score ->
 
-                            /*
-                             * Clears the previous pose so that
-                             * re-entering the camera does not create
-                             * a false movement spike.
-                             */
-
-                            mainHandler.post {
-
-                                faceDetected = false
-                                landmarkCount = 0
-
-                                eyeBlinkLeft = 0f
-                                eyeBlinkRight = 0f
-
-                                browDownLeft = 0f
-                                browDownRight = 0f
-
-                                statusMessage =
-                                    "Camera is running, but no face was detected"
-                            }
-
-                            Log.d(
-                                TAG,
-                                "No face detected | timestamp=$timestampMs"
+                        val normalizedScore =
+                            score.coerceIn(
+                                minimumValue = 0,
+                                maximumValue = 4
                             )
+
+                        Log.d(
+                            FACE_SCORE_SENT_TAG,
+                            "Sending face score to manager: " +
+                                    normalizedScore
+                        )
+
+                        DistressScoringManager
+                            .updateFaceScore(
+                                normalizedScore
+                            )
+                    },
+
+                    onDetectionStatusChanged = { status ->
+
+                        postToUi {
+
+                            detectionStatus =
+                                status
+
+                            if (!status.faceDetected) {
+
+                                displayedValues =
+                                    DisplayedFaceValues()
+                            }
                         }
+                    },
 
-                        override fun onError(
-                            message: String,
-                            exception: Throwable?
+                    onFrameDataForDebug = { frame ->
+
+                        if (
+                            frame.timestampMs -
+                            lastDebugUiTimestampMs >=
+                            DEBUG_UI_UPDATE_INTERVAL_MS
                         ) {
 
+                            lastDebugUiTimestampMs =
+                                frame.timestampMs
 
-                            mainHandler.post {
+                            postToUi {
 
-                                faceDetected = false
-                                landmarkCount = 0
-
-                                eyeBlinkLeft = 0f
-                                eyeBlinkRight = 0f
-
-                                browDownLeft = 0f
-                                browDownRight = 0f
-
-
-                                statusMessage = message
+                                displayedValues =
+                                    DisplayedFaceValues.from(
+                                        frame
+                                    )
                             }
-
-                            Log.e(
-                                TAG,
-                                message,
-                                exception
-                            )
                         }
                     }
                 )
 
-            val faceCameraManager =
-                FaceCameraManager(
-                    context = context,
-                    lifecycleOwner = lifecycleOwner,
-                    faceLandmarkerHelper = faceLandmarkerHelper
-                )
+            val started =
+                session.start()
 
-            if (faceLandmarkerHelper.isReady()) {
+            if (!started) {
 
-                statusMessage =
-                    "MediaPipe loaded. Starting camera..."
-
-                faceCameraManager.startCamera()
-
-            } else {
-
-                statusMessage =
-                    "MediaPipe could not load"
+                detectionStatus =
+                    FaceDetectionStatus(
+                        faceDetected = false,
+                        landmarkCount = 0,
+                        message =
+                            "Facial analysis could not start"
+                    )
             }
 
             onDispose {
 
-                faceCameraManager.close()
+                screenActive = false
 
-                Log.d(
-                    TAG,
-                    "Face detection test screen closed"
+                mainHandler.removeCallbacksAndMessages(
+                    null
                 )
+
+                session.close()
+
+                /*
+                 * Resets only the facial score.
+                 * Other collectors are not affected.
+                 */
+                DistressScoringManager
+                    .updateFaceScore(0)
             }
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(
+                    rememberScrollState()
+                )
+                .padding(24.dp),
+        horizontalAlignment =
+            Alignment.CenterHorizontally,
+        verticalArrangement =
+            Arrangement.Top
     ) {
 
         Text(
@@ -348,114 +286,326 @@ fun FaceDetectionTestScreen() {
         )
 
         Spacer(
-            modifier = Modifier.height(20.dp)
+            modifier =
+                Modifier.height(16.dp)
         )
 
         Text(
-            text = statusMessage
+            text =
+                detectionStatus.message
+        )
+
+        Text(
+            text =
+                "Face detected: " +
+                        detectionStatus.faceDetected
+        )
+
+        Text(
+            text =
+                "Landmarks: " +
+                        detectionStatus.landmarkCount
         )
 
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier =
+                Modifier.height(20.dp)
         )
 
         Text(
-            text = "Face detected: $faceDetected"
+            text =
+                "Analysis phase: " +
+                        analysisState.phase
         )
 
         Text(
-            text = "Landmarks: $landmarkCount"
+            text =
+                analysisState.message
+        )
+
+        Text(
+            text =
+                "Baseline ready: " +
+                        analysisState.baselineReady
+        )
+
+        Text(
+            text =
+                "Raw baseline metrics: " +
+                        "${analysisState.rawMetricCount} / 11"
+        )
+
+        Text(
+            text =
+                "Derived baseline metrics: " +
+                        analysisState.derivedMetricCount
+        )
+
+        Text(
+            text =
+                "Calibration frames: " +
+                        analysisState.collectedFrameCount
+        )
+
+        Text(
+            text =
+                "Valid windows: " +
+                        analysisState.validWindowCount
         )
 
         Spacer(
-            modifier = Modifier.height(20.dp)
+            modifier =
+                Modifier.height(20.dp)
+        )
+
+        val result =
+            distressResult
+
+        Text(
+            text =
+                "Face score: " +
+                        "${formatScore(result?.score ?: 0f)} / 4"
         )
 
         Text(
-            text = "Eye blink left: ${formatScore(eyeBlinkLeft)}"
+            text =
+                "Manager level: " +
+                        (result?.level ?: 0)
         )
 
         Text(
-            text = "Eye blink right: ${formatScore(eyeBlinkRight)}"
+            text =
+                "Reliable result: " +
+                        (result?.isReliable ?: false)
         )
 
         Text(
-            text = "Brow down left: ${formatScore(browDownLeft)}"
+            text =
+                "Eyes score: " +
+                        formatScore(
+                            result?.eyesScore
+                                ?: 0f
+                        )
         )
 
         Text(
-            text = "Brow down right: ${formatScore(browDownRight)}"
+            text =
+                "Brows score: " +
+                        formatScore(
+                            result?.browsScore
+                                ?: 0f
+                        )
+        )
+
+        Text(
+            text =
+                "Activity score: " +
+                        formatScore(
+                            result?.activityScore
+                                ?: 0f
+                        )
+        )
+
+        Text(
+            text =
+                "Top contributor: " +
+                        (
+                                result?.topContributor
+                                    ?: FaceDistressContributor.NONE
+                                )
         )
 
         Spacer(
-            modifier = Modifier.height(20.dp)
+            modifier =
+                Modifier.height(20.dp)
+        )
+
+        FaceValueText(
+            label = "Eye blink left",
+            value =
+                displayedValues.eyeBlinkLeft
+        )
+
+        FaceValueText(
+            label = "Eye blink right",
+            value =
+                displayedValues.eyeBlinkRight
+        )
+
+        FaceValueText(
+            label = "Eye squint left",
+            value =
+                displayedValues.eyeSquintLeft
+        )
+
+        FaceValueText(
+            label = "Eye squint right",
+            value =
+                displayedValues.eyeSquintRight
+        )
+
+        FaceValueText(
+            label = "Eye wide left",
+            value =
+                displayedValues.eyeWideLeft
+        )
+
+        FaceValueText(
+            label = "Eye wide right",
+            value =
+                displayedValues.eyeWideRight
+        )
+
+        FaceValueText(
+            label = "Brow down left",
+            value =
+                displayedValues.browDownLeft
+        )
+
+        FaceValueText(
+            label = "Brow down right",
+            value =
+                displayedValues.browDownRight
+        )
+
+        FaceValueText(
+            label = "Brow inner up",
+            value =
+                displayedValues.browInnerUp
+        )
+
+        FaceValueText(
+            label = "Brow outer up left",
+            value =
+                displayedValues.browOuterUpLeft
+        )
+
+        FaceValueText(
+            label = "Brow outer up right",
+            value =
+                displayedValues.browOuterUpRight
         )
 
         if (!hasCameraPermission) {
 
             Spacer(
-                modifier = Modifier.height(24.dp)
+                modifier =
+                    Modifier.height(24.dp)
             )
 
             Button(
                 onClick = {
-                    cameraPermissionLauncher.launch(
+
+                    permissionLauncher.launch(
                         Manifest.permission.CAMERA
                     )
                 }
             ) {
+
                 Text(
                     text = "Allow camera"
                 )
             }
         }
+
+        Spacer(
+            modifier =
+                Modifier.height(30.dp)
+        )
     }
 }
 
-/**
- * Finds a specific blendshape category and returns its score.
- * Returns zero when the requested category is unavailable.
- */
-private fun findBlendshapeScore(
-    blendshapes: List<Category>,
-    categoryName: String
-): Float {
+@Composable
+private fun FaceValueText(
+    label: String,
+    value: Float
+) {
 
-    return blendshapes
-        .firstOrNull {
-            it.categoryName() == categoryName
-        }
-        ?.score()
-        ?: 0f
+    Text(
+        text =
+            "$label: ${formatScore(value)}"
+    )
 }
 
-/**
- * Formats a blendshape score to three decimal places.
- */
+private data class DisplayedFaceValues(
+    val eyeBlinkLeft: Float = 0f,
+    val eyeBlinkRight: Float = 0f,
+
+    val eyeSquintLeft: Float = 0f,
+    val eyeSquintRight: Float = 0f,
+
+    val eyeWideLeft: Float = 0f,
+    val eyeWideRight: Float = 0f,
+
+    val browDownLeft: Float = 0f,
+    val browDownRight: Float = 0f,
+
+    val browInnerUp: Float = 0f,
+
+    val browOuterUpLeft: Float = 0f,
+    val browOuterUpRight: Float = 0f
+) {
+
+    companion object {
+
+        fun from(
+            frame: FaceFrameData
+        ): DisplayedFaceValues {
+
+            return DisplayedFaceValues(
+                eyeBlinkLeft =
+                    frame.eyeBlinkLeft,
+
+                eyeBlinkRight =
+                    frame.eyeBlinkRight,
+
+                eyeSquintLeft =
+                    frame.eyeSquintLeft,
+
+                eyeSquintRight =
+                    frame.eyeSquintRight,
+
+                eyeWideLeft =
+                    frame.eyeWideLeft,
+
+                eyeWideRight =
+                    frame.eyeWideRight,
+
+                browDownLeft =
+                    frame.browDownLeft,
+
+                browDownRight =
+                    frame.browDownRight,
+
+                browInnerUp =
+                    frame.browInnerUp,
+
+                browOuterUpLeft =
+                    frame.browOuterUpLeft,
+
+                browOuterUpRight =
+                    frame.browOuterUpRight
+            )
+        }
+    }
+}
+
 private fun formatScore(
     score: Float
 ): String {
 
     return String.format(
         Locale.US,
-        "%.3f",
+        "%.2f",
         score
     )
 }
 
-/**
- * Formats an angle or movement speed
- * to one decimal place.
- */
-private fun formatAngle(
-    angle: Float
-): String {
+private const val DEBUG_UI_UPDATE_INTERVAL_MS =
+    200L
 
-    return String.format(
-        Locale.US,
-        "%.1f",
-        angle
-    )
-}
+private const val FACE_RESULT_TAG =
+    "FACE_RESULT"
 
-private const val TAG = "FACE_TEST"
+private const val FACE_SCORE_SENT_TAG =
+    "FACE_SCORE_SENT"
