@@ -170,7 +170,26 @@ fun AppWithDrawer(
         DistressConfirmationManager(
             scope = scope,
             requiredMatchingWindows = 2,
-            cooldownMillis = 5_000L
+
+            // After "לא עכשיו", wait 20 seconds
+            // before the first calming message.
+            firstCalmingDelayMillis = 20_000L,
+
+            // Minimum delay between later items
+            // in the dismissed-suggestion flow.
+            dismissedFlowGapMillis = 20_000L,
+
+            // The exact original suggestion cannot return
+            // before 60 seconds have passed.
+            exactSuggestionRepeatDelayMillis = 60_000L,
+
+            // After an accepted action's success message closes,
+            // wait 20 seconds before a calming message.
+            acceptedCalmingDelayMillis = 20_000L,
+
+            // After that calming message closes,
+            // wait 25 seconds before another alternative action.
+            acceptedAlternativeDelayMillis = 25_000L
         )
     }
 
@@ -984,19 +1003,24 @@ fun AppWithDrawer(
 
                                         distressUiEvent = distressUiEvent,
 
-                                        onSuggestionAccepted = {
-                                            distressConfirmationManager.onActionAccepted()
+                                        onSuggestionAccepted = { suggestion ->
+                                            distressConfirmationManager.onActionAccepted(suggestion)
                                         },
 
+                                        onSuggestionDisplayed = { suggestion ->
+                                            distressConfirmationManager.onSuggestionDisplayed(suggestion)
+                                        },
+
+                                        onAlternativeSuggestionUnavailable = {
+                                            distressConfirmationManager.onAlternativeSuggestionUnavailable()
+                                        },
 
                                         onAcceptedActionMessageClosed = {
                                             distressConfirmationManager.onAcceptedActionMessageClosed()
                                         },
 
                                         onSuggestionDismissed = { suggestion ->
-                                            distressConfirmationManager.onSuggestionDismissed(
-                                                suggestion = suggestion
-                                            )
+                                            distressConfirmationManager.onSuggestionDismissed(suggestion)
                                         },
 
                                         onCalmingMessageClosed = {
@@ -1086,19 +1110,24 @@ fun AppWithDrawer(
 
                                         distressUiEvent = distressUiEvent,
 
-                                        onSuggestionAccepted = {
-                                            distressConfirmationManager.onActionAccepted()
+                                        onSuggestionAccepted = { suggestion ->
+                                            distressConfirmationManager.onActionAccepted(suggestion)
                                         },
 
+                                        onSuggestionDisplayed = { suggestion ->
+                                            distressConfirmationManager.onSuggestionDisplayed(suggestion)
+                                        },
+
+                                        onAlternativeSuggestionUnavailable = {
+                                            distressConfirmationManager.onAlternativeSuggestionUnavailable()
+                                        },
 
                                         onAcceptedActionMessageClosed = {
                                             distressConfirmationManager.onAcceptedActionMessageClosed()
                                         },
 
                                         onSuggestionDismissed = { suggestion ->
-                                            distressConfirmationManager.onSuggestionDismissed(
-                                                suggestion = suggestion
-                                            )
+                                            distressConfirmationManager.onSuggestionDismissed(suggestion)
                                         },
 
                                         onCalmingMessageClosed = {

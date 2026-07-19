@@ -69,9 +69,17 @@ object FormBehaviorTrackingController {
     // Stores the latest step navigation result so other modules can read it later.
     private var lastStepNavigationResult = FormStepNavigationResult()
 
-    // Stores the latest field behavior comparison result.
-    // It is updated after a field sample is compared to the baseline.
-    private var lastFieldComparisonResult: FormBehaviorComparisonResult? = null
+    // ID of the field that is currently focused.
+    // This prevents an old field's unfocus callback from clearing
+    // the live result of a newly focused field.
+    private var currentFocusedFieldId: String? = null
+
+    // Latest live comparison result of the currently focused field.
+    // Completed-field comparison results are never stored here.
+    private var currentFieldComparisonResult: FormBehaviorComparisonResult? = null
+
+
+
 
     // Stores the latest overall form behavior result.
     // This combines field behavior and step navigation behavior.
@@ -91,6 +99,17 @@ object FormBehaviorTrackingController {
     ) {
         val now = SystemClock.elapsedRealtime()
 
+        // This field is now the only field whose live comparison
+        // is allowed to affect the current form-behavior score.
+        currentFocusedFieldId = fieldId
+
+        // A newly focused field has no live comparison result yet.
+        // Until the user types or reaches an idle threshold,
+        // the form score contains only the navigation component.
+        currentFieldComparisonResult = null
+
+        updateOverallFormBehaviorResult()
+
         val focusCount = (fieldFocusCounts[fieldId] ?: 0) + 1
         fieldFocusCounts[fieldId] = focusCount
 
@@ -102,7 +121,10 @@ object FormBehaviorTrackingController {
             refocusCount = focusCount
         )
 
-        Log.d(TAG, "Field focused: $fieldId | focusCount=$focusCount")
+        Log.d(
+            TAG,
+            "Field focused: $fieldId | focusCount=$focusCount"
+        )
     }
 
     fun onFieldValueChanged(
@@ -111,6 +133,15 @@ object FormBehaviorTrackingController {
         newValue: String
     ) {
         val now = SystemClock.elapsedRealtime()
+
+        // Ignore delayed text callbacks from a field that is no longer focused.
+        if (currentFocusedFieldId != fieldId) {
+            Log.d(
+                TAG,
+                "Ignoring value change from inactive field: $fieldId"
+            )
+            return
+        }
 
         // If for some reason a value change arrives before focus was tracked,
         // create a session so the event is not lost.
@@ -166,9 +197,16 @@ object FormBehaviorTrackingController {
             TAG,
             "Value changed: $fieldId | inserted=${delta.insertedChars}, deleted=${delta.deletedChars}, events=${session.editEvents}"
         )
+
+        evaluateActiveField(fieldId)
     }
 
     fun checkCurrentFieldIdle(fieldId: String) {
+        // Ignore idle checks belonging to a field that is no longer focused.
+        if (currentFocusedFieldId != fieldId) {
+            return
+        }
+
         val now = SystemClock.elapsedRealtime()
         val session = activeSessions[fieldId] ?: return
 
@@ -193,13 +231,21 @@ object FormBehaviorTrackingController {
 
         // Report each idle level only once per idle period.
         if (idleLevel > session.lastIdleLevelReported) {
+
+            // Count only one event for one continuous idle period.
+            if (session.lastIdleLevelReported == 0) {
+                session.idleEvents++
+            }
+
             session.lastIdleLevelReported = idleLevel
-            session.idleEvents++
 
             Log.d(
                 TAG,
                 "Idle detected: $fieldId | idleLevel=$idleLevel | idleTimeMs=$idleTimeMs"
             )
+
+            // Recalculate the live score as the idle duration grows.
+            evaluateActiveField(fieldId)
         }
     }
 
@@ -213,12 +259,14 @@ object FormBehaviorTrackingController {
         )
 
         if (shouldSaveSample(sample)) {
-            Log.d(
-                TAG,
-                "Sample saved: $sample"
-            )
+            Log.d(TAG, "Final field sample created: $sample")
 
-            // If baseline is not ready yet, use clean samples to build it.
+            /*
+             * Completed samples are kept only while creating the personal baseline.
+             *
+             * They are not placed in a distress-scoring queue and are not compared
+             * again after the field is left.
+             */
             if (currentBaseline == null) {
                 if (shouldUseSampleForBaseline(sample)) {
                     completedSamples.add(sample)
@@ -232,62 +280,47 @@ object FormBehaviorTrackingController {
                 } else {
                     Log.d(
                         TAG,
-                        "Sample saved but not used for baseline: ${sample.fieldId}"
+                        "Sample not used for baseline: ${sample.fieldId}"
                     )
                 }
             } else {
-                // Baseline is already ready.
-                // From now on, samples should be compared to the baseline, not added to it.
+                /*
+                 * Once the baseline exists, leaving the field does not create
+                 * or publish a final distress comparison.
+                 *
+                 * Distress scoring uses only the live result while the field
+                 * is actively focused.
+                 */
                 Log.d(
                     TAG,
-                    "Baseline already ready. Sample should be compared, not added: ${sample.fieldId}"
+                    "Field completed. No final distress score published: ${sample.fieldId}"
                 )
-
-                val baseline = currentBaseline
-
-                if (baseline != null) {
-                    val comparisonResult = FormBehaviorBaselineComparator.compare(
-                        sample = sample,
-                        baseline = baseline
-                    )
-
-                    // Keeps the compact log.
-                    Log.d(
-                        TAG,
-                        "Comparison result: $comparisonResult"
-                    )
-
-                    // Detailed log for testing the baseline comparison without DistressScoringManager.
-                    Log.d(
-                        "FORM_COMPARISON",
-                        """
-                    Field = ${comparisonResult.fieldId}
-                    Score = ${comparisonResult.score}
-                    Level = ${comparisonResult.level}
-                    Top contributor = ${comparisonResult.topContributor}
-                    
-                    dwellTimeZ = ${comparisonResult.dwellTimeZ}
-                    thinkingTimeZ = ${comparisonResult.thinkingTimeZ}
-                    typingSpeedZ = ${comparisonResult.typingSpeedZ}
-                    idleTimeZ = ${comparisonResult.idleTimeZ}
-                    reviewTimeZ = ${comparisonResult.reviewTimeZ}
-                    deleteRatioZ = ${comparisonResult.deleteRatioZ}
-                    longPausesZ = ${comparisonResult.longPausesZ}
-                    
-                    shouldSuggestHelp = ${comparisonResult.shouldSuggestHelp}
-                    """.trimIndent()
-                    )
-
-                    // Saves the latest field comparison result and updates the overall form behavior score.
-                    lastFieldComparisonResult = comparisonResult
-                    updateOverallFormBehaviorResult()
-                }
             }
         } else {
             Log.d(
                 TAG,
-                "Sample ignored: $fieldId | dwell=${sample.dwellTimeMs}, edits=${sample.editEvents}, inserted=${sample.insertedChars}"
+                "Sample ignored: $fieldId | " +
+                        "dwell=${sample.dwellTimeMs}, " +
+                        "edits=${sample.editEvents}, " +
+                        "inserted=${sample.insertedChars}"
             )
+        }
+
+        /*
+         * Clear the live field score only when this is still the active field.
+         *
+         * A newly focused field must not be cleared by a delayed unfocus callback
+         * from the previous field.
+         */
+        if (currentFocusedFieldId == fieldId) {
+            currentFocusedFieldId = null
+            currentFieldComparisonResult = null
+
+            /*
+             * The field component is now zero/null.
+             * Navigation behavior remains active and is still published.
+             */
+            updateOverallFormBehaviorResult()
         }
     }
 
@@ -305,19 +338,18 @@ object FormBehaviorTrackingController {
         fieldFocusCounts.clear()
         currentBaseline = null
 
-        // Clears step navigation behavior data for a new form session.
         lastStepChangeTimeMs = null
         lastStepDirection = 0
-
         recentStepNavigationEvents.clear()
         editedFieldsSinceLastStepChange.clear()
         lastStepNavigationResult = FormStepNavigationResult()
 
-        // Clears the latest behavior results for a new form session.
-        lastFieldComparisonResult = null
+        currentFocusedFieldId = null
+        currentFieldComparisonResult = null
+
         lastOverallFormBehaviorResult = FormBehaviorOverallResult()
 
-        Log.d(TAG, "Form behavior tracking cleared. New baseline session started.")
+        DistressScoringManager.updateFormBehaviorScore(0)
     }
 
     private fun buildSample(
@@ -392,10 +424,11 @@ object FormBehaviorTrackingController {
                 sample.dwellTimeMs in 500L..180_000L
     }
 
-    private fun shouldUseSampleForBaseline(sample: FieldBehaviorSample): Boolean {
+    private fun shouldUseSampleForBaseline(
+        sample: FieldBehaviorSample
+    ): Boolean {
         return shouldSaveSample(sample) &&
-                sample.idleEvents == 0 &&
-                sample.maxIdleTimeMs < 10_000L
+                sample.refocusCount == 1
     }
     private fun calculateTextDelta(
         oldValue: String,
@@ -489,8 +522,8 @@ object FormBehaviorTrackingController {
 
 
     // Tracks navigation behavior between form steps.
-// This detects repeated backtracking, direction changes, and navigation without editing fields.
-// The result is used as a supporting signal only, not as a standalone distress trigger.
+    // This detects repeated backtracking, direction changes, and navigation without editing fields.
+    // The result is used as a supporting signal only, not as a standalone distress trigger.
     fun onStepChanged(
         fromStep: Int,
         toStep: Int
@@ -615,12 +648,15 @@ object FormBehaviorTrackingController {
 
         lastStepChangeTimeMs = now
         lastStepDirection = direction
+
+        // Publish the updated navigation behavior immediately.
+        updateOverallFormBehaviorResult()
     }
 
 
     // Calculates a rule-based navigation score from 0 to 100.
-// The score is based on repeated backtracking, direction changes, and navigation without progress.
-// This score should be treated as a supporting signal, not as a standalone distress decision.
+    // The score is based on repeated backtracking, direction changes, and navigation without progress.
+    // This score should be treated as a supporting signal, not as a standalone distress decision.
     private fun calculateStepNavigationScore(
         backStepCount: Int,
         directionChangeCount: Int,
@@ -717,16 +753,24 @@ object FormBehaviorTrackingController {
         }
     }
 
-    // Updates the overall form behavior result by combining field behavior and step navigation behavior.
-// This result is not connected to DistressScoringManager yet.
-// For now, it is used only for testing and logging.
-    private fun updateOverallFormBehaviorResult() {
-        lastOverallFormBehaviorResult = FormBehaviorScoreAggregator.aggregate(
-            fieldComparisonResult = lastFieldComparisonResult,
-            stepNavigationResult = lastStepNavigationResult
-        )
 
-        // Convert form behavior score from 0–100 to global distress scale 0–4.
+    /*
+ * Publishes the current form-behavior snapshot.
+ *
+ * The snapshot combines:
+ * 1. the newest live comparison of the currently focused field;
+ * 2. the recent step-navigation result.
+ *
+ * Completed field comparisons are not queued, retained, or published.
+ */
+    private fun updateOverallFormBehaviorResult() {
+
+        lastOverallFormBehaviorResult =
+            FormBehaviorScoreAggregator.aggregate(
+                fieldComparisonResult = currentFieldComparisonResult,
+                stepNavigationResult = lastStepNavigationResult
+            )
+
         val formScore0To4 = when {
             lastOverallFormBehaviorResult.score >= 75 -> 4
             lastOverallFormBehaviorResult.score >= 60 -> 3
@@ -735,7 +779,6 @@ object FormBehaviorTrackingController {
             else -> 0
         }
 
-        // Send form behavior score to the global distress scoring manager.
         DistressScoringManager.updateFormBehaviorScore(formScore0To4)
 
         Log.d(
@@ -744,16 +787,63 @@ object FormBehaviorTrackingController {
         Overall form behavior score = ${lastOverallFormBehaviorResult.score}
         Overall form behavior level = ${lastOverallFormBehaviorResult.level}
         Top contributor = ${lastOverallFormBehaviorResult.topContributor}
-        
-        Field behavior score = ${lastOverallFormBehaviorResult.fieldBehaviorScore}
+
+        Current focused field = $currentFocusedFieldId
+        Has live field result = ${currentFieldComparisonResult != null}
+
+        Live field behavior score = ${lastOverallFormBehaviorResult.fieldBehaviorScore}
         Step navigation score = ${lastOverallFormBehaviorResult.stepNavigationScore}
-        
-        Field top contributor = ${lastOverallFormBehaviorResult.fieldTopContributor}
-        Step top contributor = ${lastOverallFormBehaviorResult.stepTopContributor}
-        
+
         Converted form score 0-4 = $formScore0To4
         Should suggest help = ${lastOverallFormBehaviorResult.shouldSuggestHelp}
         """.trimIndent()
         )
     }
+
+
+    private fun evaluateActiveField(fieldId: String) {
+        // Only the currently focused field may publish a live comparison.
+        if (currentFocusedFieldId != fieldId) {
+            return
+        }
+
+        val baseline = currentBaseline ?: return
+        val session = activeSessions[fieldId] ?: return
+
+        val sample = buildSample(
+            session = session,
+            focusEndTimeMs = SystemClock.elapsedRealtime()
+        )
+
+        // Avoid evaluating an extremely short interaction.
+        if (sample.dwellTimeMs < 500L) {
+            return
+        }
+
+        val comparisonResult = FormBehaviorBaselineComparator.compare(
+            sample = sample,
+            baseline = baseline
+        )
+
+        /*
+         * Replace the previous live result.
+         *
+         * There is no queue: only the latest comparison of the active field
+         * is retained.
+         */
+        currentFieldComparisonResult = comparisonResult
+
+        Log.d(
+            "FORM_LIVE_COMPARISON",
+            """
+        Field = ${comparisonResult.fieldId}
+        Live score = ${comparisonResult.score}
+        Live level = ${comparisonResult.level}
+        Top contributor = ${comparisonResult.topContributor}
+        """.trimIndent()
+        )
+
+        updateOverallFormBehaviorResult()
+    }
+
 }

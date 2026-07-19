@@ -81,8 +81,16 @@ fun FloatingChatOverlay(
 
     onBotAction: (BotAction) -> Unit = {},
 
-    // Reports that an action button was selected.
-    onSuggestionAccepted: () -> Unit = {},
+    // Reports the exact suggestion whose action button was selected.
+    onSuggestionAccepted: (BotSuggestion) -> Unit,
+
+    // Reports that an action suggestion was actually displayed.
+    // The manager stores its ID so the same action is not offered again.
+    onSuggestionDisplayed: (BotSuggestion) -> Unit = {},
+
+    // Reports that no valid unused alternative action was available.
+    // The manager can continue with a calming message instead of getting stuck.
+    onAlternativeSuggestionUnavailable: () -> Unit = {},
 
     // Reports that the success message shown after an accepted action
 // has been closed or completed.
@@ -162,6 +170,7 @@ fun FloatingChatOverlay(
 
                 if (suggestion != null) {
                     suggestionQueue.add(suggestion)
+                    onSuggestionDisplayed(suggestion)
                 }
 
                 successMessage = null
@@ -177,6 +186,39 @@ fun FloatingChatOverlay(
             is DistressUiEvent.ShowExactSuggestion -> {
                 suggestionQueue.clear()
                 suggestionQueue.add(event.suggestion)
+                onSuggestionDisplayed(event.suggestion)
+
+                successMessage = null
+                settingsDestination = null
+                previousAppState = null
+                lastExecutedAction = null
+                isChatOpen = false
+            }
+
+            /**
+             * Ask BotSuggestionBuilder for a different, unused action.
+             *
+             * excludedSuggestionIds contains every action already displayed,
+             * accepted, dismissed, or reserved as the original default.
+             */
+            is DistressUiEvent.ShowAlternativeSuggestion -> {
+                val alternativeSuggestion =
+                    BotSuggestionBuilder.buildAlternativeSuggestion(
+                        severityLevel = event.level,
+                        distressMode = distressMode,
+                        appState = appState,
+                        excludedSuggestionIds = event.excludedSuggestionIds
+                    )
+
+                suggestionQueue.clear()
+
+                if (alternativeSuggestion != null) {
+                    suggestionQueue.add(alternativeSuggestion)
+                    onSuggestionDisplayed(alternativeSuggestion)
+                } else {
+                    // Continue the manager flow with a calming message.
+                    onAlternativeSuggestionUnavailable()
+                }
 
                 successMessage = null
                 settingsDestination = null
@@ -274,7 +316,7 @@ fun FloatingChatOverlay(
 
             /**
              * The success message finished automatically.
-             * The manager may now begin the five-second cooldown
+             * The manager may now begin the accepted-flow delay
              * before showing a calming message.
              */
             onAcceptedActionMessageClosed()
@@ -419,6 +461,7 @@ fun FloatingChatOverlay(
 
             onDismissRequest = {
                 when {
+
                     /**
                      * Closing a calming message by tapping outside should
                      * behave exactly like pressing its "סגור" button.
@@ -429,11 +472,13 @@ fun FloatingChatOverlay(
                         }
 
                         isChatOpen = false
+
                         onCalmingMessageClosed()
                     }
 
                     /**
-                     * A success card may be dismissed after an action.
+                     * Closing a success card by tapping outside should
+                     * behave exactly like closing the success card manually.
                      */
                     successMessage != null -> {
                         if (suggestionQueue.isNotEmpty()) {
@@ -446,18 +491,45 @@ fun FloatingChatOverlay(
                         lastExecutedAction = null
                         isChatOpen = false
 
-
                         /**
-                         * Tapping outside the success card also counts as closing it.
+                         * Start the accepted-action cooldown only after
+                         * the success card has finished.
                          */
                         onAcceptedActionMessageClosed()
                     }
 
                     /**
-                     * For a normal action suggestion, only close the popup.
-                     * Keep the suggestion available on the chatbot icon.
+                     * Tapping outside a normal action suggestion should behave
+                     * exactly like pressing the "לא עכשיו" button.
+                     *
+                     * The manager will:
+                     * 1. Start the dismissed-support flow.
+                     * 2. Show a calming message.
+                     * 3. Later repeat this exact suggestion.
                      */
                     else -> {
+
+                        // Save the exact suggestion before removing it locally.
+                        val dismissedSuggestion = currentSuggestion
+
+                        // Use the same manager callback as the "לא עכשיו" button.
+                        if (dismissedSuggestion != null) {
+                            onSuggestionDismissed(dismissedSuggestion)
+                        }
+
+                        // Remove the local suggestion.
+                        // This makes the colored alert disappear too.
+                        if (suggestionQueue.isNotEmpty()) {
+                            suggestionQueue.removeAt(0)
+                        }
+
+                        // Clear temporary UI state.
+                        successMessage = null
+                        settingsDestination = null
+                        previousAppState = null
+                        lastExecutedAction = null
+
+                        // Close the suggestion popup.
                         isChatOpen = false
                     }
                 }
@@ -780,9 +852,9 @@ fun FloatingChatOverlay(
                                             previousAppState = null
                                             lastExecutedAction = null
                                         }
-                                        // Report that the action was accepted.
-                                        // The confirmation manager will start the 5-second cooldown.
-                                        onSuggestionAccepted()
+                                        // Report the exact suggestion that was accepted.
+                                        // Its ID is stored so this action will not be offered again.
+                                        onSuggestionAccepted(currentSuggestion)
 
                                         // Perform the selected action.
                                         onBotAction(option.action)
@@ -841,7 +913,7 @@ fun FloatingChatOverlay(
                                              * to DistressConfirmationManager.
                                              *
                                              * The manager will:
-                                             * 1. Wait 5 seconds.
+                                             * 1. Wait before the next support item.
                                              * 2. Show a calming message.
                                              * 3. Later repeat this exact suggestion.
                                              */

@@ -60,7 +60,14 @@ fun HousingAssistanceFormScreen(
     onBotAction: (BotAction) -> Unit,
 
 // Reports that the user accepted one of the suggested actions.
-    onSuggestionAccepted: () -> Unit = {},
+    onSuggestionAccepted: (BotSuggestion) -> Unit,
+
+    // Reports that an action suggestion was successfully built
+// and displayed to the user.
+    onSuggestionDisplayed: (BotSuggestion) -> Unit = {},
+
+// Reports that no unused alternative suggestion remains.
+    onAlternativeSuggestionUnavailable: () -> Unit = {},
 
     // Reports that the accepted-action success message has finished.
     onAcceptedActionMessageClosed: () -> Unit = {},
@@ -348,52 +355,66 @@ fun HousingAssistanceFormScreen(
         // Reusable chatbot UI shown beside each section headline.
         val sectionChatbot: @Composable () -> Unit = {
             FloatingChatOverlay(
-                modifier = Modifier.wrapContentSize(),
-
-                // Current confirmed distress information.
                 distressSnapshot = distressSnapshot,
-
-                // Current analysis mode.
                 distressMode = distressMode,
 
-                // Current app settings.
+                // The parameter of this screen is named botAppState.
                 appState = botAppState,
 
-                // The event created by DistressConfirmationManager.
                 distressUiEvent = distressUiEvent,
 
-                // Executes the selected chatbot action.
-                onBotAction = onBotAction,
+                // Forward the action to the parent.
+                onBotAction = { action ->
+                    onBotAction(action)
+                },
 
-                // Notifies the manager that the user accepted an action.
-                onSuggestionAccepted = onSuggestionAccepted,
+                /**
+                 * FloatingChatOverlay sends the exact accepted suggestion.
+                 * Forward it to AppNavigation, where the manager exists.
+                 */
+                onSuggestionAccepted = { suggestion ->
+                    onSuggestionAccepted(suggestion)
+                },
 
-                onAcceptedActionMessageClosed =
-                    onAcceptedActionMessageClosed,
+                /**
+                 * These two callbacks will also need to be parameters
+                 * of HousingAssistanceFormScreen.
+                 */
+                onSuggestionDisplayed = { suggestion ->
+                    onSuggestionDisplayed(suggestion)
+                },
 
-                // Notifies the manager that the user pressed "לא עכשיו".
-                onSuggestionDismissed = onSuggestionDismissed,
+                onAlternativeSuggestionUnavailable = {
+                    onAlternativeSuggestionUnavailable()
+                },
 
-                // Notifies the manager that a calming message was closed.
-                onCalmingMessageClosed = onCalmingMessageClosed,
+                onAcceptedActionMessageClosed = {
+                    onAcceptedActionMessageClosed()
+                },
 
-                // Navigate to the existing contrast/color settings screen.
+                onSuggestionDismissed = { suggestion ->
+                    onSuggestionDismissed(suggestion)
+                },
+
+                onCalmingMessageClosed = {
+                    onCalmingMessageClosed()
+                },
+
                 onNavigateToColorSettings = {
-                    navController.navigate("contrastSettings")
+                    // Add your navigation route here later.
                 },
 
-                // Navigate to the existing font-size settings screen.
                 onNavigateToFontSettings = {
-                    navController.navigate("fontSizeSettings")
+                    // Add your navigation route here later.
                 },
 
-                // Navigate to the existing background-sound settings screen.
                 onNavigateToMusicSettings = {
-                    navController.navigate("backgroundSounds")
+                    // Add your navigation route here later.
                 },
 
-                // Forward the undo request to AppNavigation.
-                onUndoAction = onUndoBotAction
+                onUndoAction = { action, previousState ->
+                    onUndoBotAction(action, previousState)
+                }
             )
         }
 

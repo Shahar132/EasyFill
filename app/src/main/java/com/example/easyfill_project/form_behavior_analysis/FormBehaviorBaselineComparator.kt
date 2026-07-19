@@ -61,6 +61,29 @@ object FormBehaviorBaselineComparator {
             std = baseline.stdLongPauses
         )
 
+        // Time-based signals may represent normal thinking.
+        val hasTimeSignal =
+            dwellTimeZ >= 2.0 ||
+                    thinkingTimeZ >= 2.0 ||
+                    idleTimeZ >= 2.0 ||
+                    reviewTimeZ >= 2.0
+
+        // Active difficulty requires meaningful behavior,
+        // not only one isolated deletion or pause.
+        val hasActiveDifficultySignal =
+            typingSpeedZ >= 2.0 ||
+                    (
+                            deleteRatioZ >= 2.0 &&
+                                    sample.deletedChars >= 2
+                            ) ||
+                    (
+                            longPausesZ >= 2.0 &&
+                                    sample.longPauses >= 2
+                            ) ||
+                    sample.refocusCount >= 2
+
+
+
         // Main metrics that can create a distress/load score.
         val metricScores = listOf(
             MetricScore(
@@ -90,15 +113,25 @@ object FormBehaviorBaselineComparator {
 
         // Supporting metrics are added only if there is already a clear primary signal.
         val supportingScore = if (primaryScore >= 25) {
-            zToPoints(reviewTimeZ, maxPoints = 5) +
-                    zToPoints(deleteRatioZ, maxPoints = 5) +
+            zToPoints(deleteRatioZ, maxPoints = 5) +
                     idleEventsToPoints(sample.idleEvents)
         } else {
             0
         }
 
         // Final score, limited between 0 and 100.
-        val totalScore = (primaryScore + supportingScore).coerceIn(0, 100)
+        val rawTotalScore =
+            (primaryScore + supportingScore).coerceIn(0, 100)
+
+        // Long thinking or waiting alone cannot trigger a help suggestion.
+        val totalScore = if (
+            hasTimeSignal &&
+            !hasActiveDifficultySignal
+        ) {
+            rawTotalScore.coerceAtMost(15)
+        } else {
+            rawTotalScore
+        }
 
         // Convert numeric score to load level.
         val level = when {

@@ -1,5 +1,6 @@
 package com.example.easyfill_project.distress_scoring
 
+import android.os.SystemClock
 import android.util.Log
 import com.example.easyfill_project.chatbot.logic.BotSuggestion
 import com.example.easyfill_project.chatbot.logic.CalmingMessageCatalog
@@ -11,96 +12,109 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Controls the long-term distress-confirmation and chatbot-support flow.
+ * Confirms distress levels and controls the timing of chatbot support items.
  *
- * Responsibilities:
+ * Main behavior:
  *
- * 1. Require the same level in two consecutive measurement windows.
- * 2. Show the default action when a new level is confirmed.
- * 3. Confirm increases before alerting.
- * 4. Stay silent when the confirmed level decreases.
- * 5. Reset when level 0 is detected.
- * 6. Wait after Accepted or "לא עכשיו".
- * 7. Show rotating calming messages.
- * 8. Repeat a dismissed action later.
+ * 1. A non-zero level must appear in two consecutive windows before confirmation.
+ * 2. Level 0 resets the entire short-term support cycle immediately.
+ * 3. A confirmed increase cancels the old cycle and shows the stronger default suggestion.
+ * 4. A confirmed decrease cancels the old cycle, clears the UI, and remains silent.
+ * 5. Dismissing a default suggestion:
+ *    - waits 15 seconds;
+ *    - shows a calming message;
+ *    - keeps at least 10 seconds between later items;
+ *    - never repeats the original suggestion before 40 seconds;
+ *    - may show unused alternative actions before 40 seconds.
+ * 6. Accepting any action:
+ *    - stores the accepted action so it cannot be suggested again;
+ *    - ends the old 40-second repeat cycle;
+ *    - waits for the success card to close;
+ *    - waits 10 seconds and shows a calming message;
+ *    - after that message closes, waits 15 seconds and shows another unused action.
  *
- * This class does not perform BotAction.
- * It only decides what the chatbot should display next.
+ * This class does not execute BotAction. It only emits DistressUiEvent values.
  */
 class DistressConfirmationManager(
 
-    // Use a Compose-owned or ViewModel-owned coroutine scope.
     private val scope: CoroutineScope,
 
-    // Number of matching measurement windows required for confirmation.
     private val requiredMatchingWindows: Int = 2,
 
-    // Delay after a user response or calming message.
-    private val cooldownMillis: Long = 5_000L
+    // Delay from "לא עכשיו" until the first calming message.
+    private val firstCalmingDelayMillis: Long = 15_000L,
+
+    // Minimum delay between later items in the dismissed flow.
+    private val dismissedFlowGapMillis: Long = 10_000L,
+
+    // Earliest time at which the exact dismissed default may return.
+    private val exactSuggestionRepeatDelayMillis: Long = 40_000L,
+
+    // Delay after an accepted-action success card closes.
+    private val acceptedCalmingDelayMillis: Long = 10_000L,
+
+    // Delay after the accepted-flow calming message closes.
+    private val acceptedAlternativeDelayMillis: Long = 15_000L
 ) {
 
-    /**
-     * Determines what should happen after a calming message.
-     */
     private enum class FollowUpMode {
-
-        // The previous action was accepted.
-        // Continue showing calming messages only.
         AFTER_ACCEPT,
-
-        // The previous action was dismissed.
-        // Show a calming message and later repeat the same action.
         AFTER_DISMISS
     }
 
-    // First unconfirmed level currently being observed.
+    // Candidate level waiting for a second matching measurement window.
     private var candidateLevel: Int? = null
-
-    // Number of consecutive windows containing candidateLevel.
     private var candidateWindowCount: Int = 0
 
-    // Stable level confirmed after enough matching windows.
     private val _confirmedLevel = MutableStateFlow(0)
     val confirmedLevel: StateFlow<Int> = _confirmedLevel
 
-    // Current event that should be displayed by the chatbot.
-    private val _uiEvent =
-        MutableStateFlow<DistressUiEvent?>(null)
+    private val _uiEvent = MutableStateFlow<DistressUiEvent?>(null)
+    val uiEvent: StateFlow<DistressUiEvent?> = _uiEvent
 
-    val uiEvent: StateFlow<DistressUiEvent?> =
-        _uiEvent
-
-    // Used to give every UI event a unique ID.
     private var nextEventId: Long = 0L
-
-    // Current delayed follow-up operation.
     private var cooldownJob: Job? = null
-
-    // Determines what should follow the next calming message.
     private var followUpMode: FollowUpMode? = null
 
-    // Exact suggestion dismissed with "לא עכשיו".
+    // Exact default suggestion dismissed by the user.
     private var dismissedSuggestion: BotSuggestion? = null
 
-    /**
-     * Stores the next calming-message index separately for every level.
-     *
-     * Example:
-     * level 1 may currently be on message 2,
-     * while level 2 may currently be on message 0.
-     */
-    private val nextCalmingIndexByLevel =
-        mutableMapOf<Int, Int>()
+    // Monotonic timestamp used for the 40-second rule.
+    private var suggestionDismissedAtMillis: Long? = null
+
+    // In the dismissed flow, alternate between an action and a calming message.
+    private var showAlternativeNextInDismissedFlow: Boolean = true
+
+    // In the accepted flow, the first item is calming and the next is an action.
+    private var showAlternativeNextInAcceptedFlow: Boolean = false
 
     /**
-     * Receives one completed measurement window.
+     * History for the current confirmed distress event.
+     *
+     * displayedSuggestionIds:
+     * every action card that was actually displayed.
+     *
+     * acceptedSuggestionIds:
+     * every action card accepted by the user.
+     *
+     * dismissedAlternativeSuggestionIds:
+     * alternative cards dismissed by the user.
+     *
+     * All of these IDs are excluded when choosing a future alternative action.
      */
+    private val displayedSuggestionIds = mutableSetOf<String>()
+    private val acceptedSuggestionIds = mutableSetOf<String>()
+    private val dismissedAlternativeSuggestionIds = mutableSetOf<String>()
+
+    // Rotating calming-message position for every distress level.
+    private val nextCalmingIndexByLevel = mutableMapOf<Int, Int>()
+
     fun processWindow(window: DistressWindowResult) {
         processLevel(window.level)
     }
 
     /**
-     * Receives the final level from one measurement window.
+     * Receives one completed measurement-window level.
      */
     fun processLevel(rawLevel: Int) {
         val level = rawLevel.coerceIn(0, 4)
@@ -116,53 +130,25 @@ class DistressConfirmationManager(
             """.trimIndent()
         )
 
-        /**
-         * According to the selected behavior,
-         * one level-0 window immediately resets the short-term process.
-         */
+        // One level-0 window resets the short-term flow immediately.
         if (level == 0) {
             resetShortTermState()
             return
         }
 
-        /**
-         * If the new level equals the already confirmed level,
-         * no additional confirmation is required.
-         *
-         * Cooldown behavior continues independently.
-         */
+        // The confirmed level is unchanged, so no new confirmation is required.
         if (level == _confirmedLevel.value) {
             clearCandidate()
-
-            Log.d(
-                "DISTRESS_CONFIRM",
-                "Confirmed level remains unchanged: $level"
-            )
-
             return
         }
 
-        /**
-         * The new level is different from the confirmed level.
-         * It may represent:
-         *
-         * - Initial distress
-         * - An increase
-         * - A decrease
-         *
-         * In all cases, require two matching windows.
-         */
+        // A different level must appear in consecutive windows.
         if (candidateLevel == level) {
             candidateWindowCount += 1
         } else {
             candidateLevel = level
             candidateWindowCount = 1
         }
-
-        Log.d(
-            "DISTRESS_CONFIRM",
-            "Candidate level=$candidateLevel, count=$candidateWindowCount"
-        )
 
         if (candidateWindowCount < requiredMatchingWindows) {
             return
@@ -172,7 +158,7 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Called after the required number of matching windows.
+     * Applies a newly confirmed level.
      */
     private fun confirmCandidateLevel(newLevel: Int) {
         val previousLevel = _confirmedLevel.value
@@ -180,59 +166,36 @@ class DistressConfirmationManager(
         _confirmedLevel.value = newLevel
         clearCandidate()
 
-        Log.d(
-            "DISTRESS_CONFIRM",
-            "Confirmed level changed: $previousLevel -> $newLevel"
-        )
-
         when {
-
-            /**
-             * Initial confirmation:
-             * 0 -> positive level.
-             */
-            previousLevel == 0 -> {
+            // Initial positive level or confirmed increase:
+            // begin a new cycle and immediately request the default suggestion.
+            previousLevel == 0 || newLevel > previousLevel -> {
                 beginNewAlertLevel(newLevel)
             }
 
-            /**
-             * Confirmed increase:
-             * show the default action for the stronger level.
-             */
-            newLevel > previousLevel -> {
-                beginNewAlertLevel(newLevel)
-            }
-
-            /**
-             * Confirmed decrease:
-             * update the internal level but do not alert.
-             *
-             * Cancel messages belonging to the stronger previous level.
-             */
+            // Confirmed decrease:
+            // cancel the stronger-level flow, clear the UI, and remain silent.
             newLevel < previousLevel -> {
                 cancelCooldown()
-
-                followUpMode = null
-                dismissedSuggestion = null
-
+                clearFlowState()
+                clearSuggestionHistory()
                 emitResetEvent()
 
                 Log.d(
                     "DISTRESS_CONFIRM",
-                    "Level decreased. Internal state updated without alert."
+                    "Confirmed level decreased: $previousLevel -> $newLevel. UI cleared."
                 )
             }
         }
     }
 
     /**
-     * Starts a new support cycle for a newly confirmed level.
+     * Starts a fresh cycle for a newly confirmed or stronger level.
      */
     private fun beginNewAlertLevel(level: Int) {
         cancelCooldown()
-
-        followUpMode = null
-        dismissedSuggestion = null
+        clearFlowState()
+        clearSuggestionHistory()
 
         emitEvent(
             DistressUiEvent.ShowDefaultSuggestion(
@@ -248,49 +211,57 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Called when the user selects one of the action buttons.
-     *
-     * After acceptance:
-     *
-     * - Do not repeat the same action during the same distress event.
-     * - Wait 5 seconds.
-     * - If the same level remains confirmed, show a calming message.
-     * - After the message is closed, another calming message may be scheduled.
+     * Called by FloatingChatOverlay only after an action suggestion
+     * was successfully built and placed in the visible queue.
      */
-    fun onActionAccepted() {
+    fun onSuggestionDisplayed(suggestion: BotSuggestion) {
+        // Calming messages have no options and are not action-history items.
+        if (suggestion.options.isEmpty()) {
+            return
+        }
+
+        displayedSuggestionIds.add(suggestion.id)
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Suggestion displayed: ${suggestion.id}"
+        )
+    }
+
+    /**
+     * Called when the user accepts one of the displayed action suggestions.
+     *
+     * The exact suggestion is required so its stable ID can be stored.
+     */
+    fun onActionAccepted(suggestion: BotSuggestion) {
         if (_confirmedLevel.value <= 0) {
             return
         }
 
         followUpMode = FollowUpMode.AFTER_ACCEPT
+
+        displayedSuggestionIds.add(suggestion.id)
+        acceptedSuggestionIds.add(suggestion.id)
+
+        // Accepting support ends any earlier default-repeat cycle.
         dismissedSuggestion = null
+        suggestionDismissedAtMillis = null
 
-        // Remove the accepted action suggestion from the manager.
+        // The success card appears first. After it closes, show calming first.
+        showAlternativeNextInAcceptedFlow = false
+
         clearCurrentUiEvent()
-
-        /**
-         * Do not schedule a calming message yet.
-         *
-         * The chatbot first displays the success message related
-         * to the selected action.
-         *
-         * The calming-message cooldown starts only after that
-         * success message is closed or finishes automatically.
-         */
         cancelCooldown()
 
         Log.d(
             "DISTRESS_CONFIRM",
-            "Action accepted. Waiting for the success message to finish."
+            "Suggestion accepted and excluded from future alternatives: ${suggestion.id}"
         )
     }
 
     /**
-     * Called after the success message belonging to an accepted
-     * action has been closed or has finished automatically.
-     *
-     * From this moment, wait five seconds and then show a
-     * calming message if the same confirmed distress level remains.
+     * Called after the success card for an accepted action closes,
+     * finishes automatically, or navigates to a settings screen.
      */
     fun onAcceptedActionMessageClosed() {
         if (
@@ -300,57 +271,115 @@ class DistressConfirmationManager(
             return
         }
 
-        scheduleCalmingMessage()
-
-        Log.d(
-            "DISTRESS_CONFIRM",
-            "Accepted-action success message closed. Calming message scheduled."
-        )
+        scheduleAcceptedCalmingMessage()
     }
 
     /**
-     * Called when the user presses "לא עכשיו".
-     *
-     * We store the exact suggestion because it should return later.
+     * Called for both the "לא עכשיו" button and tapping outside an action card.
      */
-    fun onSuggestionDismissed(
-        suggestion: BotSuggestion
-    ) {
+    fun onSuggestionDismissed(suggestion: BotSuggestion) {
         if (_confirmedLevel.value <= 0) {
             return
         }
 
+        /**
+         * Alternative dismissal:
+         *
+         * - store the ID so the action is not offered again;
+         * - do not restart the original 40-second timer;
+         * - continue according to the current flow.
+         */
+        if (suggestion.id.startsWith("alternative_")) {
+            displayedSuggestionIds.add(suggestion.id)
+            dismissedAlternativeSuggestionIds.add(suggestion.id)
+
+            clearCurrentUiEvent()
+            cancelCooldown()
+
+            when (followUpMode) {
+                FollowUpMode.AFTER_DISMISS -> {
+                    // Next dismissed-flow item should be calming.
+                    showAlternativeNextInDismissedFlow = false
+                    scheduleNextDismissedFlowItem()
+                }
+
+                FollowUpMode.AFTER_ACCEPT -> {
+                    // After dismissing an accepted-flow alternative,
+                    // return to a calming message.
+                    showAlternativeNextInAcceptedFlow = false
+                    scheduleAcceptedCalmingMessage()
+                }
+
+                null -> Unit
+            }
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Alternative dismissed and excluded: ${suggestion.id}"
+            )
+
+            return
+        }
+
+        /**
+         * Default/exact suggestion dismissal:
+         *
+         * Store the exact object because it may return only after 40 seconds.
+         */
         followUpMode = FollowUpMode.AFTER_DISMISS
         dismissedSuggestion = suggestion
+        suggestionDismissedAtMillis = SystemClock.elapsedRealtime()
+        showAlternativeNextInDismissedFlow = true
 
         clearCurrentUiEvent()
-        scheduleCalmingMessage()
+        cancelCooldown()
+        scheduleFirstCalmingMessageAfterDismiss()
 
         Log.d(
             "DISTRESS_CONFIRM",
-            "Suggestion dismissed: ${suggestion.id}"
+            "Default suggestion dismissed: ${suggestion.id}"
         )
     }
 
     /**
-     * Called after the user closes a calming message.
-     *
-     * Accepted path:
-     * wait and show another calming message.
-     *
-     * Dismissed path:
-     * wait and repeat the exact dismissed suggestion.
+     * Waits 15 seconds after "לא עכשיו", then emits the first calming message.
+     */
+    private fun scheduleFirstCalmingMessageAfterDismiss() {
+        cancelCooldown()
+
+        val expectedLevel = _confirmedLevel.value
+        if (expectedLevel <= 0) return
+
+        cooldownJob = scope.launch {
+            delay(firstCalmingDelayMillis)
+
+            if (_confirmedLevel.value != expectedLevel) return@launch
+            if (followUpMode != FollowUpMode.AFTER_DISMISS) return@launch
+
+            emitCalmingMessage(expectedLevel)
+
+            // After this calming message closes, prefer an alternative action.
+            showAlternativeNextInDismissedFlow = true
+        }
+    }
+
+    /**
+     * Called when the user closes a calming-message card.
      */
     fun onCalmingMessageClosed() {
         clearCurrentUiEvent()
 
         when (followUpMode) {
             FollowUpMode.AFTER_ACCEPT -> {
-                scheduleCalmingMessage()
+                if (showAlternativeNextInAcceptedFlow) {
+                    scheduleAcceptedAlternativeSuggestion()
+                } else {
+                    scheduleAcceptedCalmingMessage()
+                }
             }
 
             FollowUpMode.AFTER_DISMISS -> {
-                scheduleDismissedSuggestion()
+                scheduleNextDismissedFlowItem()
             }
 
             null -> Unit
@@ -358,111 +387,183 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Waits before showing a calming message.
-     */
-    private fun scheduleCalmingMessage() {
-        cancelCooldown()
-
-        val expectedLevel = _confirmedLevel.value
-
-        if (expectedLevel <= 0) {
-            return
-        }
-
-        cooldownJob = scope.launch {
-            delay(cooldownMillis)
-
-            /**
-             * Only show the message if the same confirmed level
-             * still exists after the cooldown.
-             */
-            if (_confirmedLevel.value != expectedLevel) {
-                return@launch
-            }
-
-            val message =
-                getNextCalmingMessage(expectedLevel)
-
-            if (message.isBlank()) {
-                return@launch
-            }
-
-            emitEvent(
-                DistressUiEvent.ShowCalmingMessage(
-                    eventId = newEventId(),
-                    level = expectedLevel,
-                    message = message
-                )
-            )
-
-            Log.d(
-                "DISTRESS_CONFIRM",
-                "Calming message emitted for level $expectedLevel"
-            )
-        }
-    }
-
-    /**
-     * Waits and then repeats the exact previously dismissed suggestion.
-     */
-    private fun scheduleDismissedSuggestion() {
-        cancelCooldown()
-
-        val expectedLevel = _confirmedLevel.value
-        val suggestionToRepeat = dismissedSuggestion
-
-        if (
-            expectedLevel <= 0 ||
-            suggestionToRepeat == null
-        ) {
-            return
-        }
-
-        cooldownJob = scope.launch {
-            delay(cooldownMillis)
-
-            if (_confirmedLevel.value != expectedLevel) {
-                return@launch
-            }
-
-            emitEvent(
-                DistressUiEvent.ShowExactSuggestion(
-                    eventId = newEventId(),
-                    suggestion = suggestionToRepeat
-                )
-            )
-
-            Log.d(
-                "DISTRESS_CONFIRM",
-                "Repeating dismissed suggestion: ${suggestionToRepeat.id}"
-            )
-        }
-    }
-
-    /**
-     * Returns the next calming message using rotation.
+     * Accepted flow:
      *
-     * This guarantees that the same message is not shown
-     * twice consecutively while other messages are available.
+     * success card closes
+     * -> wait 10 seconds
+     * -> calming message
      */
-    private fun getNextCalmingMessage(
-        level: Int
-    ): String {
-        val messages =
-            CalmingMessageCatalog.getMessagesForLevel(level)
+    private fun scheduleAcceptedCalmingMessage() {
+        cancelCooldown()
 
-        if (messages.isEmpty()) {
-            return ""
+        val expectedLevel = _confirmedLevel.value
+        if (expectedLevel <= 0) return
+
+        cooldownJob = scope.launch {
+            delay(acceptedCalmingDelayMillis)
+
+            if (_confirmedLevel.value != expectedLevel) return@launch
+            if (followUpMode != FollowUpMode.AFTER_ACCEPT) return@launch
+
+            emitCalmingMessage(expectedLevel)
+
+            // After the calming card closes, wait 15 seconds for an alternative.
+            showAlternativeNextInAcceptedFlow = true
         }
+    }
 
-        val currentIndex =
-            nextCalmingIndexByLevel[level] ?: 0
+    /**
+     * Accepted flow:
+     *
+     * calming message closes
+     * -> wait 15 seconds
+     * -> request another unused action
+     */
+    private fun scheduleAcceptedAlternativeSuggestion() {
+        cancelCooldown()
 
-        val safeIndex =
-            currentIndex % messages.size
+        val expectedLevel = _confirmedLevel.value
+        if (expectedLevel <= 0) return
 
-        val selectedMessage =
-            messages[safeIndex]
+        cooldownJob = scope.launch {
+            delay(acceptedAlternativeDelayMillis)
+
+            if (_confirmedLevel.value != expectedLevel) return@launch
+            if (followUpMode != FollowUpMode.AFTER_ACCEPT) return@launch
+
+            emitAlternativeSuggestion(expectedLevel)
+
+            // Once that action is accepted/dismissed, return to calming.
+            showAlternativeNextInAcceptedFlow = false
+        }
+    }
+
+    /**
+     * Dismissed flow after the first calming message.
+     *
+     * Every call waits at least 10 seconds.
+     * Before 40 seconds, it alternates between unused actions and calming messages.
+     * At or after 40 seconds, the exact original suggestion may return.
+     */
+    private fun scheduleNextDismissedFlowItem() {
+        cancelCooldown()
+
+        val expectedLevel = _confirmedLevel.value
+        if (expectedLevel <= 0) return
+
+        cooldownJob = scope.launch {
+            delay(dismissedFlowGapMillis)
+
+            if (_confirmedLevel.value != expectedLevel) return@launch
+            if (followUpMode != FollowUpMode.AFTER_DISMISS) return@launch
+
+            val dismissedAt = suggestionDismissedAtMillis ?: return@launch
+            val elapsed = SystemClock.elapsedRealtime() - dismissedAt
+
+            if (elapsed >= exactSuggestionRepeatDelayMillis) {
+                emitDismissedSuggestionIfAvailable()
+                return@launch
+            }
+
+            if (showAlternativeNextInDismissedFlow) {
+                emitAlternativeSuggestion(expectedLevel)
+                showAlternativeNextInDismissedFlow = false
+            } else {
+                emitCalmingMessage(expectedLevel)
+                showAlternativeNextInDismissedFlow = true
+            }
+        }
+    }
+
+    /**
+     * Called by FloatingChatOverlay when the alternative builder returns null.
+     *
+     * This prevents the flow from becoming stuck when every action has already
+     * been displayed, accepted, dismissed, or is not suitable for appState.
+     */
+    fun onAlternativeSuggestionUnavailable() {
+        clearCurrentUiEvent()
+        cancelCooldown()
+
+        when (followUpMode) {
+            FollowUpMode.AFTER_ACCEPT -> {
+                showAlternativeNextInAcceptedFlow = false
+                scheduleAcceptedCalmingMessage()
+            }
+
+            FollowUpMode.AFTER_DISMISS -> {
+                showAlternativeNextInDismissedFlow = false
+                scheduleNextDismissedFlowItem()
+            }
+
+            null -> Unit
+        }
+    }
+
+    /**
+     * Emits an event asking the overlay/builder for an unused alternative.
+     */
+    private fun emitAlternativeSuggestion(level: Int) {
+        emitEvent(
+            DistressUiEvent.ShowAlternativeSuggestion(
+                eventId = newEventId(),
+                level = level,
+                excludedSuggestionIds = getExcludedAlternativeSuggestionIds()
+            )
+        )
+    }
+
+    /**
+     * Returns all IDs the alternative builder must avoid.
+     */
+    private fun getExcludedAlternativeSuggestionIds(): Set<String> {
+        return buildSet {
+            addAll(displayedSuggestionIds)
+            addAll(acceptedSuggestionIds)
+            addAll(dismissedAlternativeSuggestionIds)
+
+            // The original default is never used as an "alternative".
+            dismissedSuggestion?.id?.let(::add)
+        }
+    }
+
+    /**
+     * Emits the exact default suggestion saved at dismissal time.
+     */
+    private fun emitDismissedSuggestionIfAvailable() {
+        val suggestion = dismissedSuggestion ?: return
+
+        emitEvent(
+            DistressUiEvent.ShowExactSuggestion(
+                eventId = newEventId(),
+                suggestion = suggestion
+            )
+        )
+    }
+
+    /**
+     * Emits the next rotating calming message for the level.
+     */
+    private fun emitCalmingMessage(level: Int) {
+        val message = getNextCalmingMessage(level)
+        if (message.isBlank()) return
+
+        emitEvent(
+            DistressUiEvent.ShowCalmingMessage(
+                eventId = newEventId(),
+                level = level,
+                message = message
+            )
+        )
+    }
+
+    private fun getNextCalmingMessage(level: Int): String {
+        val messages = CalmingMessageCatalog.getMessagesForLevel(level)
+        if (messages.isEmpty()) return ""
+
+        val currentIndex = nextCalmingIndexByLevel[level] ?: 0
+        val safeIndex = currentIndex % messages.size
+        val selectedMessage = messages[safeIndex]
 
         nextCalmingIndexByLevel[level] =
             (safeIndex + 1) % messages.size
@@ -471,9 +572,7 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Immediately resets the short-term distress process.
-     *
-     * Long-term personalization history can be stored elsewhere later.
+     * Immediate short-term reset for level 0.
      */
     private fun resetShortTermState() {
         val hadActiveState =
@@ -485,18 +584,10 @@ class DistressConfirmationManager(
 
         candidateLevel = null
         candidateWindowCount = 0
-
         _confirmedLevel.value = 0
 
-        followUpMode = null
-        dismissedSuggestion = null
-
-        /**
-         * Reset calming-message rotation for a new distress event.
-         *
-         * Remove this line later if you prefer rotation to continue
-         * between separate distress events.
-         */
+        clearFlowState()
+        clearSuggestionHistory()
         nextCalmingIndexByLevel.clear()
 
         if (hadActiveState) {
@@ -507,6 +598,20 @@ class DistressConfirmationManager(
             "DISTRESS_CONFIRM",
             "Short-term distress state reset at level 0."
         )
+    }
+
+    private fun clearFlowState() {
+        followUpMode = null
+        dismissedSuggestion = null
+        suggestionDismissedAtMillis = null
+        showAlternativeNextInDismissedFlow = true
+        showAlternativeNextInAcceptedFlow = false
+    }
+
+    private fun clearSuggestionHistory() {
+        displayedSuggestionIds.clear()
+        acceptedSuggestionIds.clear()
+        dismissedAlternativeSuggestionIds.clear()
     }
 
     private fun clearCandidate() {

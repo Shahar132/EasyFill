@@ -3,20 +3,19 @@ package com.example.easyfill_project.distress_scoring
 import com.example.easyfill_project.chatbot.logic.BotSuggestion
 
 /**
- * Represents something the confirmation manager wants the chatbot UI to show.
+ * Events sent from DistressConfirmationManager
+ * to FloatingChatOverlay.
  *
- * eventId is unique for every event.
- * It allows Compose to react even if two events contain similar information.
+ * Every event has a unique eventId so Compose can process
+ * each event only once.
  */
 sealed class DistressUiEvent {
 
     abstract val eventId: Long
 
     /**
-     * Request the normal default action suggestion for a confirmed level.
-     *
-     * AppNavigation or FloatingChatOverlay will call BotSuggestionBuilder
-     * using this level and the current application state.
+     * Requests the normal default suggestion for a newly
+     * confirmed distress level.
      */
     data class ShowDefaultSuggestion(
         override val eventId: Long,
@@ -24,10 +23,8 @@ sealed class DistressUiEvent {
     ) : DistressUiEvent()
 
     /**
-     * Show the exact action suggestion again.
-     *
-     * This is used after the user previously pressed "לא עכשיו".
-     * We keep the exact object because level 3 currently selects random sounds.
+     * Re-displays the exact original suggestion that was
+     * previously dismissed.
      */
     data class ShowExactSuggestion(
         override val eventId: Long,
@@ -35,7 +32,19 @@ sealed class DistressUiEvent {
     ) : DistressUiEvent()
 
     /**
-     * Show a general supportive message without an app action.
+     * Requests a different alternative action.
+     *
+     * excludedSuggestionIds contains all suggestions or action
+     * categories that must not be shown again.
+     */
+    data class ShowAlternativeSuggestion(
+        override val eventId: Long,
+        val level: Int,
+        val excludedSuggestionIds: Set<String>
+    ) : DistressUiEvent()
+
+    /**
+     * Displays a calming message without action buttons.
      */
     data class ShowCalmingMessage(
         override val eventId: Long,
@@ -44,7 +53,7 @@ sealed class DistressUiEvent {
     ) : DistressUiEvent()
 
     /**
-     * Clear the current short-term chatbot alert.
+     * Clears the current chatbot alert and popup.
      */
     data class Reset(
         override val eventId: Long
