@@ -138,7 +138,18 @@ fun FloatingChatOverlay(
     var lastExecutedAction by remember {
         mutableStateOf<BotAction?>(null)
     }
-    val severityLevel = distressSnapshot.globalScore
+    val currentSuggestion =
+        suggestionQueue.firstOrNull()
+
+    /*
+     * Once a chatbot suggestion exists, its distress level becomes
+     * the UI severity until the user handles that suggestion.
+     *
+     * This prevents the alert color/text from disappearing when the
+     * live distress score drops.
+     */
+    val severityLevel =
+        currentSuggestion?.level ?: distressSnapshot.globalScore
 
     /**
      * Listen only to events created by DistressConfirmationManager.
@@ -159,10 +170,25 @@ fun FloatingChatOverlay(
              * Build the normal default action belonging to the confirmed level.
              */
             is DistressUiEvent.ShowDefaultSuggestion -> {
+
+                /*
+                 * Use the source saved when the alert was created.
+                 * Do not rely on the current live distressMode because the mode
+                 * may already have returned to FORM_FILLING after recording stops.
+                 */
+                val suggestionMode =
+                    when (event.source) {
+                        DistressUiEvent.DistressAlertSource.FORM_FILLING ->
+                            DistressMode.FORM_FILLING
+
+                        DistressUiEvent.DistressAlertSource.VOICE_RECORDING ->
+                            DistressMode.VOICE_RECORDING
+                    }
+
                 val suggestion =
                     BotSuggestionBuilder.buildSuggestion(
                         severityLevel = event.level,
-                        distressMode = distressMode,
+                        distressMode = suggestionMode,
                         appState = appState
                     )
 
@@ -253,21 +279,27 @@ fun FloatingChatOverlay(
             }
 
             is DistressUiEvent.Reset -> {
-                suggestionQueue.clear()
 
-                successMessage = null
-                settingsDestination = null
-                previousAppState = null
-                lastExecutedAction = null
-                isChatOpen = false
+                /*
+                 * Never clear a pending suggestion automatically.
+                 *
+                 * DistressConfirmationManager now emits Reset only when
+                 * there is no pending alert, but this keeps the UI safe.
+                 */
+                if (suggestionQueue.isEmpty()) {
+
+                    successMessage = null
+                    settingsDestination = null
+                    previousAppState = null
+                    lastExecutedAction = null
+                    isChatOpen = false
+                }
             }
 
             null -> Unit
         }
     }
 
-    val currentSuggestion =
-        suggestionQueue.firstOrNull()
 
     /**
      * Calming messages contain no action options.
@@ -359,9 +391,38 @@ fun FloatingChatOverlay(
                     MaterialTheme.colorScheme.primary
                 )
                 .clickable {
-                    // Open the window only when a suggestion already exists.
-                    if (currentSuggestion != null) {
-                        isChatOpen = !isChatOpen
+
+                    val suggestion = currentSuggestion
+
+                    if (suggestion != null) {
+
+                        if (!isChatOpen) {
+                            /*
+                             * The alert is visible.
+                             * Pressing the chatbot icon opens the suggestion popup.
+                             */
+                            isChatOpen = true
+
+                        } else {
+                            /*
+                             * The popup is already open.
+                             *
+                             * Pressing the chatbot icon again is treated exactly
+                             * like pressing "לא עכשיו".
+                             */
+                            onSuggestionDismissed(suggestion)
+
+                            if (suggestionQueue.isNotEmpty()) {
+                                suggestionQueue.removeAt(0)
+                            }
+
+                            successMessage = null
+                            settingsDestination = null
+                            previousAppState = null
+                            lastExecutedAction = null
+
+                            isChatOpen = false
+                        }
                     }
                 },
             contentAlignment = Alignment.Center
@@ -509,27 +570,35 @@ fun FloatingChatOverlay(
                      */
                     else -> {
 
-                        // Save the exact suggestion before removing it locally.
+                        /*
+                         * Tapping outside a normal action suggestion has the same
+                         * meaning as pressing "לא עכשיו".
+                         *
+                         * The suggestion is explicitly dismissed by the user, so:
+                         *
+                         * 1. Notify DistressConfirmationManager.
+                         * 2. Remove the suggestion from the local queue.
+                         * 3. Clear the temporary popup state.
+                         * 4. Close the popup.
+                         *
+                         * Because the suggestion is removed, the colored alert will
+                         * not appear again immediately after the popup closes.
+                         */
                         val dismissedSuggestion = currentSuggestion
 
-                        // Use the same manager callback as the "לא עכשיו" button.
                         if (dismissedSuggestion != null) {
                             onSuggestionDismissed(dismissedSuggestion)
                         }
 
-                        // Remove the local suggestion.
-                        // This makes the colored alert disappear too.
                         if (suggestionQueue.isNotEmpty()) {
                             suggestionQueue.removeAt(0)
                         }
 
-                        // Clear temporary UI state.
                         successMessage = null
                         settingsDestination = null
                         previousAppState = null
                         lastExecutedAction = null
 
-                        // Close the suggestion popup.
                         isChatOpen = false
                     }
                 }

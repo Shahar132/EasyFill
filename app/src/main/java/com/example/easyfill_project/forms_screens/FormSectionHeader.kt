@@ -1,24 +1,17 @@
 package com.example.easyfill_project.forms_screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-
 
 @Composable
 fun FormSectionHeader(
     title: String,
-    chatbotContent: @Composable () -> Unit
+    chatbotContent: @Composable () -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -30,15 +23,5 @@ fun FormSectionHeader(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
-
-        // The chatbot always occupies the same width.
-        Box(
-            modifier = Modifier
-                .width(118.dp) // // 48.dp icon + 70.dp padding
-                .padding(end = 70.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            chatbotContent()
-        }
     }
 }

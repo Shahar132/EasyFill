@@ -17,9 +17,9 @@ import kotlinx.coroutines.launch
  * Main behavior:
  *
  * 1. A non-zero level must appear in two consecutive windows before confirmation.
- * 2. Level 0 resets the entire short-term support cycle immediately.
- * 3. A confirmed increase cancels the old cycle and shows the stronger default suggestion.
- * 4. A confirmed decrease cancels the old cycle, clears the UI, and remains silent.
+ * 2. Level 0 resets the short-term cycle only when no suggestion is waiting for the user.
+ * 3. A confirmed increase shows the stronger default suggestion when no alert is already pending.
+ * 4. A confirmed decrease updates the measured level without closing a pending alert or popup.
  * 5. Dismissing a default suggestion:
  *    - waits 15 seconds;
  *    - shows a calming message;
@@ -88,6 +88,23 @@ class DistressConfirmationManager(
     // In the accepted flow, the first item is calming and the next is an action.
     private var showAlternativeNextInAcceptedFlow: Boolean = false
 
+    private var pendingSuggestionLevel: Int? = null
+
+    private var pendingSuggestionSource:
+            DistressUiEvent.DistressAlertSource? = null
+
+    private var pendingSuggestionHandled = true
+
+    private var dismissedRecordingSuggestion:
+            BotSuggestion? = null
+
+    private var recordingsSinceDismissal = 0
+
+    private val recordingsBeforeRepeat = 3
+
+    // Level connected to the most recently accepted action.
+    private var lastAcceptedSuggestionLevel: Int = 0
+
     /**
      * History for the current confirmed distress event.
      *
@@ -109,14 +126,127 @@ class DistressConfirmationManager(
     // Rotating calming-message position for every distress level.
     private val nextCalmingIndexByLevel = mutableMapOf<Int, Int>()
 
+    /**
+     * Receives one completed FORM_FILLING measurement window.
+     *
+     * Form-filling windows still require the same non-zero
+     * distress level to appear in consecutive windows before
+     * that level is confirmed.
+     */
     fun processWindow(window: DistressWindowResult) {
-        processLevel(window.level)
+
+        processLevel(
+            rawLevel = window.level,
+            source = DistressUiEvent.DistressAlertSource.FORM_FILLING
+        )
+    }
+
+    /**
+     * Receives one completed VOICE_RECORDING result.
+     *
+     * A voice-recording result already represents the entire
+     * recording:
+     *
+     * - all recording hand windows were averaged;
+     * - one final voice score was calculated;
+     * - both values were combined into one weighted result.
+     *
+     * Therefore, it must NOT go through the two-consecutive-window
+     * confirmation rule.
+     *
+     * It is treated immediately as a completed and confirmed result.
+     */
+    fun processVoiceRecording(
+        result: VoiceRecordingDistressResult
+    ) {
+        val level = result.level.coerceIn(0, 4)
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            """
+            Completed voice-recording result received:
+            level=$level
+            voiceScore=${result.voiceScore}
+            handAverage=${result.handAverage}
+            weightedScore=${result.weightedScore}
+            previousConfirmedLevel=${_confirmedLevel.value}
+            """.trimIndent()
+        )
+
+        /*
+         * A recording is already one complete aggregated result.
+         * It must never complete a partially observed FORM_FILLING candidate.
+         */
+        clearCandidate()
+
+        /*
+         * When the user previously selected "Not now" for a recording
+         * suggestion, count later reliable recordings. After three later
+         * recordings, the same exact suggestion may be shown again.
+         */
+        if (
+            dismissedRecordingSuggestion != null &&
+            pendingSuggestionHandled
+        ) {
+            recordingsSinceDismissal += 1
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Recordings since dismissal: " +
+                        "$recordingsSinceDismissal/$recordingsBeforeRepeat"
+            )
+
+            if (recordingsSinceDismissal >= recordingsBeforeRepeat) {
+                val suggestion = dismissedRecordingSuggestion
+
+                if (
+                    suggestion != null &&
+                    suggestion.id !in acceptedSuggestionIds
+                ) {
+                    pendingSuggestionLevel = suggestion.level
+                    pendingSuggestionSource =
+                        DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+                    pendingSuggestionHandled = false
+
+                    _confirmedLevel.value = suggestion.level.coerceIn(0, 4)
+
+                    emitEvent(
+                        DistressUiEvent.ShowExactSuggestion(
+                            eventId = newEventId(),
+                            suggestion = suggestion
+                        )
+                    )
+
+                    Log.d(
+                        "DISTRESS_CONFIRM",
+                        "Dismissed recording suggestion repeated after " +
+                                "$recordingsBeforeRepeat later recordings: ${suggestion.id}"
+                    )
+                }
+
+                recordingsSinceDismissal = 0
+                dismissedRecordingSuggestion = null
+                return
+            }
+        }
+
+        /*
+         * A complete recording bypasses the two-window confirmation rule.
+         */
+        processConfirmedLevel(
+            level = level,
+            source = DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        )
     }
 
     /**
      * Receives one completed measurement-window level.
      */
-    fun processLevel(rawLevel: Int) {
+    fun processLevel(
+        rawLevel: Int,
+        source: DistressUiEvent.DistressAlertSource =
+            DistressUiEvent.DistressAlertSource.FORM_FILLING
+    ) {
         val level = rawLevel.coerceIn(0, 4)
 
         Log.d(
@@ -127,22 +257,41 @@ class DistressConfirmationManager(
             candidateLevel=$candidateLevel
             candidateCount=$candidateWindowCount
             confirmedLevel=${_confirmedLevel.value}
+            pendingSuggestion=${hasPendingSuggestion()}
             """.trimIndent()
         )
 
-        // One level-0 window resets the short-term flow immediately.
+        /*
+         * A visible or unopened suggestion is already waiting.
+         * Sensor changes may continue, but they must not close, replace,
+         * or reset the current alert and popup.
+         */
+        if (hasPendingSuggestion()) {
+            clearCandidate()
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Measurement ignored for chatbot UI while suggestion is pending. " +
+                        "newLevel=$level, pendingLevel=$pendingSuggestionLevel"
+            )
+            return
+        }
+
+        /*
+         * Level 0 may reset only when no suggestion is waiting for a user decision.
+         */
         if (level == 0) {
+            clearCandidate()
             resetShortTermState()
             return
         }
 
-        // The confirmed level is unchanged, so no new confirmation is required.
         if (level == _confirmedLevel.value) {
             clearCandidate()
             return
         }
 
-        // A different level must appear in consecutive windows.
+        // A different FORM_FILLING level must appear in consecutive windows.
         if (candidateLevel == level) {
             candidateWindowCount += 1
         } else {
@@ -154,36 +303,98 @@ class DistressConfirmationManager(
             return
         }
 
-        confirmCandidateLevel(level)
+        confirmCandidateLevel(
+            newLevel = level,
+            source = source
+        )
     }
 
     /**
      * Applies a newly confirmed level.
      */
-    private fun confirmCandidateLevel(newLevel: Int) {
+    private fun confirmCandidateLevel(
+        newLevel: Int,
+        source: DistressUiEvent.DistressAlertSource
+    ) {
         val previousLevel = _confirmedLevel.value
 
         _confirmedLevel.value = newLevel
         clearCandidate()
 
         when {
-            // Initial positive level or confirmed increase:
-            // begin a new cycle and immediately request the default suggestion.
-            previousLevel == 0 || newLevel > previousLevel -> {
-                beginNewAlertLevel(newLevel)
+            previousLevel == 0 -> {
+                beginNewAlertLevel(
+                    level = newLevel,
+                    source = source
+                )
             }
 
-            // Confirmed decrease:
-            // cancel the stronger-level flow, clear the UI, and remain silent.
-            newLevel < previousLevel -> {
-                cancelCooldown()
-                clearFlowState()
-                clearSuggestionHistory()
-                emitResetEvent()
+            newLevel > previousLevel -> {
+                beginNewAlertLevel(
+                    level = newLevel,
+                    source = source
+                )
+            }
 
+            newLevel < previousLevel -> {
+                /*
+                 * Never emit Reset here. A decrease changes the measured
+                 * level but does not close an alert or popup.
+                 */
                 Log.d(
                     "DISTRESS_CONFIRM",
-                    "Confirmed level decreased: $previousLevel -> $newLevel. UI cleared."
+                    "Confirmed distress decreased: " +
+                            "$previousLevel -> $newLevel. Pending chatbot UI preserved."
+                )
+            }
+        }
+    }
+
+    /**
+     * Applies an already-complete result, such as one full voice recording.
+     */
+    private fun processConfirmedLevel(
+        level: Int,
+        source: DistressUiEvent.DistressAlertSource
+    ) {
+        if (hasPendingSuggestion()) {
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Completed result ignored for chatbot UI because a suggestion is pending."
+            )
+            return
+        }
+
+        if (level <= 0) {
+            resetShortTermState()
+            return
+        }
+
+        val previousLevel = _confirmedLevel.value
+        _confirmedLevel.value = level
+        clearCandidate()
+
+        when {
+            previousLevel == 0 -> {
+                beginNewAlertLevel(level, source)
+            }
+
+            level > previousLevel -> {
+                beginNewAlertLevel(level, source)
+            }
+
+            level < previousLevel -> {
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Completed distress result decreased: " +
+                            "$previousLevel -> $level. No UI reset emitted."
+                )
+            }
+
+            else -> {
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Completed distress level unchanged: $level"
                 )
             }
         }
@@ -192,21 +403,38 @@ class DistressConfirmationManager(
     /**
      * Starts a fresh cycle for a newly confirmed or stronger level.
      */
-    private fun beginNewAlertLevel(level: Int) {
+    private fun beginNewAlertLevel(
+        level: Int,
+        source: DistressUiEvent.DistressAlertSource
+    ) {
+        if (hasPendingSuggestion()) {
+            return
+        }
+
         cancelCooldown()
         clearFlowState()
-        clearSuggestionHistory()
+
+        /*
+         * Keep acceptedSuggestionIds for the full app session so an accepted
+         * action cannot be offered again. Other short-term history may reset.
+         */
+        clearShortTermSuggestionHistory()
+
+        pendingSuggestionLevel = level
+        pendingSuggestionSource = source
+        pendingSuggestionHandled = false
 
         emitEvent(
             DistressUiEvent.ShowDefaultSuggestion(
                 eventId = newEventId(),
-                level = level
+                level = level,
+                source = source
             )
         )
 
         Log.d(
             "DISTRESS_CONFIRM",
-            "Default suggestion requested for level $level"
+            "Default suggestion requested for level $level from $source"
         )
     }
 
@@ -234,16 +462,25 @@ class DistressConfirmationManager(
      * The exact suggestion is required so its stable ID can be stored.
      */
     fun onActionAccepted(suggestion: BotSuggestion) {
-        if (_confirmedLevel.value <= 0) {
-            return
+        /*
+         * Acceptance must still work even if the live distress level already fell.
+         */
+        displayedSuggestionIds.add(suggestion.id)
+        acceptedSuggestionIds.add(suggestion.id)
+        lastAcceptedSuggestionLevel = suggestion.level.coerceIn(0, 4)
+
+        if (dismissedRecordingSuggestion?.id == suggestion.id) {
+            dismissedRecordingSuggestion = null
+            recordingsSinceDismissal = 0
         }
+
+        pendingSuggestionHandled = true
+        pendingSuggestionLevel = null
+        pendingSuggestionSource = null
 
         followUpMode = FollowUpMode.AFTER_ACCEPT
 
-        displayedSuggestionIds.add(suggestion.id)
-        acceptedSuggestionIds.add(suggestion.id)
-
-        // Accepting support ends any earlier default-repeat cycle.
+        // Accepting support ends any earlier exact-repeat cycle.
         dismissedSuggestion = null
         suggestionDismissedAtMillis = null
 
@@ -253,9 +490,15 @@ class DistressConfirmationManager(
         clearCurrentUiEvent()
         cancelCooldown()
 
+        /*
+         * Reset only the measurement state. Do not emit Reset because the overlay
+         * is now responsible for showing and closing the success card.
+         */
+        resetMeasurementStateWithoutUiReset()
+
         Log.d(
             "DISTRESS_CONFIRM",
-            "Suggestion accepted and excluded from future alternatives: ${suggestion.id}"
+            "Suggestion accepted and excluded for the app session: ${suggestion.id}"
         )
     }
 
@@ -264,10 +507,7 @@ class DistressConfirmationManager(
      * finishes automatically, or navigates to a settings screen.
      */
     fun onAcceptedActionMessageClosed() {
-        if (
-            _confirmedLevel.value <= 0 ||
-            followUpMode != FollowUpMode.AFTER_ACCEPT
-        ) {
+        if (followUpMode != FollowUpMode.AFTER_ACCEPT) {
             return
         }
 
@@ -278,16 +518,18 @@ class DistressConfirmationManager(
      * Called for both the "לא עכשיו" button and tapping outside an action card.
      */
     fun onSuggestionDismissed(suggestion: BotSuggestion) {
-        if (_confirmedLevel.value <= 0) {
-            return
-        }
+        val source = pendingSuggestionSource
+
+        /*
+         * The suggestion has now been explicitly handled by the user.
+         */
+        pendingSuggestionHandled = true
+        pendingSuggestionLevel = null
+        pendingSuggestionSource = null
 
         /**
-         * Alternative dismissal:
-         *
-         * - store the ID so the action is not offered again;
-         * - do not restart the original 40-second timer;
-         * - continue according to the current flow.
+         * Alternative dismissal keeps the existing accepted/dismissed follow-up
+         * behavior. Alternative IDs remain excluded.
          */
         if (suggestion.id.startsWith("alternative_")) {
             displayedSuggestionIds.add(suggestion.id)
@@ -298,14 +540,11 @@ class DistressConfirmationManager(
 
             when (followUpMode) {
                 FollowUpMode.AFTER_DISMISS -> {
-                    // Next dismissed-flow item should be calming.
                     showAlternativeNextInDismissedFlow = false
                     scheduleNextDismissedFlowItem()
                 }
 
                 FollowUpMode.AFTER_ACCEPT -> {
-                    // After dismissing an accepted-flow alternative,
-                    // return to a calming message.
                     showAlternativeNextInAcceptedFlow = false
                     scheduleAcceptedCalmingMessage()
                 }
@@ -317,14 +556,33 @@ class DistressConfirmationManager(
                 "DISTRESS_CONFIRM",
                 "Alternative dismissed and excluded: ${suggestion.id}"
             )
-
             return
         }
 
-        /**
-         * Default/exact suggestion dismissal:
-         *
-         * Store the exact object because it may return only after 40 seconds.
+        /*
+         * Recording suggestion: do not use the old time-based repeat cycle.
+         * Repeat this exact suggestion only after three later reliable recordings.
+         */
+        if (source == DistressUiEvent.DistressAlertSource.VOICE_RECORDING) {
+            dismissedRecordingSuggestion = suggestion
+            recordingsSinceDismissal = 0
+
+            clearCurrentUiEvent()
+            cancelCooldown()
+            clearFlowState()
+            resetMeasurementStateWithoutUiReset()
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Recording suggestion dismissed. It may repeat after " +
+                        "$recordingsBeforeRepeat later recordings: ${suggestion.id}"
+            )
+            return
+        }
+
+        /*
+         * FORM_FILLING suggestion: preserve the existing calming/alternative and
+         * 40-second exact-repeat flow.
          */
         followUpMode = FollowUpMode.AFTER_DISMISS
         dismissedSuggestion = suggestion
@@ -337,7 +595,7 @@ class DistressConfirmationManager(
 
         Log.d(
             "DISTRESS_CONFIRM",
-            "Default suggestion dismissed: ${suggestion.id}"
+            "Form-filling default suggestion dismissed: ${suggestion.id}"
         )
     }
 
@@ -396,13 +654,12 @@ class DistressConfirmationManager(
     private fun scheduleAcceptedCalmingMessage() {
         cancelCooldown()
 
-        val expectedLevel = _confirmedLevel.value
+        val expectedLevel = lastHandledSupportLevel()
         if (expectedLevel <= 0) return
 
         cooldownJob = scope.launch {
             delay(acceptedCalmingDelayMillis)
 
-            if (_confirmedLevel.value != expectedLevel) return@launch
             if (followUpMode != FollowUpMode.AFTER_ACCEPT) return@launch
 
             emitCalmingMessage(expectedLevel)
@@ -422,13 +679,12 @@ class DistressConfirmationManager(
     private fun scheduleAcceptedAlternativeSuggestion() {
         cancelCooldown()
 
-        val expectedLevel = _confirmedLevel.value
+        val expectedLevel = lastHandledSupportLevel()
         if (expectedLevel <= 0) return
 
         cooldownJob = scope.launch {
             delay(acceptedAlternativeDelayMillis)
 
-            if (_confirmedLevel.value != expectedLevel) return@launch
             if (followUpMode != FollowUpMode.AFTER_ACCEPT) return@launch
 
             emitAlternativeSuggestion(expectedLevel)
@@ -571,10 +827,29 @@ class DistressConfirmationManager(
         return selectedMessage
     }
 
+
+    private fun hasPendingSuggestion(): Boolean {
+        return !pendingSuggestionHandled &&
+                pendingSuggestionLevel != null
+    }
+
     /**
      * Immediate short-term reset for level 0.
      */
     private fun resetShortTermState() {
+        /*
+         * A sensor reset is not allowed to close an alert that still awaits
+         * an explicit user decision.
+         */
+        if (hasPendingSuggestion()) {
+            clearCandidate()
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Short-term reset skipped because a suggestion is pending."
+            )
+            return
+        }
+
         val hadActiveState =
             _confirmedLevel.value != 0 ||
                     candidateLevel != null ||
@@ -587,7 +862,7 @@ class DistressConfirmationManager(
         _confirmedLevel.value = 0
 
         clearFlowState()
-        clearSuggestionHistory()
+        clearShortTermSuggestionHistory()
         nextCalmingIndexByLevel.clear()
 
         if (hadActiveState) {
@@ -600,6 +875,24 @@ class DistressConfirmationManager(
         )
     }
 
+    /**
+     * Resets only measurement values after the user explicitly handles an alert.
+     * No Reset event is emitted, so an action success card is not closed.
+     */
+    private fun resetMeasurementStateWithoutUiReset() {
+        candidateLevel = null
+        candidateWindowCount = 0
+        _confirmedLevel.value = 0
+    }
+
+    private fun lastHandledSupportLevel(): Int {
+        return when {
+            lastAcceptedSuggestionLevel > 0 -> lastAcceptedSuggestionLevel
+            pendingSuggestionLevel != null -> pendingSuggestionLevel ?: 0
+            else -> _confirmedLevel.value
+        }
+    }
+
     private fun clearFlowState() {
         followUpMode = null
         dismissedSuggestion = null
@@ -608,9 +901,12 @@ class DistressConfirmationManager(
         showAlternativeNextInAcceptedFlow = false
     }
 
-    private fun clearSuggestionHistory() {
+    /**
+     * Clear only short-term display history. Accepted IDs intentionally remain
+     * for the whole app session, so accepted actions are not suggested again.
+     */
+    private fun clearShortTermSuggestionHistory() {
         displayedSuggestionIds.clear()
-        acceptedSuggestionIds.clear()
         dismissedAlternativeSuggestionIds.clear()
     }
 

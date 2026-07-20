@@ -198,10 +198,40 @@ fun AppWithDrawer(
      *
      * This collector receives repeated equal levels as separate events.
      */
+    /**
+     * Receives every completed FORM_FILLING measurement window.
+     *
+     * Each five-second form-filling window is passed through the
+     * two-consecutive-window confirmation logic.
+     */
     LaunchedEffect(Unit) {
         DistressScoringManager.completedWindows.collect { window ->
-            distressConfirmationManager.processWindow(window)
+
+            distressConfirmationManager.processWindow(
+                window
+            )
         }
+    }
+
+    /**
+     * Receives every completed VOICE_RECORDING result.
+     *
+     * This is one result for the entire recording, not one
+     * five-second measurement window.
+     *
+     * It bypasses the consecutive-window confirmation rule and is
+     * processed immediately by DistressConfirmationManager.
+     */
+    LaunchedEffect(Unit) {
+        DistressScoringManager
+            .completedVoiceRecordings
+            .collect { recordingResult ->
+
+                distressConfirmationManager
+                    .processVoiceRecording(
+                        recordingResult
+                    )
+            }
     }
 
     // This controls only screens INSIDE the app area

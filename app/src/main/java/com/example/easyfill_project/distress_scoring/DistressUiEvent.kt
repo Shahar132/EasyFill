@@ -19,8 +19,10 @@ sealed class DistressUiEvent {
      */
     data class ShowDefaultSuggestion(
         override val eventId: Long,
-        val level: Int
+        val level: Int,
+        val source: DistressAlertSource
     ) : DistressUiEvent()
+
 
     /**
      * Re-displays the exact original suggestion that was
@@ -58,4 +60,9 @@ sealed class DistressUiEvent {
     data class Reset(
         override val eventId: Long
     ) : DistressUiEvent()
+
+    enum class DistressAlertSource {
+        FORM_FILLING,
+        VOICE_RECORDING
+    }
 }

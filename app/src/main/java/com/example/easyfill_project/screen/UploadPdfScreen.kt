@@ -465,7 +465,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1025,7 +1025,7 @@ fun UploadPdfScreen(
                 ) {
                     Icon(
                         imageVector =
-                            Icons.Default.ArrowForward,
+                            Icons.Default.ArrowBack,
                         contentDescription = "מעבר"
                     )
 
