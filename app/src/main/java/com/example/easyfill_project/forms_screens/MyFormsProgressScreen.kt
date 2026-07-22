@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,7 +34,9 @@ fun MyFormsProgressScreen(navController: NavHostController) {
     val db = FirebaseFirestore.getInstance()
     val uid = FirebaseAuth.getInstance().currentUser?.uid
 
-    var savedFields by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var savedFields by remember {
+        mutableStateOf<Map<String, String>>(emptyMap())
+    }
 
     LaunchedEffect(uid) {
         if (uid == null) return@LaunchedEffect
@@ -70,13 +73,22 @@ fun MyFormsProgressScreen(navController: NavHostController) {
             progress = progress,
             percentText = roundedPercent(progress),
             status = if (uid != null) {
-                getStatusByProgress(context, uid, form.formId, progress)
+                getStatusByProgress(
+                    context,
+                    uid,
+                    form.formId,
+                    progress
+                )
             } else {
                 FormStatus.NOT_STARTED
             },
             currentStep = currentStep,
             lastUpdated = if (uid != null) {
-                FormProgressStorage.getLastUpdatedText(context, uid, form.formId)
+                FormProgressStorage.getLastUpdatedText(
+                    context,
+                    uid,
+                    form.formId
+                )
             } else {
                 "עדיין לא התחלת למלא את הטופס"
             }
@@ -111,7 +123,9 @@ fun MyFormsProgressScreen(navController: NavHostController) {
             FormProgressCard(
                 formProgress = formProgress,
                 onContinueClick = {
-                    navController.navigate("${formProgress.form.route}/${formProgress.currentStep}")
+                    navController.navigate(
+                        "${formProgress.form.route}/${formProgress.currentStep}"
+                    )
                 }
             )
         }
@@ -125,7 +139,8 @@ fun calculateFieldsProgress(
     if (requiredFields.isEmpty()) return 0f
 
     val filledCount = requiredFields.count { key ->
-        !savedFields[key].isNullOrBlank() && savedFields[key] != "false"
+        !savedFields[key].isNullOrBlank() &&
+                savedFields[key] != "false"
     }
 
     return filledCount / requiredFields.size.toFloat()
@@ -165,6 +180,10 @@ fun FormProgressCard(
         elevation = CardDefaults.cardElevation(6.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
         )
     ) {
         Column(
@@ -175,7 +194,9 @@ fun FormProgressCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         text = form.title,
                         style = MaterialTheme.typography.titleLarge,
@@ -191,14 +212,17 @@ fun FormProgressCard(
                     )
                 }
 
-                FormStatusChip(status = formProgress.status)
+                FormStatusChip(
+                    status = formProgress.status
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             val totalSteps = form.sections.size
             val currentStepForDisplay = formProgress.currentStep + 1
-            val currentSectionName = form.sections[formProgress.currentStep]
+            val currentSectionName =
+                form.sections[formProgress.currentStep]
 
             Text(
                 text = "שלב $currentStepForDisplay מתוך $totalSteps - $currentSectionName",
@@ -223,7 +247,9 @@ fun FormProgressCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             LinearProgressIndicator(
-                progress = { formProgress.progress },
+                progress = {
+                    formProgress.progress
+                },
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -291,11 +317,10 @@ fun FormStatusChip(status: FormStatus) {
         FormStatus.COMPLETED -> "הושלם"
     }
 
-
     val chipColor = when (status) {
-        FormStatus.NOT_STARTED -> Color(0xFFE53935)   // Red
-        FormStatus.IN_PROGRESS -> Color(0xFFFFC107)   // Yellow
-        FormStatus.COMPLETED -> Color(0xFF4CAF50)     // Green
+        FormStatus.NOT_STARTED -> Color(0xFFE53935)
+        FormStatus.IN_PROGRESS -> Color(0xFFFFC107)
+        FormStatus.COMPLETED -> Color(0xFF4CAF50)
     }
 
     AssistChip(

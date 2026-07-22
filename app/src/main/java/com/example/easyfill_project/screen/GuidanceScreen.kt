@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -75,7 +76,11 @@ fun ExpandableItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(vertical = 6.dp),
+            border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
 
         Column {

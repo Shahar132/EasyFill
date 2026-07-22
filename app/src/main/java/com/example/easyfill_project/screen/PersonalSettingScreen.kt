@@ -1,6 +1,7 @@
 package com.example.easyfill_project.screen
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -161,7 +162,11 @@ fun PersonalSettingCard(
             .clickable {
                 onClick()
             },
-        elevation = CardDefaults.cardElevation(6.dp)
+        elevation = CardDefaults.cardElevation(6.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
 
         Column(

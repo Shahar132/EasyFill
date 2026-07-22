@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -425,7 +426,11 @@ fun ProfileSectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(14.dp)
+        elevation = CardDefaults.cardElevation(14.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
@@ -42,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.easyfill_project.distress_scoring.DistressMode
@@ -69,6 +71,9 @@ fun SmartTextField(
     speechManager: SpeechToTextManager,
     maxLines: Int = 1,
 
+    // Receives validation messages that depend on other form fields.
+    externalValidationMessage: String? = null,
+
     // Reports which field the user most recently selected.
     onFocusedFieldChange: (String) -> Unit = {}
 ) {
@@ -90,6 +95,39 @@ fun SmartTextField(
     var isFocused by remember {
         mutableStateOf(false)
     }
+
+    // Prevents validation errors from appearing before the field is visited.
+    var hasReceivedFocus by remember(fieldId) {
+        mutableStateOf(false)
+    }
+
+    // Controls when the validation error should be displayed.
+    var shouldShowValidationError by remember(fieldId) {
+        mutableStateOf(false)
+    }
+
+    // Validates the current value using the rule assigned to this field ID.
+    val validationError = if (shouldShowValidationError) {
+        FieldInputRules.validate(
+            fieldId = fieldId,
+            value = value
+        )
+    } else {
+        null
+    }
+
+    // Converts the validation result into a message shown to the user.
+    val validationMessage = validationError?.let { error ->
+        FieldValidationMessages.getMessage(error)
+    }
+
+    // Shows the field's own error first, then an optional cross-field error.
+    val displayedValidationMessage =
+        if (shouldShowValidationError) {
+            validationMessage ?: externalValidationMessage
+        } else {
+            null
+        }
 
     /*
      * Request microphone permission when needed.
@@ -159,16 +197,25 @@ fun SmartTextField(
         OutlinedTextField(
             value = value,
 
-            onValueChange = { newValue ->
+            onValueChange = { typedValue ->
 
-                FormBehaviorTrackingController
-                    .onFieldValueChanged(
+                // Applies the input restrictions defined for this field ID.
+                val sanitizedValue =
+                    FieldInputRules.sanitizeTypedInput(
                         fieldId = fieldId,
-                        oldValue = value,
-                        newValue = newValue
+                        input = typedValue
                     )
 
-                onValueChange(newValue)
+                if (sanitizedValue != value) {
+                    FormBehaviorTrackingController
+                        .onFieldValueChanged(
+                            fieldId = fieldId,
+                            oldValue = value,
+                            newValue = sanitizedValue
+                        )
+
+                    onValueChange(sanitizedValue)
+                }
             },
 
             label = {
@@ -186,6 +233,11 @@ fun SmartTextField(
                         focusState.isFocused
 
                     if (focusState.isFocused) {
+
+                        hasReceivedFocus = true
+
+                        // Hides the current error while the user edits the value.
+                        shouldShowValidationError = false
 
                         /*
                          * Do not interrupt a voice-recording
@@ -226,6 +278,11 @@ fun SmartTextField(
 
                     } else {
 
+                        // Shows validation only after the user has left the field.
+                        if (hasReceivedFocus) {
+                            shouldShowValidationError = true
+                        }
+
                         FormBehaviorTrackingController
                             .onFieldUnfocused(fieldId)
                     }
@@ -233,6 +290,31 @@ fun SmartTextField(
 
             minLines = 1,
             maxLines = maxLines,
+
+            // Marks the text field as invalid when a validation message exists.
+            isError = displayedValidationMessage != null,
+
+            // Displays the validation message below the field.
+            supportingText =
+                if (displayedValidationMessage != null) {
+                    {
+                        Text(displayedValidationMessage)
+                    }
+                } else {
+                    null
+                },
+
+            // Uses the keyboard type assigned to this field in FieldInputRules.
+            keyboardOptions = KeyboardOptions(
+                keyboardType =
+                    FieldInputRules.getKeyboardType(fieldId),
+
+                imeAction = if (maxLines == 1) {
+                    ImeAction.Next
+                } else {
+                    ImeAction.Default
+                }
+            ),
 
             trailingIcon = {
 
