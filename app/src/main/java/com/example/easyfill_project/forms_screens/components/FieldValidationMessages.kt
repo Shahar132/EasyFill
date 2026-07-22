@@ -47,7 +47,7 @@ internal object FieldValidationMessages {
                 "כל גיל חייב להיות בין 0 ל־120"
 
             is FieldInputRules.ValidationError.ChildrenAgesCountMismatch ->
-                "הוזנו גילאים עבור ${error.actualCount} ילדים, " +
+                "מספר הגילאים שהוזנו הוא ${error.actualCount}, " +
                         "אך מספר הילדים הוא ${error.expectedCount}"
 
             FieldInputRules.ValidationError.AgesEnteredWithoutChildren ->

@@ -25,6 +25,9 @@ import kotlinx.coroutines.delay
 import com.example.easyfill_project.hand_analysis.MotionTrackingController
 import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
 
+import com.example.easyfill_project.forms_screens.components.FieldInputRules
+import com.example.easyfill_project.forms_screens.components.FieldValidationMessages
+
 
 import com.example.easyfill_project.chatbot.model.BotAction
 import com.example.easyfill_project.chatbot.model.BotAppState
@@ -121,6 +124,23 @@ fun HousingAssistanceFormScreen(
     }
 
     var formData by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    // Compares the declared number of children with the entered ages.
+    val childrenAgesCountError =
+        FieldInputRules.validateChildrenAgesCount(
+            childrenCountValue =
+                formData["childrenCount"].orEmpty(),
+
+            childrenAgesValue =
+                formData["childrenAges"].orEmpty()
+        )
+
+// Converts the comparison error into a user-facing message.
+    val childrenAgesCountMessage =
+        childrenAgesCountError?.let { error ->
+            FieldValidationMessages.getMessage(error)
+        }
+
     var dataLoaded by remember { mutableStateOf(false) }
 
     val db = FirebaseFirestore.getInstance()
@@ -378,6 +398,10 @@ fun HousingAssistanceFormScreen(
                 2 -> FamilyStatusSection(
                     formData = formData,
                     onFieldChange = ::updateField,
+
+                    // Sends the children-count comparison error to the ages field.
+                    childrenAgesValidationMessage =
+                        childrenAgesCountMessage,
 
                     // Sends the selected family-status text field upward.
                     onFocusedFieldChange = onFocusedFieldChange,

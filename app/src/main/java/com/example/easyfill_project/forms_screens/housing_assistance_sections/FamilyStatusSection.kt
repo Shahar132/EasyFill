@@ -28,6 +28,8 @@ fun FamilyStatusSection(
     // Sends changed field values back to HousingAssistanceFormScreen.
     onFieldChange: (String, String) -> Unit,
 
+    childrenAgesValidationMessage: String? = null,
+
     // Reports which SmartTextField the user most recently selected.
     // This is forwarded to AppNavigation for field-help reading.
     onFocusedFieldChange: (String) -> Unit,
@@ -141,6 +143,10 @@ fun FamilyStatusSection(
             onValueChange = { newValue ->
                 onFieldChange("childrenAges", newValue)
             },
+
+            externalValidationMessage =
+                childrenAgesValidationMessage,
+
             ttsManager = ttsManager,
             speechManager = speechManager,
 
