@@ -175,9 +175,8 @@ fun AppWithDrawer(
             // before the first calming message.
             firstCalmingDelayMillis = 20_000L,
 
-            // Minimum delay between later items
-            // in the dismissed-suggestion flow.
-            dismissedFlowGapMillis = 20_000L,
+            dismissedAlternativeCalmingDelayMillis = 20_000L,
+            dismissedNextActionDelayMillis = 25_000L,
 
             // The exact original suggestion cannot return
             // before 60 seconds have passed.

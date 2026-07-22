@@ -104,19 +104,51 @@ object BotSuggestionBuilder {
     fun buildSuggestion(
         severityLevel: Int,
         distressMode: DistressMode,
-        appState: BotAppState
+        appState: BotAppState,
+        excludedSuggestionIds: Set<String> = emptySet()
     ): BotSuggestion? {
 
         if (severityLevel <= 0) {
             return null
         }
 
-        return when (severityLevel) {
-            1 -> buildLowSeveritySuggestion(distressMode)
-            2 -> buildColorSuggestion(appState)
-            3 -> buildMusicSuggestion(appState)
-            else -> buildHighSeveritySuggestion(appState)
+        /*
+         * First build the normal default suggestion for this level.
+         */
+        val defaultSuggestion =
+            when (severityLevel) {
+                1 -> buildLowSeveritySuggestion(distressMode)
+                2 -> buildColorSuggestion(appState)
+                3 -> buildMusicSuggestion(appState)
+                else -> buildHighSeveritySuggestion(appState)
+            }
+
+        /*
+         * Return the normal default only when neither its exact ID nor
+         * an equivalent action category was accepted previously.
+         */
+        val defaultIsExcluded =
+            defaultSuggestion.id in excludedSuggestionIds ||
+                    isDefaultCategoryExcluded(
+                        suggestionId = defaultSuggestion.id,
+                        excludedSuggestionIds = excludedSuggestionIds
+                    )
+
+        if (!defaultIsExcluded && defaultSuggestion.options.isNotEmpty()) {
+            return defaultSuggestion
         }
+
+        /*
+         * The default was already accepted or is no longer usable.
+         * Select a different unused action instead.
+         */
+        return buildAlternativeSuggestion(
+            severityLevel = severityLevel,
+            distressMode = distressMode,
+            appState = appState,
+            excludedSuggestionIds = excludedSuggestionIds +
+                    defaultSuggestion.id
+        )
     }
 
     /**
@@ -272,6 +304,47 @@ object BotSuggestionBuilder {
 
             ALTERNATIVE_EMERGENCY_ID -> {
                 DEFAULT_HIGH_SUPPORT_ID in excludedSuggestionIds ||
+                        ALTERNATIVE_EMERGENCY_ID in excludedSuggestionIds
+            }
+
+            else -> false
+        }
+    }
+
+
+    /**
+     * Prevents a default suggestion from returning when an equivalent
+     * alternative category was already accepted.
+     *
+     * Example:
+     * alternative_background_music was accepted earlier.
+     * The normal level-3 music default must not appear afterward.
+     */
+    private fun isDefaultCategoryExcluded(
+        suggestionId: String,
+        excludedSuggestionIds: Set<String>
+    ): Boolean {
+
+        return when (suggestionId) {
+
+            DEFAULT_READING_ID -> {
+                DEFAULT_READING_ID in excludedSuggestionIds ||
+                        ALTERNATIVE_READING_ID in excludedSuggestionIds
+            }
+
+            DEFAULT_COLOR_ID -> {
+                DEFAULT_COLOR_ID in excludedSuggestionIds ||
+                        ALTERNATIVE_CONTRAST_ID in excludedSuggestionIds
+            }
+
+            DEFAULT_MUSIC_ID -> {
+                DEFAULT_MUSIC_ID in excludedSuggestionIds ||
+                        ALTERNATIVE_MUSIC_ID in excludedSuggestionIds
+            }
+
+            DEFAULT_HIGH_SUPPORT_ID -> {
+                DEFAULT_HIGH_SUPPORT_ID in excludedSuggestionIds ||
+                        ALTERNATIVE_FONT_ID in excludedSuggestionIds ||
                         ALTERNATIVE_EMERGENCY_ID in excludedSuggestionIds
             }
 

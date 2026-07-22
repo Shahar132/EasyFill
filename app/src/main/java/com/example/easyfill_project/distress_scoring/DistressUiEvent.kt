@@ -20,9 +20,11 @@ sealed class DistressUiEvent {
     data class ShowDefaultSuggestion(
         override val eventId: Long,
         val level: Int,
-        val source: DistressAlertSource
+        val source: DistressAlertSource,
+        // Suggestions accepted earlier in the current app session.
+        // The builder must not offer these suggestions or equivalent categories.
+        val excludedSuggestionIds: Set<String>
     ) : DistressUiEvent()
-
 
     /**
      * Re-displays the exact original suggestion that was
@@ -34,14 +36,15 @@ sealed class DistressUiEvent {
     ) : DistressUiEvent()
 
     /**
-     * Requests a different alternative action.
+     * Requests a different unused alternative action.
      *
-     * excludedSuggestionIds contains all suggestions or action
-     * categories that must not be shown again.
+     * source is required because a recording may already have ended
+     * before FloatingChatOverlay builds the suggestion.
      */
     data class ShowAlternativeSuggestion(
         override val eventId: Long,
         val level: Int,
+        val source: DistressAlertSource,
         val excludedSuggestionIds: Set<String>
     ) : DistressUiEvent()
 

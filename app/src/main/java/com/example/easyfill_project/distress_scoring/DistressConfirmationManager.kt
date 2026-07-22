@@ -44,11 +44,14 @@ class DistressConfirmationManager(
     // Delay from "לא עכשיו" until the first calming message.
     private val firstCalmingDelayMillis: Long = 15_000L,
 
-    // Minimum delay between later items in the dismissed flow.
-    private val dismissedFlowGapMillis: Long = 10_000L,
+    // After dismissing an alternative, wait before calming.
+    private val dismissedAlternativeCalmingDelayMillis: Long = 20_000L,
+
+// After closing a calming message, wait before the next action.
+    private val dismissedNextActionDelayMillis: Long = 25_000L,
 
     // Earliest time at which the exact dismissed default may return.
-    private val exactSuggestionRepeatDelayMillis: Long = 40_000L,
+    private val exactSuggestionRepeatDelayMillis: Long = 60_000L,
 
     // Delay after an accepted-action success card closes.
     private val acceptedCalmingDelayMillis: Long = 10_000L,
@@ -95,12 +98,64 @@ class DistressConfirmationManager(
 
     private var pendingSuggestionHandled = true
 
-    private var dismissedRecordingSuggestion:
-            BotSuggestion? = null
+    /**
+     * The exact original recording suggestion for which the user pressed
+     * "Not now".
+     *
+     * It may return only after enough later recordings have completed
+     * and only when a later recording reaches the same distress level.
+     */
+    private var dismissedRecordingSuggestion: BotSuggestion? = null
 
-    private var recordingsSinceDismissal = 0
+    /**
+     * Number of recordings completed after the original recording
+     * suggestion was dismissed.
+     */
+    private var recordingsSinceDismissal: Int = 0
 
-    private val recordingsBeforeRepeat = 3
+    /**
+     * The original dismissed recording suggestion cannot return
+     * before three later recordings have completed.
+     */
+    private val recordingsBeforeRepeat: Int = 3
+
+    /**
+     * Controls the support item shown on later distressed recordings.
+     *
+     * true:
+     * show a calming message on the next distressed recording.
+     *
+     * false:
+     * request an unused alternative action on the next distressed recording.
+     */
+    private var showCalmingNextForRecording: Boolean = true
+
+    /**
+     * True after the user accepted or dismissed a recording suggestion.
+     *
+     * Later recordings then show calming messages or unused alternatives
+     * instead of immediately restarting the normal default suggestion.
+     */
+    private var hasRecordingFollowUpFlow: Boolean = false
+
+    /**
+     * Remembers whether the currently displayed action came from
+     * a voice-recording result.
+     *
+     * This prevents accepted recording actions from starting the
+     * form-filling 20/25-second timer flow.
+     */
+
+    /*
+     * The distress level associated with the current recording follow-up flow.
+     *
+     * After accepting a recording suggestion, calming/alternative support
+     * should continue only when the next recording has the same level.
+     *
+     * A different level must receive its normal default suggestion.
+     */
+    private var recordingFollowUpLevel: Int? = null
+    private var acceptedActionCameFromRecording: Boolean = false
 
     // Level connected to the most recently accepted action.
     private var lastAcceptedSuggestionLevel: Int = 0
@@ -142,19 +197,40 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Receives one completed VOICE_RECORDING result.
+     * Receives one completed VOICE_RECORDING distress result.
      *
-     * A voice-recording result already represents the entire
-     * recording:
+     * Recording mode is event-based:
      *
-     * - all recording hand windows were averaged;
-     * - one final voice score was calculated;
-     * - both values were combined into one weighted result.
+     * - Each completed recording is handled independently.
+     * - It does not require two matching windows.
+     * - It does not use the form-filling timer flow.
+     * - A support item is shown immediately after a distressed recording.
      *
-     * Therefore, it must NOT go through the two-consecutive-window
-     * confirmation rule.
+     * Recording behavior:
      *
-     * It is treated immediately as a completed and confirmed result.
+     * 1. The first distressed recording shows the normal default suggestion.
+     *
+     * 2. If that suggestion is dismissed:
+     *    - later recordings with the same level show calming/alternative support;
+     *    - on recordings 3, 6, 9... after dismissal, the exact original suggestion
+     *      may return when the level is still the same;
+     *    - a later recording with a different level receives the normal default
+     *      suggestion for that new level.
+     *
+     * Example:
+     *
+     * Original recording level 2
+     * -> default level-2 suggestion
+     * -> user presses "Not now"
+     *
+     * Later level 2
+     * -> calming or alternative
+     *
+     * Later recording number 3, 6, 9... with level 2
+     * -> exact original level-2 suggestion
+     *
+     * Later level 4
+     * -> normal level-4 default suggestion
      */
     fun processVoiceRecording(
         result: VoiceRecordingDistressResult
@@ -164,78 +240,346 @@ class DistressConfirmationManager(
         Log.d(
             "DISTRESS_CONFIRM",
             """
-            Completed voice-recording result received:
-            level=$level
-            voiceScore=${result.voiceScore}
-            handAverage=${result.handAverage}
-            weightedScore=${result.weightedScore}
-            previousConfirmedLevel=${_confirmedLevel.value}
-            """.trimIndent()
+        Completed voice recording:
+        level=$level
+        voiceScore=${result.voiceScore}
+        handAverage=${result.handAverage}
+        weightedScore=${result.weightedScore}
+        dismissedSuggestion=${dismissedRecordingSuggestion?.id}
+        dismissedSuggestionLevel=${dismissedRecordingSuggestion?.level}
+        recordingsSinceDismissal=$recordingsSinceDismissal
+        """.trimIndent()
         )
 
         /*
-         * A recording is already one complete aggregated result.
-         * It must never complete a partially observed FORM_FILLING candidate.
+         * Recording results must never complete a partially confirmed
+         * FORM_FILLING candidate.
          */
         clearCandidate()
 
         /*
-         * When the user previously selected "Not now" for a recording
-         * suggestion, count later reliable recordings. After three later
-         * recordings, the same exact suggestion may be shown again.
+         * Do not replace a support item that is still waiting for
+         * the user to accept, dismiss, or close it.
          */
-        if (
-            dismissedRecordingSuggestion != null &&
-            pendingSuggestionHandled
-        ) {
-            recordingsSinceDismissal += 1
-
+        if (hasPendingSuggestion()) {
             Log.d(
                 "DISTRESS_CONFIRM",
-                "Recordings since dismissal: " +
-                        "$recordingsSinceDismissal/$recordingsBeforeRepeat"
+                "Recording result ignored for chatbot UI because an item is pending."
             )
-
-            if (recordingsSinceDismissal >= recordingsBeforeRepeat) {
-                val suggestion = dismissedRecordingSuggestion
-
-                if (
-                    suggestion != null &&
-                    suggestion.id !in acceptedSuggestionIds
-                ) {
-                    pendingSuggestionLevel = suggestion.level
-                    pendingSuggestionSource =
-                        DistressUiEvent.DistressAlertSource.VOICE_RECORDING
-                    pendingSuggestionHandled = false
-
-                    _confirmedLevel.value = suggestion.level.coerceIn(0, 4)
-
-                    emitEvent(
-                        DistressUiEvent.ShowExactSuggestion(
-                            eventId = newEventId(),
-                            suggestion = suggestion
-                        )
-                    )
-
-                    Log.d(
-                        "DISTRESS_CONFIRM",
-                        "Dismissed recording suggestion repeated after " +
-                                "$recordingsBeforeRepeat later recordings: ${suggestion.id}"
-                    )
-                }
-
-                recordingsSinceDismissal = 0
-                dismissedRecordingSuggestion = null
-                return
-            }
+            return
         }
 
         /*
-         * A complete recording bypasses the two-window confirmation rule.
+         * Every completed recording after dismissing an original
+         * recording suggestion advances the repeat counter.
+         *
+         * Level-0 recordings also count as completed recordings,
+         * but they do not display a support item.
          */
-        processConfirmedLevel(
-            level = level,
-            source = DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        if (dismissedRecordingSuggestion != null) {
+            recordingsSinceDismissal += 1
+        }
+
+        /*
+         * Recording results are independent.
+         *
+         * This value is only the most recent detected recording level.
+         * It is not used for two-window confirmation.
+         */
+        _confirmedLevel.value = level
+
+        /*
+         * No detected distress.
+         *
+         * The recording may still count toward 3, 6, 9..., but no
+         * chatbot message should be displayed.
+         */
+        if (level <= 0) {
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Recording completed with level 0. No chatbot item displayed."
+            )
+            return
+        }
+
+        val savedDismissedSuggestion =
+            dismissedRecordingSuggestion
+
+        /*
+         * An original recording suggestion is currently remembered
+         * because the user previously pressed "Not now".
+         */
+        if (savedDismissedSuggestion != null) {
+
+            val dismissedLevel =
+                savedDismissedSuggestion.level.coerceIn(0, 4)
+
+            val isSameLevelAsDismissed =
+                level == dismissedLevel
+
+            val isExactRepeatOpportunity =
+                recordingsSinceDismissal > 0 &&
+                        recordingsSinceDismissal %
+                        recordingsBeforeRepeat == 0
+
+            /*
+             * The current recording has a different distress level.
+             *
+             * Treat it as a separate distress situation and show the
+             * normal default suggestion for the current level.
+             *
+             * Example:
+             *
+             * dismissed suggestion level = 2
+             * current recording level = 4
+             *
+             * result:
+             * normal level-4 default suggestion
+             */
+            if (!isSameLevelAsDismissed) {
+                emitRecordingDefaultSuggestion(level)
+
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Recording level $level differs from dismissed level " +
+                            "$dismissedLevel. Requested the normal default " +
+                            "suggestion for level $level."
+                )
+
+                return
+            }
+
+            /*
+             * The current recording has the same level as the
+             * original dismissed suggestion.
+             *
+             * On recordings 3, 6, 9... repeat the exact original.
+             */
+            if (
+                isExactRepeatOpportunity &&
+                savedDismissedSuggestion.id !in acceptedSuggestionIds
+            ) {
+                pendingSuggestionLevel = level
+                pendingSuggestionSource =
+                    DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+                pendingSuggestionHandled = false
+
+                emitEvent(
+                    DistressUiEvent.ShowExactSuggestion(
+                        eventId = newEventId(),
+                        suggestion = savedDismissedSuggestion
+                    )
+                )
+
+                /*
+                 * Do not clear dismissedRecordingSuggestion here.
+                 *
+                 * The user must first handle the repeated suggestion:
+                 *
+                 * - Accept:
+                 *   onActionAccepted() clears the stored repeat state.
+                 *
+                 * - Not now:
+                 *   onSuggestionDismissed() saves it again and resets
+                 *   recordingsSinceDismissal to zero.
+                 */
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Exact dismissed recording suggestion repeated on " +
+                            "recording $recordingsSinceDismissal: " +
+                            savedDismissedSuggestion.id
+                )
+
+                return
+            }
+
+            /*
+             * Same level as the dismissed original, but this recording
+             * is not position 3, 6, 9...
+             *
+             * Show immediate support without timers:
+             *
+             * one recording -> calming
+             * next recording -> unused alternative
+             * next recording -> calming
+             */
+            if (showCalmingNextForRecording) {
+                emitRecordingCalmingMessage(level)
+                showCalmingNextForRecording = false
+
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Same level as dismissed recording suggestion. " +
+                            "Immediate calming message requested."
+                )
+            } else {
+                emitRecordingAlternativeSuggestion(level)
+                showCalmingNextForRecording = true
+
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Same level as dismissed recording suggestion. " +
+                            "Immediate unused alternative requested."
+                )
+            }
+
+            return
+        }
+
+        if (!hasRecordingFollowUpFlow) {
+            emitRecordingDefaultSuggestion(level)
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "First recording distress item requested for level $level."
+            )
+
+            return
+        }
+
+        /*
+         * A previous recording suggestion was accepted.
+         *
+         * Continue the old calming/alternative flow only when the current
+         * recording has the same distress level as the accepted suggestion.
+         */
+        val previousRecordingFollowUpLevel =
+            recordingFollowUpLevel
+
+        if (
+            previousRecordingFollowUpLevel != null &&
+            level != previousRecordingFollowUpLevel
+        ) {
+            /*
+             * The distress level changed.
+             *
+             * End the previous accepted-recording follow-up flow and show the
+             * normal default suggestion for the new level.
+             */
+            hasRecordingFollowUpFlow = false
+            recordingFollowUpLevel = null
+            showCalmingNextForRecording = true
+
+            emitRecordingDefaultSuggestion(level)
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Recording level changed after accepted suggestion: " +
+                        "$previousRecordingFollowUpLevel -> $level. " +
+                        "Normal default suggestion requested for level $level."
+            )
+
+            return
+        }
+
+        /*
+         * The current level is the same as the previously accepted level.
+         *
+         * Continue the recording follow-up flow using immediate
+         * calming/alternative items.
+         */
+        if (showCalmingNextForRecording) {
+            emitRecordingCalmingMessage(level)
+            showCalmingNextForRecording = false
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Same recording level after acceptance. " +
+                        "Recording follow-up calming message requested."
+            )
+        } else {
+            emitRecordingAlternativeSuggestion(level)
+            showCalmingNextForRecording = true
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Same recording level after acceptance. " +
+                        "Recording follow-up alternative suggestion requested."
+            )
+        }
+    }
+
+    /**
+     * Requests the normal default suggestion for a recording result.
+     */
+    private fun emitRecordingDefaultSuggestion(level: Int) {
+        pendingSuggestionLevel = level
+        pendingSuggestionSource =
+            DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        pendingSuggestionHandled = false
+
+        val excluded = acceptedSuggestionIds.toMutableSet()
+
+        /*
+       * Prevent the normal builder from returning the dismissed
+       * original suggestion outside recordings 3, 6, 9...
+       */
+        dismissedRecordingSuggestion?.let { suggestion ->
+            excluded.add(suggestion.id)
+        }
+
+        emitEvent(
+            DistressUiEvent.ShowDefaultSuggestion(
+                eventId = newEventId(),
+                level = level,
+                source = DistressUiEvent.DistressAlertSource.VOICE_RECORDING,
+
+                // Accepted actions stay excluded.
+                excludedSuggestionIds = excluded
+            )
+        )
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Recording default suggestion requested for level $level"
+        )
+    }
+
+    /**
+     * Shows one calming message immediately after a later
+     * distressed recording.
+     *
+     * There is no time-based delay.
+     */
+    private fun emitRecordingCalmingMessage(level: Int) {
+        pendingSuggestionLevel = level
+        pendingSuggestionSource =
+            DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        pendingSuggestionHandled = false
+
+        emitCalmingMessage(level)
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Immediate recording calming message emitted for level $level"
+        )
+    }
+
+    /**
+     * Requests one unused alternative immediately after a later
+     * distressed recording.
+     *
+     * There is no time-based delay.
+     */
+    private fun emitRecordingAlternativeSuggestion(level: Int) {
+        pendingSuggestionLevel = level
+        pendingSuggestionSource =
+            DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        pendingSuggestionHandled = false
+
+        emitEvent(
+            DistressUiEvent.ShowAlternativeSuggestion(
+                eventId = newEventId(),
+                level = level,
+                source = DistressUiEvent.DistressAlertSource.VOICE_RECORDING,
+                excludedSuggestionIds =
+                    getExcludedAlternativeSuggestionIds()
+            )
+        )
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Immediate recording alternative requested for level $level"
         )
     }
 
@@ -262,9 +606,51 @@ class DistressConfirmationManager(
         )
 
         /*
+ * Level 0 means that current distress is no longer detected.
+ *
+ * A currently visible support item must remain visible until the user
+ * explicitly accepts, dismisses, or closes it.
+ *
+ * Any delayed follow-up job that has not yet appeared should be cancelled.
+ */
+        if (level == 0) {
+            clearCandidate()
+            cancelCooldown()
+
+            /*
+             * Reset the measurement level so any later non-zero distress must
+             * pass the normal confirmation process again.
+             */
+            _confirmedLevel.value = 0
+
+            /*
+             * Preserve a visible or pending action suggestion, calming message,
+             * success card, or other chatbot item.
+             *
+             * Do not call clearCurrentUiEvent() or clearFlowState() here.
+             */
+            if (hasPendingSuggestion() || _uiEvent.value != null) {
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Distress decreased to level 0. " +
+                            "Visible chatbot UI preserved; future cooldown stopped."
+                )
+                return
+            }
+
+            /*
+             * Nothing is visible or waiting for the user, so the remaining
+             * short-term state can be safely reset.
+             */
+            resetShortTermState()
+            return
+        }
+
+        /*
          * A visible or unopened suggestion is already waiting.
-         * Sensor changes may continue, but they must not close, replace,
-         * or reset the current alert and popup.
+         *
+         * Non-zero sensor changes may continue, but they must not close,
+         * replace, or reset the current alert and popup.
          */
         if (hasPendingSuggestion()) {
             clearCandidate()
@@ -274,15 +660,6 @@ class DistressConfirmationManager(
                 "Measurement ignored for chatbot UI while suggestion is pending. " +
                         "newLevel=$level, pendingLevel=$pendingSuggestionLevel"
             )
-            return
-        }
-
-        /*
-         * Level 0 may reset only when no suggestion is waiting for a user decision.
-         */
-        if (level == 0) {
-            clearCandidate()
-            resetShortTermState()
             return
         }
 
@@ -338,13 +715,26 @@ class DistressConfirmationManager(
 
             newLevel < previousLevel -> {
                 /*
-                 * Never emit Reset here. A decrease changes the measured
-                 * level but does not close an alert or popup.
+                 * Stop only future delayed follow-up items.
+                 *
+                 * Do not clear the current UI event, because a visible alert
+                 * must remain until the user explicitly accepts or dismisses it.
                  */
+                cancelCooldown()
+
+                /*
+                 * Clear the old timer-based follow-up state only when there is
+                 * no suggestion currently waiting for the user.
+                 */
+                if (!hasPendingSuggestion()) {
+                    clearFlowState()
+                }
+
                 Log.d(
                     "DISTRESS_CONFIRM",
                     "Confirmed distress decreased: " +
-                            "$previousLevel -> $newLevel. Pending chatbot UI preserved."
+                            "$previousLevel -> $newLevel. " +
+                            "Visible chatbot UI preserved; future cooldown stopped."
                 )
             }
         }
@@ -428,7 +818,13 @@ class DistressConfirmationManager(
             DistressUiEvent.ShowDefaultSuggestion(
                 eventId = newEventId(),
                 level = level,
-                source = source
+                source = source,
+
+                /*
+                 * Send a defensive copy of all suggestions accepted during
+                 * the current application session.
+                 */
+                excludedSuggestionIds = acceptedSuggestionIds.toSet()
             )
         )
 
@@ -462,6 +858,7 @@ class DistressConfirmationManager(
      * The exact suggestion is required so its stable ID can be stored.
      */
     fun onActionAccepted(suggestion: BotSuggestion) {
+        val source = pendingSuggestionSource
         /*
          * Acceptance must still work even if the live distress level already fell.
          */
@@ -478,7 +875,35 @@ class DistressConfirmationManager(
         pendingSuggestionLevel = null
         pendingSuggestionSource = null
 
-        followUpMode = FollowUpMode.AFTER_ACCEPT
+        if (
+            source ==
+            DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        ) {
+            /*
+             * Recording support is event-based, not timer-based.
+             *
+             * Wait for another completed recording before showing
+             * calming or alternative support.
+             */
+            acceptedActionCameFromRecording = true
+            hasRecordingFollowUpFlow = true
+            showCalmingNextForRecording = true
+
+            /*
+             * Remember the level of the accepted recording suggestion.
+             *
+             * A later recording continues this follow-up flow only if
+             * its detected level is the same.
+             */
+            recordingFollowUpLevel =
+                suggestion.level.coerceIn(1, 4)
+
+            // Do not start the form-filling accepted timer flow.
+            followUpMode = null
+        } else {
+            acceptedActionCameFromRecording = false
+            followUpMode = FollowUpMode.AFTER_ACCEPT
+        }
 
         // Accepting support ends any earlier exact-repeat cycle.
         dismissedSuggestion = null
@@ -490,11 +915,10 @@ class DistressConfirmationManager(
         clearCurrentUiEvent()
         cancelCooldown()
 
-        /*
-         * Reset only the measurement state. Do not emit Reset because the overlay
-         * is now responsible for showing and closing the success card.
-         */
-        resetMeasurementStateWithoutUiReset()
+      //clearCandidate() only clears candidateLevel ,candidateWindowCount
+        //Those are only temporary variables while waiting for confirmation.
+        //It DOES NOT change confirmedLevel ,which is exactly what you want.
+        clearCandidate()
 
         Log.d(
             "DISTRESS_CONFIRM",
@@ -507,6 +931,23 @@ class DistressConfirmationManager(
      * finishes automatically, or navigates to a settings screen.
      */
     fun onAcceptedActionMessageClosed() {
+        /*
+         * Recording support waits for the next completed recording.
+         * It must not start a time-based cooldown.
+         */
+        if (acceptedActionCameFromRecording) {
+            acceptedActionCameFromRecording = false
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Recording success card closed. Waiting for the next recording."
+            )
+            return
+        }
+
+        /*
+         * Form-filling support continues with its normal timer flow.
+         */
         if (followUpMode != FollowUpMode.AFTER_ACCEPT) {
             return
         }
@@ -532,30 +973,57 @@ class DistressConfirmationManager(
          * behavior. Alternative IDs remain excluded.
          */
         if (suggestion.id.startsWith("alternative_")) {
+            val alternativeSource =  source
+
             displayedSuggestionIds.add(suggestion.id)
             dismissedAlternativeSuggestionIds.add(suggestion.id)
+
+            pendingSuggestionHandled = true
+            pendingSuggestionLevel = null
+            pendingSuggestionSource = null
 
             clearCurrentUiEvent()
             cancelCooldown()
 
-            when (followUpMode) {
-                FollowUpMode.AFTER_DISMISS -> {
-                    showAlternativeNextInDismissedFlow = false
-                    scheduleNextDismissedFlowItem()
-                }
+            if (
+                alternativeSource ==
+                DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+            ) {
+                /*
+                 * Recording alternatives are permanently excluded.
+                 *
+                 * Do not use a timer. Wait for the next distressed
+                 * recording and show a calming message then.
+                 */
+                hasRecordingFollowUpFlow = true
+                showCalmingNextForRecording = true
+                followUpMode = null
 
-                FollowUpMode.AFTER_ACCEPT -> {
-                    showAlternativeNextInAcceptedFlow = false
-                    scheduleAcceptedCalmingMessage()
-                }
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Recording alternative dismissed and excluded. " +
+                            "Waiting for the next recording: ${suggestion.id}"
+                )
+            } else {
+                /*
+                 * Form-filling alternative dismissal keeps its
+                 * 20-second calming delay.
+                 */
+                when (followUpMode) {
+                    FollowUpMode.AFTER_DISMISS -> {
+                        showAlternativeNextInDismissedFlow = false
+                        scheduleCalmingAfterAlternativeDismissal()
+                    }
 
-                null -> Unit
+                    FollowUpMode.AFTER_ACCEPT -> {
+                        showAlternativeNextInAcceptedFlow = false
+                        scheduleCalmingAfterAlternativeDismissal()
+                    }
+
+                    null -> Unit
+                }
             }
 
-            Log.d(
-                "DISTRESS_CONFIRM",
-                "Alternative dismissed and excluded: ${suggestion.id}"
-            )
             return
         }
 
@@ -563,26 +1031,84 @@ class DistressConfirmationManager(
          * Recording suggestion: do not use the old time-based repeat cycle.
          * Repeat this exact suggestion only after three later reliable recordings.
          */
-        if (source == DistressUiEvent.DistressAlertSource.VOICE_RECORDING) {
+        /*
+ * Recording suggestion: do not use the old time-based repeat cycle.
+ * Repeat this exact suggestion only after three later reliable recordings.
+ */
+        if (
+            source ==
+            DistressUiEvent.DistressAlertSource.VOICE_RECORDING
+        ) {
+            /*
+             * Save the exact original suggestion.
+             *
+             * It may return only after three later recordings and only
+             * on a later recording with the same distress level.
+             */
             dismissedRecordingSuggestion = suggestion
             recordingsSinceDismissal = 0
 
+            /*
+             * Later distressed recordings should still receive support.
+             *
+             * The first later distressed recording will receive a calming
+             * message, followed by an unused alternative on the next one.
+             */
+            hasRecordingFollowUpFlow = true
+            showCalmingNextForRecording = true
+
+            pendingSuggestionHandled = true
+            pendingSuggestionLevel = null
+            pendingSuggestionSource = null
+
             clearCurrentUiEvent()
             cancelCooldown()
-            clearFlowState()
-            resetMeasurementStateWithoutUiReset()
+
+            /*
+             * No time-based dismissed flow is used for recording.
+             */
+            followUpMode = null
+
+            /*
+             * Recording results are independent, so the next completed
+             * recording starts as a fresh recording measurement.
+             */
+            clearCandidate()
 
             Log.d(
                 "DISTRESS_CONFIRM",
-                "Recording suggestion dismissed. It may repeat after " +
-                        "$recordingsBeforeRepeat later recordings: ${suggestion.id}"
+                "Recording default dismissed. It may repeat after " +
+                        "$recordingsBeforeRepeat later recordings at the same level: " +
+                        suggestion.id
             )
             return
         }
 
         /*
+         * The form suggestion remained visible while the measured distress
+         * returned to level 0.
+         *
+         * The user has now dismissed it, so close the visible item but do not
+         * begin a new delayed calming/alternative flow.
+         */
+        if (_confirmedLevel.value <= 0) {
+            clearCurrentUiEvent()
+            cancelCooldown()
+            clearFlowState()
+            clearCandidate()
+
+            Log.d(
+                "DISTRESS_CONFIRM",
+                "Form-filling suggestion dismissed after distress returned to level 0. " +
+                        "No follow-up flow scheduled."
+            )
+
+            return
+        }
+
+        /*
          * FORM_FILLING suggestion: preserve the existing calming/alternative and
-         * 40-second exact-repeat flow.
+         * exact-repeat flow.
          */
         followUpMode = FollowUpMode.AFTER_DISMISS
         dismissedSuggestion = suggestion
@@ -597,6 +1123,41 @@ class DistressConfirmationManager(
             "DISTRESS_CONFIRM",
             "Form-filling default suggestion dismissed: ${suggestion.id}"
         )
+    }
+
+    private fun scheduleCalmingAfterAlternativeDismissal() {
+        cancelCooldown()
+
+        val expectedLevel = _confirmedLevel.value
+        if (expectedLevel <= 0) return
+
+        cooldownJob = scope.launch {
+            delay(dismissedAlternativeCalmingDelayMillis)
+
+            if (_confirmedLevel.value != expectedLevel) {
+                stopFollowUpBecauseLevelChanged(
+                    expectedLevel = expectedLevel,
+                    stage = "dismissed alternative calming"
+                )
+                return@launch
+            }
+
+            if (followUpMode == null) {
+                return@launch
+            }
+
+            emitCalmingMessage(expectedLevel)
+
+            when (followUpMode) {
+                FollowUpMode.AFTER_ACCEPT ->
+                    showAlternativeNextInAcceptedFlow = true
+
+                FollowUpMode.AFTER_DISMISS ->
+                    showAlternativeNextInDismissedFlow = true
+
+                null -> Unit
+            }
+        }
     }
 
     /**
@@ -625,6 +1186,19 @@ class DistressConfirmationManager(
      * Called when the user closes a calming-message card.
      */
     fun onCalmingMessageClosed() {
+        /*
+         * The calming message was explicitly closed, so it must no longer
+         * remain marked as a pending chatbot item.
+         *
+         * This is especially important for recording mode, where
+         * followUpMode is null. Without clearing these values,
+         * hasPendingSuggestion() remains true and all future recording
+         * and form-filling distress results are ignored.
+         */
+        pendingSuggestionHandled = true
+        pendingSuggestionLevel = null
+        pendingSuggestionSource = null
+
         clearCurrentUiEvent()
 
         when (followUpMode) {
@@ -640,7 +1214,21 @@ class DistressConfirmationManager(
                 scheduleNextDismissedFlowItem()
             }
 
-            null -> Unit
+            /*
+             * Recording support has no timer-based followUpMode.
+             *
+             * After closing the calming message, simply wait for the next
+             * completed recording. The recording flow will then choose an
+             * unused alternative because showCalmingNextForRecording was
+             * already changed to false.
+             */
+            null -> {
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Recording calming message closed. " +
+                            "Pending state cleared; waiting for next recording."
+                )
+            }
         }
     }
 
@@ -654,17 +1242,27 @@ class DistressConfirmationManager(
     private fun scheduleAcceptedCalmingMessage() {
         cancelCooldown()
 
-        val expectedLevel = lastHandledSupportLevel()
+        val expectedLevel = lastAcceptedSuggestionLevel
         if (expectedLevel <= 0) return
 
         cooldownJob = scope.launch {
             delay(acceptedCalmingDelayMillis)
 
-            if (followUpMode != FollowUpMode.AFTER_ACCEPT) return@launch
+            if (followUpMode != FollowUpMode.AFTER_ACCEPT) {
+                return@launch
+            }
+
+            if (_confirmedLevel.value != expectedLevel) {
+                stopFollowUpBecauseLevelChanged(
+                    expectedLevel = expectedLevel,
+                    stage = "accepted calming"
+                )
+                return@launch
+            }
 
             emitCalmingMessage(expectedLevel)
 
-            // After the calming card closes, wait 15 seconds for an alternative.
+            // When the calming card closes, the next item is an alternative.
             showAlternativeNextInAcceptedFlow = true
         }
     }
@@ -679,19 +1277,45 @@ class DistressConfirmationManager(
     private fun scheduleAcceptedAlternativeSuggestion() {
         cancelCooldown()
 
-        val expectedLevel = lastHandledSupportLevel()
+        val expectedLevel = lastAcceptedSuggestionLevel
         if (expectedLevel <= 0) return
 
         cooldownJob = scope.launch {
             delay(acceptedAlternativeDelayMillis)
 
-            if (followUpMode != FollowUpMode.AFTER_ACCEPT) return@launch
+            if (followUpMode != FollowUpMode.AFTER_ACCEPT) {
+                return@launch
+            }
+
+            if (_confirmedLevel.value != expectedLevel) {
+                stopFollowUpBecauseLevelChanged(
+                    expectedLevel = expectedLevel,
+                    stage = "accepted alternative"
+                )
+                return@launch
+            }
 
             emitAlternativeSuggestion(expectedLevel)
 
-            // Once that action is accepted/dismissed, return to calming.
+            // After this alternative is accepted or dismissed,
+            // the next item should again be a calming message.
             showAlternativeNextInAcceptedFlow = false
         }
+    }
+
+    private fun stopFollowUpBecauseLevelChanged(
+        expectedLevel: Int,
+        stage: String
+    ) {
+        cancelCooldown()
+        clearCurrentUiEvent()
+        clearFlowState()
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Stopped $stage flow because level changed. " +
+                    "expected=$expectedLevel, actual=${_confirmedLevel.value}"
+        )
     }
 
     /**
@@ -708,7 +1332,7 @@ class DistressConfirmationManager(
         if (expectedLevel <= 0) return
 
         cooldownJob = scope.launch {
-            delay(dismissedFlowGapMillis)
+            delay(dismissedNextActionDelayMillis)
 
             if (_confirmedLevel.value != expectedLevel) return@launch
             if (followUpMode != FollowUpMode.AFTER_DISMISS) return@launch
@@ -757,18 +1381,50 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Emits an event asking the overlay/builder for an unused alternative.
+     * Called by FloatingChatOverlay when the default builder cannot create
+     * either the normal default suggestion or an unused alternative.
+     *
+     * This clears the pending state so the manager does not remain stuck
+     * waiting for a suggestion that was never displayed.
      */
-    private fun emitAlternativeSuggestion(level: Int) {
+    fun onDefaultSuggestionUnavailable() {
+
+        pendingSuggestionHandled = true
+        pendingSuggestionLevel = null
+        pendingSuggestionSource = null
+
+        clearCurrentUiEvent()
+        clearCandidate()
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "No available default or alternative suggestion could be displayed."
+        )
+    }
+
+
+    /**
+     * Requests an unused alternative for the current support flow.
+     */
+    private fun emitAlternativeSuggestion(
+        level: Int,
+        source: DistressUiEvent.DistressAlertSource =
+            DistressUiEvent.DistressAlertSource.FORM_FILLING
+    ) {
+        pendingSuggestionLevel = level
+        pendingSuggestionSource = source
+        pendingSuggestionHandled = false
+
         emitEvent(
             DistressUiEvent.ShowAlternativeSuggestion(
                 eventId = newEventId(),
                 level = level,
-                excludedSuggestionIds = getExcludedAlternativeSuggestionIds()
+                source = source,
+                excludedSuggestionIds =
+                    getExcludedAlternativeSuggestionIds()
             )
         )
     }
-
     /**
      * Returns all IDs the alternative builder must avoid.
      */

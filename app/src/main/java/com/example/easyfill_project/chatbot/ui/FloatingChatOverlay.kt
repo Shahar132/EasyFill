@@ -55,6 +55,7 @@ import com.example.easyfill_project.chatbot.model.BotAppState
 import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.distress_scoring.DistressMode
 import com.example.easyfill_project.distress_scoring.DistressUiEvent
+import com.example.easyfill_project.distress_scoring.DistressConfirmationManager
 
 import kotlinx.coroutines.delay
 
@@ -89,10 +90,14 @@ fun FloatingChatOverlay(
     onSuggestionDisplayed: (BotSuggestion) -> Unit = {},
 
     // Reports that no valid unused alternative action was available.
-    // The manager can continue with a calming message instead of getting stuck.
+// The manager can continue with a calming message instead of getting stuck.
     onAlternativeSuggestionUnavailable: () -> Unit = {},
 
-    // Reports that the success message shown after an accepted action
+// Reports that neither the default suggestion nor an unused
+// alternative suggestion could be created.
+    onDefaultSuggestionUnavailable: () -> Unit = {},
+
+// Reports that the success message shown after an accepted action
 // has been closed or completed.
     onAcceptedActionMessageClosed: () -> Unit = {},
 
@@ -189,7 +194,8 @@ fun FloatingChatOverlay(
                     BotSuggestionBuilder.buildSuggestion(
                         severityLevel = event.level,
                         distressMode = suggestionMode,
-                        appState = appState
+                        appState = appState,
+                        excludedSuggestionIds = event.excludedSuggestionIds
                     )
 
                 suggestionQueue.clear()
@@ -197,6 +203,8 @@ fun FloatingChatOverlay(
                 if (suggestion != null) {
                     suggestionQueue.add(suggestion)
                     onSuggestionDisplayed(suggestion)
+                } else {
+                    onDefaultSuggestionUnavailable()
                 }
 
                 successMessage = null
@@ -228,12 +236,28 @@ fun FloatingChatOverlay(
              * accepted, dismissed, or reserved as the original default.
              */
             is DistressUiEvent.ShowAlternativeSuggestion -> {
+                /*
+                 * Use the source stored when the event was created.
+                 *
+                 * A recording may already be finished, so the current live
+                 * distressMode may have returned to FORM_FILLING.
+                 */
+                val suggestionMode =
+                    when (event.source) {
+                        DistressUiEvent.DistressAlertSource.FORM_FILLING ->
+                            DistressMode.FORM_FILLING
+
+                        DistressUiEvent.DistressAlertSource.VOICE_RECORDING ->
+                            DistressMode.VOICE_RECORDING
+                    }
+
                 val alternativeSuggestion =
                     BotSuggestionBuilder.buildAlternativeSuggestion(
                         severityLevel = event.level,
-                        distressMode = distressMode,
+                        distressMode = suggestionMode,
                         appState = appState,
-                        excludedSuggestionIds = event.excludedSuggestionIds
+                        excludedSuggestionIds =
+                            event.excludedSuggestionIds
                     )
 
                 suggestionQueue.clear()
@@ -242,7 +266,6 @@ fun FloatingChatOverlay(
                     suggestionQueue.add(alternativeSuggestion)
                     onSuggestionDisplayed(alternativeSuggestion)
                 } else {
-                    // Continue the manager flow with a calming message.
                     onAlternativeSuggestionUnavailable()
                 }
 
