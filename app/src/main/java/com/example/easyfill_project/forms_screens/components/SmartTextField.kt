@@ -57,6 +57,17 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.staticCompositionLocalOf
+
+
+
+
+
+// Provides form-level validation messages to every SmartTextField.
+internal val LocalFormValidationMessages =
+    staticCompositionLocalOf<Map<String, String>> {
+        emptyMap()
+    }
 
 @Composable
 fun SmartTextField(
@@ -119,15 +130,20 @@ fun SmartTextField(
         FieldValidationMessages.getMessage(error)
     }
 
-    // Prefers the field's own validation error and then checks
-    // for an external error that depends on other form fields.
-    val displayedValidationMessage =
-        if (shouldShowValidationError) {
-            validationMessage ?: externalValidationMessage
-        } else {
-            null
-        }
+    // Reads a validation message produced by the full-form validator.
+    val formValidationMessage =
+        LocalFormValidationMessages.current[fieldId]
 
+
+    // Form-level issues remain visible until their values become valid.
+    // Regular field validation appears only after the user leaves the field.
+    val displayedValidationMessage =
+        formValidationMessage
+            ?: if (shouldShowValidationError) {
+                validationMessage ?: externalValidationMessage
+            } else {
+                null
+            }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -303,14 +319,27 @@ fun SmartTextField(
 
                             speechManager.startSpeechRecognition(
                                 onResult = { text ->
-                                    FormBehaviorTrackingController
-                                        .onFieldValueChanged(
+                                    // Applies the same field rules to recognized speech.
+                                    val sanitizedValue =
+                                        FieldInputRules.sanitizeTypedInput(
                                             fieldId = fieldId,
-                                            oldValue = value,
-                                            newValue = text
+                                            input = text
                                         )
 
-                                    onValueChange(text)
+                                    // Ignores speech that contains no valid value for this field.
+                                    if (
+                                        sanitizedValue.isNotBlank() &&
+                                        sanitizedValue != value
+                                    ) {
+                                        FormBehaviorTrackingController
+                                            .onFieldValueChanged(
+                                                fieldId = fieldId,
+                                                oldValue = value,
+                                                newValue = sanitizedValue
+                                            )
+
+                                        onValueChange(sanitizedValue)
+                                    }
                                 },
 
                                 onSpeechStarted = {

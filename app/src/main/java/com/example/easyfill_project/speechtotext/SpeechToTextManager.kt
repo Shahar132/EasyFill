@@ -34,9 +34,12 @@ class SpeechToTextManager(val context: Context) {
             onFinished()
             return
         }
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+        if (speechRecognizer == null) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        }
 
-        speechRecognizer?.destroy()
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 
         analyzer = SpeechAudioAnalyzer()
         analysisSent = false
@@ -57,9 +60,9 @@ class SpeechToTextManager(val context: Context) {
                 return
             }
 
-            analysisSent = true
-
             val result = analyzer?.analyze() ?: return
+
+            analysisSent = true
 
             Log.d("STT_ANALYSIS", result.toString())
             Log.d("STT_PAUSE", "Pause count = ${result.pauseCount}")
@@ -116,8 +119,6 @@ class SpeechToTextManager(val context: Context) {
             override fun onEndOfSpeech() {
                 Log.d("STT", "End of speech")
                 analyzer?.stopSpeech()
-                sendAnalysisOnce()
-                finishOnce()
             }
 
             override fun onError(error: Int) {
@@ -167,16 +168,24 @@ class SpeechToTextManager(val context: Context) {
     }
 
     fun stopSpeechRecognition() {
-        Log.d("STT", "stopSpeechRecognition called")
+        Log.d(
+            "STT",
+            "stopSpeechRecognition called",
+            Throwable("Who called stopSpeechRecognition?")
+        )
 
         speechRecognizer?.stopListening()
         speechRecognizer?.destroy()
         speechRecognizer = null
     }
 
-
     fun stopAndAnalyze() {
-        Log.d("STT", "Manual stop requested")
+        Log.d(
+            "STT",
+            "stopAndAnalyze called",
+            Throwable("Who called stopAndAnalyze?")
+        )
+
         analyzer?.stopSpeech()
         speechRecognizer?.stopListening()
     }

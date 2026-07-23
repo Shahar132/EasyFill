@@ -3,6 +3,7 @@ package com.example.easyfill_project.forms_screens
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.imeNestedScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -21,13 +22,13 @@ import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
 import com.example.easyfill_project.distress_scoring.DistressMode
 import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
+import com.example.easyfill_project.forms_screens.components.LocalFormValidationMessages
 import com.example.easyfill_project.forms_screens.housing_assistance_sections.*
 import com.example.easyfill_project.hand_analysis.MotionTrackingController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.layout.imeNestedScroll
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -105,6 +106,31 @@ fun HousingAssistanceFormScreen(
 
     var dataLoaded by remember {
         mutableStateOf(false)
+    }
+
+    // Stores all missing and invalid fields found before PDF creation.
+    var validationIssues by remember {
+        mutableStateOf<List<FormIssue>>(emptyList())
+    }
+
+    // Converts the issue list into fast fieldId-to-message lookup.
+    val validationMessagesByField = remember(validationIssues) {
+        validationIssues.associate { issue ->
+            issue.fieldId to issue.message
+        }
+    }
+
+    // Revalidates the form while previously detected issues are corrected.
+    LaunchedEffect(
+        formData,
+        validationIssues.isNotEmpty()
+    ) {
+        if (validationIssues.isNotEmpty()) {
+            validationIssues =
+                HousingAssistanceFormValidator.validateForm(
+                    formData = formData
+                )
+        }
     }
 
     val db = FirebaseFirestore.getInstance()
@@ -615,6 +641,7 @@ fun HousingAssistanceFormScreen(
      * The chatbot itself is outside the scrolling Column.
      */
     val formScrollState = rememberScrollState()
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -629,70 +656,82 @@ fun HousingAssistanceFormScreen(
                 currentStep = currentStep,
                 sections = sections
             )
+
             Spacer(
                 modifier = Modifier.height(10.dp)
             )
 
-            when (currentStep) {
-                0 -> PersonalDetailsSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
-                    onFocusedFieldChange =
-                        onFocusedFieldChange,
+            CompositionLocalProvider(
+                LocalFormValidationMessages provides
+                        validationMessagesByField
+            ) {
+                when (currentStep) {
+                    0 -> PersonalDetailsSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                    // The chatbot is now displayed by the outer Box.
-                    chatbotContent = {}
-                )
+                    1 -> MailingAddressSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                1 -> MailingAddressSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
-                    onFocusedFieldChange =
-                        onFocusedFieldChange,
+                    2 -> FamilyStatusSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                    // The chatbot is now displayed by the outer Box.
-                    chatbotContent = {}
-                )
+                    3 -> IncomeDetailsSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                2 -> FamilyStatusSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
-                    onFocusedFieldChange =
-                        onFocusedFieldChange,
+                    4 -> AssistanceSelectionSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+                        chatbotContent = {}
+                    )
 
-                    // The chatbot is now displayed by the outer Box.
-                    chatbotContent = {}
-                )
+                    5 -> RentAssistanceSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                3 -> IncomeDetailsSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
-                    onFocusedFieldChange =
-                        onFocusedFieldChange,
+                    6 -> SummarySection(
+                        formData = formData,
 
-                    // The chatbot is now displayed by the outer Box.
-                    chatbotContent = {}
-                )
+                        onValidationIssuesFound = { issues ->
+                            validationIssues = issues
 
-                4 -> AssistanceSelectionSection(
-                    formData,
-                    ::updateField,
-                    chatbotContent = {}
-                )
+                            val firstIssue =
+                                issues.firstOrNull()
 
-                5 -> RentAssistanceSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
-                    onFocusedFieldChange =
-                        onFocusedFieldChange,
+                            if (firstIssue != null) {
+                                val targetStep =
+                                    firstIssue.sectionIndex
 
-                    // The chatbot is now displayed by the outer Box.
-                    chatbotContent = {}
-                )
+                                FormBehaviorTrackingController
+                                    .onStepChanged(
+                                        fromStep = currentStep,
+                                        toStep = targetStep
+                                    )
 
-                6 -> SummarySection(
-                    navController
-                )
+                                saveStep(targetStep)
+                                currentStep = targetStep
+                            }
+                        }
+                    )
+                }
             }
 
             Spacer(
