@@ -17,6 +17,12 @@ class FaceBaselineRepository {
     private val db =
         FirebaseFirestore.getInstance()
 
+    /**
+     * Saves a newly calibrated raw baseline.
+     *
+     * Previously learned derived metrics are cleared because
+     * they may no longer match the new raw calibration.
+     */
     fun saveRawBaseline(
         baseline: FaceBaseline,
         collectedFrameCount: Int,
@@ -24,12 +30,10 @@ class FaceBaselineRepository {
         onSuccess: () -> Unit = {},
         onFailure: (Exception) -> Unit = {}
     ) {
-
         val userId =
             auth.currentUser?.uid
 
         if (userId == null) {
-
             onFailure(
                 IllegalStateException(
                     "Cannot save face baseline without an authenticated user."
@@ -40,7 +44,6 @@ class FaceBaselineRepository {
         }
 
         if (!containsAllRawMetrics(baseline.rawMetrics)) {
-
             onFailure(
                 IllegalArgumentException(
                     "Face baseline is missing required raw metrics."
@@ -54,7 +57,7 @@ class FaceBaselineRepository {
             db.collection("users")
                 .document(userId)
                 .collection("faceParameters")
-                .document("baseline")
+                .document(BASELINE_DOCUMENT_NAME)
 
         val data =
             hashMapOf<String, Any>(
@@ -62,18 +65,28 @@ class FaceBaselineRepository {
                         serializeMetrics(
                             baseline.rawMetrics
                         ),
+
+                /*
+                 * Derived metrics from the previous calibration
+                 * must not remain after raw calibration changes.
+                 */
+                "derivedMetrics" to
+                        emptyMap<String, Any>(),
+
                 "baselineVersion" to
                         CURRENT_BASELINE_VERSION,
+
                 "collectedFrameCount" to
                         collectedFrameCount,
+
                 "validWindowCount" to
                         validWindowCount,
+
                 "updatedAt" to
                         FieldValue.serverTimestamp()
             )
 
         db.runTransaction { transaction ->
-
             val document =
                 transaction.get(reference)
 
@@ -91,10 +104,10 @@ class FaceBaselineRepository {
             true
         }
             .addOnSuccessListener {
-
                 Log.d(
                     TAG,
                     "Raw baseline saved | " +
+                            "version=$CURRENT_BASELINE_VERSION | " +
                             "metrics=${baseline.rawMetrics.size} | " +
                             "frames=$collectedFrameCount | " +
                             "windows=$validWindowCount"
@@ -103,7 +116,6 @@ class FaceBaselineRepository {
                 onSuccess()
             }
             .addOnFailureListener { exception ->
-
                 Log.e(
                     TAG,
                     "Failed to save raw face baseline",
@@ -115,7 +127,8 @@ class FaceBaselineRepository {
     }
 
     /**
-     * Saves only derived metrics.
+     * Saves only learned derived metrics.
+     *
      * Raw metrics are not overwritten.
      */
     fun saveDerivedBaseline(
@@ -123,12 +136,10 @@ class FaceBaselineRepository {
         onSuccess: () -> Unit = {},
         onFailure: (Exception) -> Unit = {}
     ) {
-
         val userId =
             auth.currentUser?.uid
 
         if (userId == null) {
-
             onFailure(
                 IllegalStateException(
                     "Cannot save derived baseline without an authenticated user."
@@ -149,6 +160,10 @@ class FaceBaselineRepository {
                         serializeMetrics(
                             baseline.derivedMetrics
                         ),
+
+                "baselineVersion" to
+                        CURRENT_BASELINE_VERSION,
+
                 "updatedAt" to
                         FieldValue.serverTimestamp()
             )
@@ -156,23 +171,22 @@ class FaceBaselineRepository {
         db.collection("users")
             .document(userId)
             .collection("faceParameters")
-            .document("baseline")
+            .document(BASELINE_DOCUMENT_NAME)
             .set(
                 data,
                 SetOptions.merge()
             )
             .addOnSuccessListener {
-
                 Log.d(
                     TAG,
                     "Derived baseline saved | " +
+                            "version=$CURRENT_BASELINE_VERSION | " +
                             "metrics=${baseline.derivedMetrics.size}"
                 )
 
                 onSuccess()
             }
             .addOnFailureListener { exception ->
-
                 Log.e(
                     TAG,
                     "Failed to save derived face baseline",
@@ -183,16 +197,20 @@ class FaceBaselineRepository {
             }
     }
 
+    /**
+     * Loads a compatible personal baseline.
+     *
+     * Old versions and baselines that are missing any
+     * required raw feature are ignored automatically.
+     */
     fun getBaseline(
         onSuccess: (FaceBaseline?) -> Unit,
         onFailure: (Exception) -> Unit = {}
     ) {
-
         val userId =
             auth.currentUser?.uid
 
         if (userId == null) {
-
             onFailure(
                 IllegalStateException(
                     "Cannot load face baseline without an authenticated user."
@@ -205,12 +223,10 @@ class FaceBaselineRepository {
         db.collection("users")
             .document(userId)
             .collection("faceParameters")
-            .document("baseline")
+            .document(BASELINE_DOCUMENT_NAME)
             .get()
             .addOnSuccessListener { document ->
-
                 if (!document.exists()) {
-
                     Log.d(
                         TAG,
                         "No saved face baseline was found"
@@ -227,10 +243,11 @@ class FaceBaselineRepository {
                         ?.toInt()
 
                 if (version != CURRENT_BASELINE_VERSION) {
-
                     Log.d(
                         TAG,
-                        "Ignoring incompatible baseline version: $version"
+                        "Ignoring incompatible baseline | " +
+                                "savedVersion=$version | " +
+                                "requiredVersion=$CURRENT_BASELINE_VERSION"
                     )
 
                     onSuccess(null)
@@ -249,10 +266,15 @@ class FaceBaselineRepository {
                     )
 
                 if (!containsAllRawMetrics(rawMetrics)) {
+                    val missingFeatures =
+                        FaceStats.rawFeatures.filter { feature ->
+                            feature !in rawMetrics
+                        }
 
                     Log.e(
                         TAG,
-                        "Saved baseline is missing raw metrics"
+                        "Saved baseline is missing raw metrics | " +
+                                "missing=$missingFeatures"
                     )
 
                     onSuccess(null)
@@ -269,6 +291,7 @@ class FaceBaselineRepository {
                 Log.d(
                     TAG,
                     "Face baseline loaded | " +
+                            "version=$version | " +
                             "raw=${rawMetrics.size} | " +
                             "derived=${derivedMetrics.size}"
                 )
@@ -276,7 +299,6 @@ class FaceBaselineRepository {
                 onSuccess(baseline)
             }
             .addOnFailureListener { exception ->
-
                 Log.e(
                     TAG,
                     "Failed to load face baseline",
@@ -287,31 +309,39 @@ class FaceBaselineRepository {
             }
     }
 
+    /**
+     * Converts feature metrics into a Firestore-safe map.
+     */
     private fun serializeMetrics(
         metrics: Map<FaceBaselineFeature, BaselineMetric>
     ): Map<String, Any> {
-
         return metrics
             .mapKeys { entry ->
                 entry.key.name
             }
             .mapValues { entry ->
-
                 mapOf(
                     "median" to
                             entry.value.median,
+
                     "mad" to
                             entry.value.mad,
+
                     "sampleCount" to
                             entry.value.sampleCount
                 )
             }
     }
 
+    /**
+     * Converts stored Firestore values into baseline metrics.
+     *
+     * Unknown feature names are ignored so future enum changes
+     * do not cause the entire document to fail loading.
+     */
     private fun deserializeMetrics(
         storedValue: Any?
     ): Map<FaceBaselineFeature, BaselineMetric> {
-
         val storedMetrics =
             storedValue as? Map<*, *>
                 ?: return emptyMap()
@@ -323,7 +353,6 @@ class FaceBaselineRepository {
                     >()
 
         storedMetrics.forEach { (key, value) ->
-
             val featureName =
                 key as? String
                     ?: return@forEach
@@ -375,17 +404,29 @@ class FaceBaselineRepository {
         return parsed
     }
 
+    /**
+     * Checks that every currently required raw feature exists.
+     */
     private fun containsAllRawMetrics(
         metrics: Map<FaceBaselineFeature, BaselineMetric>
     ): Boolean {
-
         return FaceStats.rawFeatures.all { feature ->
             feature in metrics
         }
     }
 
     companion object {
-        private const val TAG = "FACE_BASELINE_FIREBASE"
-        private const val CURRENT_BASELINE_VERSION = 1
+
+        private const val TAG =
+            "FACE_BASELINE_FIREBASE"
+
+        private const val BASELINE_DOCUMENT_NAME =
+            "baseline"
+
+        /*
+         * Version 2 adds normalized eyebrow geometry.
+         */
+        private const val CURRENT_BASELINE_VERSION =
+            2
     }
 }

@@ -1,5 +1,6 @@
 package com.example.easyfill_project.face_analysis
 
+import android.util.Log
 import java.util.ArrayDeque
 import kotlin.math.abs
 
@@ -13,32 +14,46 @@ class FaceDistressAnalyzer(
 
     private var activeBaseline = baseline
 
-    private val currentWindowFrames = mutableListOf<FaceFrameData>()
+    private val currentWindowFrames =
+        mutableListOf<FaceFrameData>()
 
-    private var currentWindowStartTimestampMs: Long? = null
+    private var currentWindowStartTimestampMs: Long? =
+        null
 
-    private var lastFrameTimestampMs: Long? = null
+    private var lastFrameTimestampMs: Long? =
+        null
 
-    private var observationStartTimestampMs: Long? = null
+    private var observationStartTimestampMs: Long? =
+        null
 
-    private val recentWindows = ArrayDeque<FaceWindowResult>()
+    private val recentWindows =
+        ArrayDeque<FaceWindowResult>()
 
-    private val blinkEvents = ArrayDeque<BlinkEvent>()
+    private val blinkEvents =
+        ArrayDeque<BlinkEvent>()
 
-    private var currentBlinkStartTimestampMs: Long? = null
+    private var currentBlinkStartTimestampMs: Long? =
+        null
 
-    private var smoothedScore = 0f
+    private var smoothedScore =
+        0f
 
-    private val cleanDerivedSamples = mutableMapOf<FaceBaselineFeature, ArrayDeque<Float>>()
+    private val cleanDerivedSamples =
+        mutableMapOf<
+                FaceBaselineFeature,
+                ArrayDeque<Float>
+                >()
 
-    private var cleanSnapshotCount = 0
+    private var cleanSnapshotCount =
+        0
 
-    private var lastDerivedBaselineUpdateTimestampMs = 0L
+    private var lastDerivedBaselineUpdateTimestampMs =
+        0L
 
-    private var pendingBaselineUpdate: FaceBaseline? = null
+    private var pendingBaselineUpdate: FaceBaseline? =
+        null
 
     init {
-
         require(
             FaceStats.rawFeatures.all { feature ->
                 feature in baseline.rawMetrics
@@ -56,7 +71,6 @@ class FaceDistressAnalyzer(
     fun addFrame(
         frameData: FaceFrameData
     ): FaceDistressResult? {
-
         if (!FaceStats.isValidFrame(frameData)) {
             return null
         }
@@ -87,7 +101,6 @@ class FaceDistressAnalyzer(
             currentWindowStartTimestampMs
 
         if (windowStart == null) {
-
             currentWindowStartTimestampMs =
                 frameData.timestampMs
 
@@ -101,7 +114,6 @@ class FaceDistressAnalyzer(
                     windowStart
 
         if (elapsed < WINDOW_DURATION_MS) {
-
             currentWindowFrames.add(frameData)
 
             return null
@@ -150,7 +162,6 @@ class FaceDistressAnalyzer(
     fun onFaceMissing(
         timestampMs: Long
     ): Boolean {
-
         val lastTimestamp =
             lastFrameTimestampMs
                 ?: return false
@@ -170,9 +181,11 @@ class FaceDistressAnalyzer(
         return true
     }
 
+    /**
+     * Clears all transient and learned session data.
+     */
     @Synchronized
     fun reset() {
-
         resetTransientState()
 
         lastFrameTimestampMs = null
@@ -202,10 +215,12 @@ class FaceDistressAnalyzer(
         return update
     }
 
+    /**
+     * Creates one 500 ms window result.
+     */
     private fun buildWindowResult(
         startTimestampMs: Long
     ): FaceWindowResult? {
-
         if (
             currentWindowFrames.size <
             MIN_VALID_FRAMES_PER_WINDOW
@@ -216,11 +231,9 @@ class FaceDistressAnalyzer(
         val featureResults =
             FaceStats.rawFeatures
                 .associateWith { feature ->
-
                     val currentMedian =
                         FaceStats.median(
                             currentWindowFrames.map { frame ->
-
                                 FaceStats.rawValue(
                                     frame = frame,
                                     feature = feature
@@ -270,48 +283,196 @@ class FaceDistressAnalyzer(
                 currentWindowFrames.size,
             activityLevel =
                 calculateWindowActivity(
-                    frames =
-                        currentWindowFrames
+                    frames = currentWindowFrames
                 ),
             featureResults =
                 featureResults
         )
     }
 
+    /**
+     * Combines eye, eyebrow and activity measurements.
+     */
     private fun buildDistressResult(
         currentWindow: FaceWindowResult
     ): FaceDistressResult {
+        val reliable =
+            recentWindows.size >=
+                    PERSISTENCE_WINDOW_COUNT
 
-        val reliable = recentWindows.size >= PERSISTENCE_WINDOW_COUNT
+        val squintScore =
+            persistentScore(
+                FaceBaselineFeature.EYE_SQUINT_LEFT,
+                FaceBaselineFeature.EYE_SQUINT_RIGHT
+            )
 
-        val squintScore = persistentScore(FaceBaselineFeature.EYE_SQUINT_LEFT, FaceBaselineFeature.EYE_SQUINT_RIGHT)
+        val wideEyeScore =
+            persistentScore(
+                FaceBaselineFeature.EYE_WIDE_LEFT,
+                FaceBaselineFeature.EYE_WIDE_RIGHT
+            )
 
-        val wideEyeScore = persistentScore(FaceBaselineFeature.EYE_WIDE_LEFT, FaceBaselineFeature.EYE_WIDE_RIGHT)
+        /*
+         * Raw MediaPipe eyebrow scores.
+         */
+        val rawBrowFurrowScore =
+            persistentScore(
+                FaceBaselineFeature.BROW_DOWN_LEFT,
+                FaceBaselineFeature.BROW_DOWN_RIGHT
+            )
 
-        val browFurrowScore = persistentScore(FaceBaselineFeature.BROW_DOWN_LEFT, FaceBaselineFeature.BROW_DOWN_RIGHT)
+        val rawInnerBrowRaiseScore =
+            persistentScore(
+                FaceBaselineFeature.BROW_INNER_UP
+            )
 
-        val innerBrowRaiseScore = persistentScore(FaceBaselineFeature.BROW_INNER_UP)
+        val rawOuterBrowRaiseScore =
+            persistentScore(
+                FaceBaselineFeature.BROW_OUTER_UP_LEFT,
+                FaceBaselineFeature.BROW_OUTER_UP_RIGHT
+            )
 
-        val outerBrowRaiseScore = persistentScore(FaceBaselineFeature.BROW_OUTER_UP_LEFT, FaceBaselineFeature.BROW_OUTER_UP_RIGHT)
+        val rawBrowRaiseScore =
+            maxOf(
+                rawInnerBrowRaiseScore,
+                rawOuterBrowRaiseScore
+            )
 
-        val derivedMetrics = buildDerivedMetrics(currentTimestampMs = currentWindow.endTimestampMs)
+        /*
+         * A brow raise should increase the normalized
+         * distance between the eyebrows and the eyes.
+         */
+        val browRaiseGeometryScore =
+            persistentScore(
+                FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
+                FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT
+            )
 
-        val blinkPatternScore = calculateBlinkPatternScore(derivedMetrics = derivedMetrics)
+        /*
+         * Brow lowering should decrease the normalized
+         * distance between the eyebrows and the eyes.
+         */
+        val browLoweringGeometryScore =
+            persistentNegativeScore(
+                FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
+                FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT
+            )
 
-        val activityScore = calculateLowActivityScore(derivedMetrics = derivedMetrics)
+        /*
+         * Brow furrowing can also reduce the normalized
+         * distance between the inner eyebrow areas.
+         */
+        val innerBrowCompressionScore =
+            persistentNegativeScore(
+                FaceBaselineFeature.INNER_BROW_DISTANCE
+            )
 
-        val browRaiseScore = maxOf(innerBrowRaiseScore, outerBrowRaiseScore)
+        val browFurrowGeometryScore =
+            combineStrongest(
+                listOf(
+                    browLoweringGeometryScore,
+                    innerBrowCompressionScore
+                )
+            )
 
-        val eyesScore = combineStrongest(listOf(squintScore, wideEyeScore, blinkPatternScore))
+        /*
+         * Strong geometry asymmetry often indicates
+         * a camera-angle change or unreliable pose.
+         */
+        val geometryAsymmetryScore =
+            persistentScore(
+                FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY
+            )
 
-        val browsScore = combineStrongest(listOf(browFurrowScore, browRaiseScore))
+        val confirmedBrowFurrowScore =
+            confirmBrowSignal(
+                blendshapeScore =
+                    rawBrowFurrowScore,
+                geometryScore =
+                    browFurrowGeometryScore,
+                asymmetryScore =
+                    geometryAsymmetryScore
+            )
 
-        val contributorScores = linkedMapOf(FaceDistressContributor.EYE_SQUINT to squintScore,
-            FaceDistressContributor.EYE_WIDE to wideEyeScore,
-            FaceDistressContributor.BLINK_PATTERN to blinkPatternScore,
-            FaceDistressContributor.BROW_FURROW to browFurrowScore,
-            FaceDistressContributor.BROW_RAISE to browRaiseScore,
-            FaceDistressContributor.LOW_FACIAL_ACTIVITY to activityScore
+        val confirmedBrowRaiseScore =
+            confirmBrowSignal(
+                blendshapeScore =
+                    rawBrowRaiseScore,
+                geometryScore =
+                    browRaiseGeometryScore,
+                asymmetryScore =
+                    geometryAsymmetryScore
+            )
+
+        logBrowConfirmation(
+            rawFurrowScore =
+                rawBrowFurrowScore,
+            furrowGeometryScore =
+                browFurrowGeometryScore,
+            confirmedFurrowScore =
+                confirmedBrowFurrowScore,
+            rawRaiseScore =
+                rawBrowRaiseScore,
+            raiseGeometryScore =
+                browRaiseGeometryScore,
+            confirmedRaiseScore =
+                confirmedBrowRaiseScore,
+            asymmetryScore =
+                geometryAsymmetryScore
+        )
+
+        val derivedMetrics =
+            buildDerivedMetrics(
+                currentTimestampMs =
+                    currentWindow.endTimestampMs
+            )
+
+        val blinkPatternScore =
+            calculateBlinkPatternScore(
+                derivedMetrics = derivedMetrics
+            )
+
+        val activityScore =
+            calculateLowActivityScore(
+                derivedMetrics = derivedMetrics
+            )
+
+        val eyesScore =
+            combineStrongest(
+                listOf(
+                    squintScore,
+                    wideEyeScore,
+                    blinkPatternScore
+                )
+            )
+
+        val browsScore =
+            combineStrongest(
+                listOf(
+                    confirmedBrowFurrowScore,
+                    confirmedBrowRaiseScore
+                )
+            )
+
+        val contributorScores =
+            linkedMapOf(
+                FaceDistressContributor.EYE_SQUINT
+                        to squintScore,
+
+                FaceDistressContributor.EYE_WIDE
+                        to wideEyeScore,
+
+                FaceDistressContributor.BLINK_PATTERN
+                        to blinkPatternScore,
+
+                FaceDistressContributor.BROW_FURROW
+                        to confirmedBrowFurrowScore,
+
+                FaceDistressContributor.BROW_RAISE
+                        to confirmedBrowRaiseScore,
+
+                FaceDistressContributor.LOW_FACIAL_ACTIVITY
+                        to activityScore
             )
 
         val peakFeatureScore =
@@ -341,15 +502,10 @@ class FaceDistressAnalyzer(
 
         smoothedScore =
             if (!reliable) {
-
                 0f
-
             } else if (smoothedScore == 0f) {
-
                 rawFaceScore
-
             } else {
-
                 smoothedScore *
                         SCORE_SMOOTHING_OLD_WEIGHT +
                         rawFaceScore *
@@ -405,13 +561,12 @@ class FaceDistressAnalyzer(
     /**
      * Uses the median of the last three windows.
      *
-     * For bilateral features, both sides are averaged
-     * so noise from one side cannot dominate the score.
+     * Bilateral features are averaged so that
+     * noise from one side cannot dominate.
      */
     private fun persistentScore(
         vararg features: FaceBaselineFeature
     ): Float {
-
         if (
             recentWindows.size <
             PERSISTENCE_WINDOW_COUNT
@@ -428,18 +583,14 @@ class FaceDistressAnalyzer(
 
         val scores =
             lastWindows.map { window ->
-
                 val featureScores =
                     features.map { feature ->
                         window.scoreOf(feature)
                     }
 
                 if (featureScores.size == 1) {
-
                     featureScores.first()
-
                 } else {
-
                     featureScores
                         .average()
                         .toFloat()
@@ -449,10 +600,120 @@ class FaceDistressAnalyzer(
         return FaceStats.median(scores)
     }
 
+    /**
+     * Detects decreases relative to the personal baseline.
+     *
+     * FaceWindowFeatureResult normally stores a score for
+     * positive deviations. This method reverses the Z-score
+     * so decreases can also be measured.
+     */
+    private fun persistentNegativeScore(
+        vararg features: FaceBaselineFeature
+    ): Float {
+        if (
+            recentWindows.size <
+            PERSISTENCE_WINDOW_COUNT
+        ) {
+            return 0f
+        }
+
+        val lastWindows =
+            recentWindows
+                .toList()
+                .takeLast(
+                    PERSISTENCE_WINDOW_COUNT
+                )
+
+        val scores =
+            lastWindows.map { window ->
+                val featureScores =
+                    features.map { feature ->
+                        val modifiedZ =
+                            window.featureResults[feature]
+                                ?.modifiedZ
+                                ?: 0f
+
+                        FaceStats.positiveZToScore(
+                            -modifiedZ
+                        )
+                    }
+
+                if (featureScores.size == 1) {
+                    featureScores.first()
+                } else {
+                    featureScores
+                        .average()
+                        .toFloat()
+                }
+            }
+
+        return FaceStats.median(scores)
+    }
+
+    /**
+     * Keeps a brow Blendshape score only when normalized
+     * landmark geometry supports the same movement.
+     *
+     * Unsupported Blendshape changes are not removed
+     * completely, but they are strongly reduced.
+     */
+    private fun confirmBrowSignal(
+        blendshapeScore: Float,
+        geometryScore: Float,
+        asymmetryScore: Float
+    ): Float {
+        if (blendshapeScore <= 0f) {
+            return 0f
+        }
+
+        val geometrySupported =
+            geometryScore >=
+                    GEOMETRY_CONFIRMATION_SCORE
+
+        val supportedScore =
+            if (geometrySupported) {
+                blendshapeScore *
+                        CONFIRMED_BLENDSHAPE_WEIGHT +
+                        geometryScore *
+                        CONFIRMED_GEOMETRY_WEIGHT
+            } else {
+                blendshapeScore *
+                        UNCONFIRMED_BROW_WEIGHT
+            }
+
+        val asymmetryReliability =
+            when {
+                asymmetryScore >=
+                        HIGH_ASYMMETRY_SCORE ->
+                    HIGH_ASYMMETRY_WEIGHT
+
+                asymmetryScore >=
+                        MEDIUM_ASYMMETRY_SCORE ->
+                    MEDIUM_ASYMMETRY_WEIGHT
+
+                asymmetryScore >=
+                        LOW_ASYMMETRY_SCORE ->
+                    LOW_ASYMMETRY_WEIGHT
+
+                else ->
+                    1f
+            }
+
+        return (
+                supportedScore *
+                        asymmetryReliability
+                ).coerceIn(
+                minimumValue = 0f,
+                maximumValue = 4f
+            )
+    }
+
+    /**
+     * Combines the two strongest scores.
+     */
     private fun combineStrongest(
         scores: List<Float>
     ): Float {
-
         val sorted =
             scores.sortedDescending()
 
@@ -476,10 +737,12 @@ class FaceDistressAnalyzer(
             )
     }
 
+    /**
+     * Tracks bilateral blink events.
+     */
     private fun updateBlinkTracking(
         frameData: FaceFrameData
     ) {
-
         val leftFeature =
             FaceBaselineFeature.EYE_BLINK_LEFT
 
@@ -516,10 +779,6 @@ class FaceDistressAnalyzer(
                 )
             )
 
-        /*
-         * Both eyes must support the blink.
-         * Noise from one eye cannot start an event.
-         */
         val bilateralBlinkScore =
             minOf(
                 leftScore,
@@ -531,7 +790,6 @@ class FaceDistressAnalyzer(
             bilateralBlinkScore >=
             BLINK_START_SCORE
         ) {
-
             currentBlinkStartTimestampMs =
                 frameData.timestampMs
 
@@ -543,7 +801,6 @@ class FaceDistressAnalyzer(
             bilateralBlinkScore <=
             BLINK_END_SCORE
         ) {
-
             val startTimestamp =
                 currentBlinkStartTimestampMs
                     ?: return
@@ -560,7 +817,6 @@ class FaceDistressAnalyzer(
                 MIN_BLINK_DURATION_MS..
                 MAX_TRACKED_EYE_CLOSURE_MS
             ) {
-
                 blinkEvents.addLast(
                     BlinkEvent(
                         endTimestampMs =
@@ -578,10 +834,12 @@ class FaceDistressAnalyzer(
         )
     }
 
+    /**
+     * Removes blink events outside the history window.
+     */
     private fun pruneBlinkEvents(
         currentTimestampMs: Long
     ) {
-
         while (
             blinkEvents.isNotEmpty() &&
             currentTimestampMs -
@@ -592,10 +850,12 @@ class FaceDistressAnalyzer(
         }
     }
 
+    /**
+     * Calculates derived facial metrics.
+     */
     private fun buildDerivedMetrics(
         currentTimestampMs: Long
     ): Map<FaceBaselineFeature, Float> {
-
         val windows =
             recentWindows.toList()
 
@@ -645,7 +905,6 @@ class FaceDistressAnalyzer(
         val currentClosureDuration =
             currentBlinkStartTimestampMs
                 ?.let { start ->
-
                     (
                             currentTimestampMs -
                                     start
@@ -655,14 +914,19 @@ class FaceDistressAnalyzer(
 
         val completedLongClosures =
             blinkEventList.filter { event ->
-
                 event.durationMs >=
                         LONG_EYE_CLOSURE_MS
             }
 
-        val longestClosure = maxOf(currentClosureDuration, completedLongClosures.maxOfOrNull { event -> event.durationMs } ?: 0L)
-
-     //   val longestClosure = maxOf(window.scoreOf(leftFeature) + window.scoreOf(rightFeature)) / 2f
+        val longestClosure =
+            maxOf(
+                currentClosureDuration,
+                completedLongClosures
+                    .maxOfOrNull { event ->
+                        event.durationMs
+                    }
+                    ?: 0L
+            )
 
         val longClosureCount =
             completedLongClosures.size +
@@ -732,7 +996,6 @@ class FaceDistressAnalyzer(
 
         val lowActivityFlags =
             windows.map { window ->
-
                 lowActivityThreshold != null &&
                         window.activityLevel <=
                         lowActivityThreshold
@@ -759,7 +1022,6 @@ class FaceDistressAnalyzer(
             )
 
         return linkedMapOf(
-
             FaceBaselineFeature.BLINK_RATE
                     to blinkRate,
 
@@ -843,58 +1105,51 @@ class FaceDistressAnalyzer(
         )
     }
 
+    /**
+     * Calculates intensity, duration, percentage,
+     * asymmetry and event count for one expression.
+     */
     private fun expressionStats(
         windows: List<FaceWindowResult>,
         leftFeature: FaceBaselineFeature,
         rightFeature: FaceBaselineFeature?
     ): ExpressionStats {
-
         val scores =
             windows.map { window ->
-
                 if (rightFeature == null) {
-
                     window.scoreOf(
                         leftFeature
                     )
-
                 } else {
-
-                    maxOf(
-                        window.scoreOf(
-                            leftFeature
-                        ),
-                        window.scoreOf(
-                            rightFeature
-                        )
-                    )
+                    (
+                            window.scoreOf(
+                                leftFeature
+                            ) +
+                                    window.scoreOf(
+                                        rightFeature
+                                    )
+                            ) / 2f
                 }
             }
 
         val activeFlags =
             scores.map { score ->
-
                 score >=
                         EXPRESSION_ACTIVE_SCORE
             }
 
         val activeScores =
             scores.filter { score ->
-
                 score >=
                         EXPRESSION_ACTIVE_SCORE
             }
 
         val asymmetry =
             if (rightFeature == null) {
-
                 0f
-
             } else {
-
                 windows
                     .map { window ->
-
                         abs(
                             window.scoreOf(
                                 leftFeature
@@ -938,11 +1193,13 @@ class FaceDistressAnalyzer(
         )
     }
 
+    /**
+     * Calculates blink-pattern score.
+     */
     private fun calculateBlinkPatternScore(
         derivedMetrics:
         Map<FaceBaselineFeature, Float>
     ): Float {
-
         val currentLongClosure =
             derivedMetrics[
                 FaceBaselineFeature
@@ -951,7 +1208,6 @@ class FaceDistressAnalyzer(
 
         val longClosureScore =
             when {
-
                 currentLongClosure <
                         LONG_EYE_CLOSURE_MS ->
                     0f
@@ -995,7 +1251,6 @@ class FaceDistressAnalyzer(
                 FaceBaselineFeature
                     .AVERAGE_BLINK_DURATION
             ).mapNotNull { feature ->
-
                 val currentValue =
                     derivedMetrics[feature]
                         ?: return@mapNotNull null
@@ -1016,11 +1271,13 @@ class FaceDistressAnalyzer(
         )
     }
 
+    /**
+     * Calculates low-activity score.
+     */
     private fun calculateLowActivityScore(
         derivedMetrics:
         Map<FaceBaselineFeature, Float>
     ): Float {
-
         val activityMetric =
             activeBaseline.derivedMetrics[
                 FaceBaselineFeature
@@ -1041,7 +1298,8 @@ class FaceDistressAnalyzer(
                             ) /
                     FaceStats.effectiveMad(
                         feature =
-                            FaceBaselineFeature.FACIAL_ACTIVITY_LEVEL,
+                            FaceBaselineFeature
+                                .FACIAL_ACTIVITY_LEVEL,
                         metric = activityMetric
                     )
 
@@ -1058,7 +1316,6 @@ class FaceDistressAnalyzer(
 
         val durationScore =
             when {
-
                 lowDuration < 3_000f ->
                     0f
 
@@ -1103,11 +1360,13 @@ class FaceDistressAnalyzer(
         )
     }
 
+    /**
+     * Compares a derived value to its learned baseline.
+     */
     private fun compareDerivedPositive(
         feature: FaceBaselineFeature,
         currentValue: Float
     ): Float? {
-
         val metric =
             activeBaseline
                 .derivedMetrics[feature]
@@ -1122,12 +1381,16 @@ class FaceDistressAnalyzer(
         )
     }
 
+    /**
+     * Calculates the personalized low-activity threshold.
+     */
     private fun calculateLowActivityThreshold():
             Float? {
 
         val metric =
             activeBaseline.derivedMetrics[
-                FaceBaselineFeature.FACIAL_ACTIVITY_LEVEL
+                FaceBaselineFeature
+                    .FACIAL_ACTIVITY_LEVEL
             ] ?: return null
 
         return (
@@ -1135,16 +1398,20 @@ class FaceDistressAnalyzer(
                         LOW_ACTIVITY_BASELINE_DEVIATIONS *
                         FaceStats.effectiveMad(
                             feature =
-                                FaceBaselineFeature.FACIAL_ACTIVITY_LEVEL,
+                                FaceBaselineFeature
+                                    .FACIAL_ACTIVITY_LEVEL,
                             metric = metric
                         )
                 ).coerceAtLeast(0f)
     }
 
+    /**
+     * Calculates how long an expression vector
+     * has remained relatively unchanged.
+     */
     private fun calculateExpressionHoldDuration(
         windows: List<FaceWindowResult>
     ): Float {
-
         if (windows.size < 2) {
             return 0f
         }
@@ -1156,7 +1423,6 @@ class FaceDistressAnalyzer(
         index in
         windows.lastIndex downTo 1
         ) {
-
             val current =
                 windows[index]
 
@@ -1170,11 +1436,9 @@ class FaceDistressAnalyzer(
                 )
 
             val expressionActive =
-                current.featureResults
-                    .values
-                    .any { result ->
-
-                        result.score >=
+                FaceStats.blendshapeFeatures
+                    .any { feature ->
+                        current.scoreOf(feature) >=
                                 EXPRESSION_ACTIVE_SCORE
                     }
 
@@ -1193,10 +1457,12 @@ class FaceDistressAnalyzer(
                 WINDOW_DURATION_MS.toFloat()
     }
 
+    /**
+     * Counts meaningful changes in the expression vector.
+     */
     private fun calculateFacialChangeCount(
         windows: List<FaceWindowResult>
     ): Float {
-
         if (windows.size < 2) {
             return 0f
         }
@@ -1204,7 +1470,6 @@ class FaceDistressAnalyzer(
         return windows
             .zipWithNext()
             .count { pair ->
-
                 val previous =
                     pair.first
 
@@ -1214,19 +1479,25 @@ class FaceDistressAnalyzer(
                 windowVectorChange(
                     first = previous,
                     second = current
-                ) >= FACIAL_CHANGE_THRESHOLD
+                ) >=
+                        FACIAL_CHANGE_THRESHOLD
             }
             .toFloat()
     }
 
+    /**
+     * Measures expression-vector change using only
+     * MediaPipe Blendshapes.
+     *
+     * Geometry features are excluded because changes
+     * in camera pose must not increase facial activity.
+     */
     private fun windowVectorChange(
         first: FaceWindowResult,
         second: FaceWindowResult
     ): Float {
-
-        return FaceStats.rawFeatures
+        return FaceStats.blendshapeFeatures
             .map { feature ->
-
                 abs(
                     first.medianOf(feature) -
                             second.medianOf(feature)
@@ -1236,10 +1507,12 @@ class FaceDistressAnalyzer(
             .toFloat()
     }
 
+    /**
+     * Calculates activity using only Blendshape changes.
+     */
     private fun calculateWindowActivity(
         frames: List<FaceFrameData>
     ): Float {
-
         if (frames.size < 2) {
             return 0f
         }
@@ -1247,16 +1520,14 @@ class FaceDistressAnalyzer(
         return frames
             .zipWithNext()
             .map { pair ->
-
                 val previous =
                     pair.first
 
                 val current =
                     pair.second
 
-                FaceStats.rawFeatures
+                FaceStats.blendshapeFeatures
                     .map { feature ->
-
                         abs(
                             FaceStats.rawValue(
                                 frame = current,
@@ -1275,15 +1546,16 @@ class FaceDistressAnalyzer(
             .toFloat()
     }
 
+    /**
+     * Calculates current consecutive duration.
+     */
     private fun currentConsecutiveDuration(
         flags: List<Boolean>
     ): Float {
-
         var count =
             0
 
         for (flag in flags.asReversed()) {
-
             if (!flag) {
                 break
             }
@@ -1295,10 +1567,12 @@ class FaceDistressAnalyzer(
                 WINDOW_DURATION_MS.toFloat()
     }
 
+    /**
+     * Calculates the percentage of true values.
+     */
     private fun percentageOfTrue(
         flags: List<Boolean>
     ): Float {
-
         if (flags.isEmpty()) {
             return 0f
         }
@@ -1309,10 +1583,12 @@ class FaceDistressAnalyzer(
                 flags.size.toFloat()
     }
 
+    /**
+     * Counts false-to-true transitions.
+     */
     private fun countEvents(
         flags: List<Boolean>
     ): Int {
-
         var eventCount =
             0
 
@@ -1320,7 +1596,6 @@ class FaceDistressAnalyzer(
             false
 
         flags.forEach { active ->
-
             if (
                 active &&
                 !previouslyActive
@@ -1342,7 +1617,6 @@ class FaceDistressAnalyzer(
     private fun learnDerivedBaselineIfClean(
         result: FaceDistressResult
     ) {
-
         if (!result.isReliable) {
             return
         }
@@ -1373,7 +1647,6 @@ class FaceDistressAnalyzer(
         }
 
         result.derivedMetrics.forEach { (feature, value) ->
-
             if (!value.isFinite()) {
                 return@forEach
             }
@@ -1417,7 +1690,6 @@ class FaceDistressAnalyzer(
         val observedMetrics =
             cleanDerivedSamples
                 .mapNotNull { entry ->
-
                     val feature =
                         entry.key
 
@@ -1458,17 +1730,13 @@ class FaceDistressAnalyzer(
                 .toMutableMap()
 
         observedMetrics.forEach { (feature, observed) ->
-
             val existing =
                 mergedMetrics[feature]
 
             mergedMetrics[feature] =
                 if (existing == null) {
-
                     observed
-
                 } else {
-
                     BaselineMetric(
                         median =
                             existing.median *
@@ -1509,12 +1777,13 @@ class FaceDistressAnalyzer(
         cleanDerivedSamples.clear()
     }
 
+    /**
+     * Converts the continuous score into level 0-4.
+     */
     private fun scoreToLevel(
         score: Float
     ): Int {
-
         return when {
-
             score < 1.25f ->
                 0
 
@@ -1532,8 +1801,34 @@ class FaceDistressAnalyzer(
         }
     }
 
-    private fun resetTransientState() {
+    /**
+     * Prints one geometry-confirmation result per window.
+     */
+    private fun logBrowConfirmation(
+        rawFurrowScore: Float,
+        furrowGeometryScore: Float,
+        confirmedFurrowScore: Float,
+        rawRaiseScore: Float,
+        raiseGeometryScore: Float,
+        confirmedRaiseScore: Float,
+        asymmetryScore: Float
+    ) {
+        Log.d(
+            BROW_CONFIRMATION_TAG,
+            "furrowRaw=$rawFurrowScore | " +
+                    "furrowGeometry=$furrowGeometryScore | " +
+                    "furrowFinal=$confirmedFurrowScore | " +
+                    "raiseRaw=$rawRaiseScore | " +
+                    "raiseGeometry=$raiseGeometryScore | " +
+                    "raiseFinal=$confirmedRaiseScore | " +
+                    "asymmetry=$asymmetryScore"
+        )
+    }
 
+    /**
+     * Clears recent window and event state.
+     */
+    private fun resetTransientState() {
         currentWindowFrames.clear()
         currentWindowStartTimestampMs = null
 
@@ -1560,75 +1855,149 @@ class FaceDistressAnalyzer(
 
     companion object {
 
-        private const val WINDOW_DURATION_MS = 500L
+        private const val BROW_CONFIRMATION_TAG =
+            "BROW_CONFIRMATION"
 
-        private const val MIN_VALID_FRAMES_PER_WINDOW = 5
+        private const val WINDOW_DURATION_MS =
+            500L
 
-        private const val MAX_FRAME_GAP_MS = 1_200L
+        private const val MIN_VALID_FRAMES_PER_WINDOW =
+            5
 
-        private const val HISTORY_WINDOW_COUNT = 20
+        private const val MAX_FRAME_GAP_MS =
+            1_200L
 
-        private const val PERSISTENCE_WINDOW_COUNT = 3
+        private const val HISTORY_WINDOW_COUNT =
+            20
 
-        private const val EYES_WEIGHT = 0.50f
+        private const val PERSISTENCE_WINDOW_COUNT =
+            3
 
-        private const val BROWS_WEIGHT = 0.35f
+        private const val EYES_WEIGHT =
+            0.50f
 
-        private const val ACTIVITY_WEIGHT = 0.15f
+        private const val BROWS_WEIGHT =
+            0.35f
 
-        private const val SECOND_SIGNAL_BONUS_WEIGHT = 0.25f
+        private const val ACTIVITY_WEIGHT =
+            0.15f
 
-        private const val MULTI_SIGNAL_THRESHOLD = 2f
+        private const val SECOND_SIGNAL_BONUS_WEIGHT =
+            0.25f
 
-        private const val MULTI_SIGNAL_BONUS = 0.40f
+        private const val MULTI_SIGNAL_THRESHOLD =
+            2f
 
-        private const val SCORE_SMOOTHING_OLD_WEIGHT = 0.55f
+        private const val MULTI_SIGNAL_BONUS =
+            0.40f
 
-        private const val SCORE_SMOOTHING_NEW_WEIGHT = 0.45f
+        private const val SCORE_SMOOTHING_OLD_WEIGHT =
+            0.55f
 
-        private const val SCORE_RESET_THRESHOLD = 0.25f
+        private const val SCORE_SMOOTHING_NEW_WEIGHT =
+            0.45f
 
-        private const val SCORE_DECAY_FACTOR = 0.70f
-        private const val BLINK_START_SCORE = 2.5f
+        private const val SCORE_RESET_THRESHOLD =
+            0.25f
 
-        private const val BLINK_END_SCORE = 0.8f
+        private const val SCORE_DECAY_FACTOR =
+            0.70f
 
-        private const val MIN_BLINK_DURATION_MS = 50L
+        private const val BLINK_START_SCORE =
+            2.5f
 
-        private const val LONG_EYE_CLOSURE_MS = 800L
+        private const val BLINK_END_SCORE =
+            0.8f
 
-        private const val MAX_TRACKED_EYE_CLOSURE_MS = 5_000L
+        private const val MIN_BLINK_DURATION_MS =
+            50L
 
-        private const val BLINK_HISTORY_MS = 60_000L
+        private const val LONG_EYE_CLOSURE_MS =
+            800L
 
-        private const val MIN_RATE_OBSERVATION_MS = 5_000L
+        private const val MAX_TRACKED_EYE_CLOSURE_MS =
+            5_000L
 
-        private const val EXPRESSION_ACTIVE_SCORE = 1f
+        private const val BLINK_HISTORY_MS =
+            60_000L
 
-        private const val EXPRESSION_HOLD_CHANGE_THRESHOLD = 0.01f
+        private const val MIN_RATE_OBSERVATION_MS =
+            5_000L
 
-        private const val FACIAL_CHANGE_THRESHOLD = 0.03f
+        private const val EXPRESSION_ACTIVE_SCORE =
+            1f
 
-        private const val LOW_ACTIVITY_BASELINE_DEVIATIONS = 2f
+        private const val EXPRESSION_HOLD_CHANGE_THRESHOLD =
+            0.01f
 
-        private const val MIN_HISTORY_WINDOWS_FOR_LEARNING = 10
+        private const val FACIAL_CHANGE_THRESHOLD =
+            0.03f
 
-        private const val CLEAN_SCORE_LIMIT = 0.75f
+        private const val LOW_ACTIVITY_BASELINE_DEVIATIONS =
+            2f
 
-        private const val CLEAN_FEATURE_LIMIT = 1f
+        /*
+         * Initial engineering thresholds for geometry confirmation.
+         * These values should be tuned using live logs.
+         */
+        private const val GEOMETRY_CONFIRMATION_SCORE =
+            0.35f
 
-        private const val CLEAN_SNAPSHOTS_PER_UPDATE = 60
+        private const val CONFIRMED_BLENDSHAPE_WEIGHT =
+            0.70f
 
-        private const val MIN_DERIVED_SAMPLES_PER_FEATURE = 30
+        private const val CONFIRMED_GEOMETRY_WEIGHT =
+            0.30f
 
-        private const val MAX_CLEAN_SAMPLES_PER_FEATURE = 240
+        private const val UNCONFIRMED_BROW_WEIGHT =
+            0.20f
 
-        private const val DERIVED_UPDATE_INTERVAL_MS = 300_000L
+        private const val LOW_ASYMMETRY_SCORE =
+            1f
 
-        private const val EXISTING_BASELINE_WEIGHT = 0.80f
+        private const val MEDIUM_ASYMMETRY_SCORE =
+            2f
 
-        private const val NEW_BASELINE_WEIGHT = 0.20f
+        private const val HIGH_ASYMMETRY_SCORE =
+            3f
 
-        private const val MAX_BASELINE_SAMPLE_COUNT = 10_000
+        private const val LOW_ASYMMETRY_WEIGHT =
+            0.80f
+
+        private const val MEDIUM_ASYMMETRY_WEIGHT =
+            0.55f
+
+        private const val HIGH_ASYMMETRY_WEIGHT =
+            0.30f
+
+        private const val MIN_HISTORY_WINDOWS_FOR_LEARNING =
+            10
+
+        private const val CLEAN_SCORE_LIMIT =
+            0.75f
+
+        private const val CLEAN_FEATURE_LIMIT =
+            1f
+
+        private const val CLEAN_SNAPSHOTS_PER_UPDATE =
+            60
+
+        private const val MIN_DERIVED_SAMPLES_PER_FEATURE =
+            30
+
+        private const val MAX_CLEAN_SAMPLES_PER_FEATURE =
+            240
+
+        private const val DERIVED_UPDATE_INTERVAL_MS =
+            300_000L
+
+        private const val EXISTING_BASELINE_WEIGHT =
+            0.80f
+
+        private const val NEW_BASELINE_WEIGHT =
+            0.20f
+
+        private const val MAX_BASELINE_SAMPLE_COUNT =
+            10_000
     }
 }

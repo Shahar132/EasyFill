@@ -14,13 +14,27 @@ internal object FaceStats {
         0.6745f
 
     /*
-     * Prevents very small MAD values from
-     * producing unrealistic Z-scores.
+     * Broad technical limits for normalized eyebrow geometry.
+     *
+     * These limits reject invalid values only.
+     * They are not distress-detection thresholds.
      */
-//    private const val MIN_EFFECTIVE_MAD =
-//        0.005f
+    private const val MIN_GEOMETRY_RATIO =
+        0f
 
-    val rawFeatures =
+    private const val MAX_GEOMETRY_RATIO =
+        2.5f
+
+    private const val MAX_GEOMETRY_ASYMMETRY =
+        1.0f
+
+    private const val MIN_INTER_EYE_DISTANCE =
+        0.03f
+
+    /**
+     * Raw MediaPipe blendshape features.
+     */
+    val blendshapeFeatures =
         listOf(
             FaceBaselineFeature.EYE_BLINK_LEFT,
             FaceBaselineFeature.EYE_BLINK_RIGHT,
@@ -40,11 +54,35 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_OUTER_UP_RIGHT
         )
 
+    /**
+     * Normalized geometry features calculated
+     * from MediaPipe face landmarks.
+     */
+    val geometryFeatures =
+        listOf(
+            FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
+            FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT,
+            FaceBaselineFeature.INNER_BROW_DISTANCE,
+            FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY
+        )
+
+    /**
+     * Every raw feature required by the personal baseline.
+     */
+    val rawFeatures =
+        blendshapeFeatures +
+                geometryFeatures
+
+    /**
+     * Returns one raw value from a facial frame.
+     *
+     * Float.NaN is returned when a geometry value
+     * is unavailable. The frame will then fail validation.
+     */
     fun rawValue(
         frame: FaceFrameData,
         feature: FaceBaselineFeature
     ): Float {
-
         return when (feature) {
 
             FaceBaselineFeature.EYE_BLINK_LEFT ->
@@ -80,34 +118,107 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_OUTER_UP_RIGHT ->
                 frame.browOuterUpRight
 
+            FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT ->
+                frame.browGeometry
+                    ?.leftBrowEyeDistanceRatio
+                    ?: Float.NaN
+
+            FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT ->
+                frame.browGeometry
+                    ?.rightBrowEyeDistanceRatio
+                    ?: Float.NaN
+
+            FaceBaselineFeature.INNER_BROW_DISTANCE ->
+                frame.browGeometry
+                    ?.innerBrowDistanceRatio
+                    ?: Float.NaN
+
+            FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY ->
+                frame.browGeometry
+                    ?.asymmetry
+                    ?: Float.NaN
+
             else ->
                 throw IllegalArgumentException(
-                    "Feature $feature is not a raw MediaPipe feature."
+                    "Feature $feature is not a raw facial feature."
                 )
         }
     }
 
+    /**
+     * Returns true when one frame contains valid
+     * blendshape values and reliable eyebrow geometry.
+     */
     fun isValidFrame(
         frame: FaceFrameData
     ): Boolean {
+        val blendshapesAreValid =
+            blendshapeFeatures.all { feature ->
+                val value =
+                    rawValue(
+                        frame = frame,
+                        feature = feature
+                    )
 
-        return rawFeatures.all { feature ->
+                value.isFinite() &&
+                        value in MIN_RAW_VALUE..MAX_RAW_VALUE
+            }
 
-            val value =
-                rawValue(
-                    frame = frame,
-                    feature = feature
-                )
-
-            value.isFinite() &&
-                    value in MIN_RAW_VALUE..MAX_RAW_VALUE
+        if (!blendshapesAreValid) {
+            return false
         }
+
+        val geometry =
+            frame.browGeometry
+                ?: return false
+
+        if (!geometry.isReliable) {
+            return false
+        }
+
+        val browEyeRatiosAreValid =
+            geometry.leftBrowEyeDistanceRatio
+                .isValidGeometryRatio() &&
+                    geometry.rightBrowEyeDistanceRatio
+                        .isValidGeometryRatio()
+
+        val innerBrowRatioIsValid =
+            geometry.innerBrowDistanceRatio
+                .isValidGeometryRatio()
+
+        val asymmetryIsValid =
+            geometry.asymmetry.isFinite() &&
+                    geometry.asymmetry in
+                    MIN_GEOMETRY_RATIO..
+                    MAX_GEOMETRY_ASYMMETRY
+
+        val normalizationDistanceIsValid =
+            geometry.interEyeDistance.isFinite() &&
+                    geometry.interEyeDistance >=
+                    MIN_INTER_EYE_DISTANCE
+
+        return browEyeRatiosAreValid &&
+                innerBrowRatioIsValid &&
+                asymmetryIsValid &&
+                normalizationDistanceIsValid
     }
 
+    /**
+     * Returns true when a normalized geometry
+     * ratio is finite and technically plausible.
+     */
+    private fun Float.isValidGeometryRatio(): Boolean {
+        return isFinite() &&
+                this in MIN_GEOMETRY_RATIO..
+                MAX_GEOMETRY_RATIO
+    }
+
+    /**
+     * Calculates the median of a non-empty list.
+     */
     fun median(
         values: List<Float>
     ): Float {
-
         require(values.isNotEmpty()) {
             "Cannot calculate median from an empty list."
         }
@@ -119,23 +230,22 @@ internal object FaceStats {
             sorted.size / 2
 
         return if (sorted.size % 2 == 0) {
-
             (
                     sorted[middle - 1] +
                             sorted[middle]
                     ) / 2f
-
         } else {
-
             sorted[middle]
         }
     }
 
+    /**
+     * Calculates Median Absolute Deviation.
+     */
     fun mad(
         values: List<Float>,
         median: Float
     ): Float {
-
         require(values.isNotEmpty()) {
             "Cannot calculate MAD from an empty list."
         }
@@ -148,37 +258,15 @@ internal object FaceStats {
         return median(deviations)
     }
 
-//    fun effectiveMad(
-//        metric: BaselineMetric
-//    ): Float {
-//
-//        return maxOf(
-//            metric.mad,
-//            MIN_EFFECTIVE_MAD
-//        )
-//    }
-//
-//    fun modifiedZ(
-//        currentValue: Float,
-//        metric: BaselineMetric
-//    ): Float {
-//
-//        return MODIFIED_Z_SCALE *
-//                (currentValue - metric.median) /
-//                effectiveMad(metric)
-//    }
-
-    ///////////////////
-
     /**
      * Returns a minimum variation value for each feature.
-     * This prevents tiny baseline MAD values from
-     * producing unrealistically large Z-scores.
+     *
+     * This prevents very small baseline MAD values from
+     * producing unrealistically large Modified Z-scores.
      */
     private fun minimumMadFor(
         feature: FaceBaselineFeature
     ): Float {
-
         return when (feature) {
 
             FaceBaselineFeature.EYE_BLINK_LEFT,
@@ -204,28 +292,49 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_OUTER_UP_RIGHT ->
                 0.025f
 
+            /*
+             * Geometry values are normalized ratios.
+             *
+             * These are initial engineering values and
+             * should be tuned using live test logs.
+             */
+            FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
+            FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT ->
+                0.015f
+
+            FaceBaselineFeature.INNER_BROW_DISTANCE ->
+                0.010f
+
+            FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY ->
+                0.010f
+
             else ->
                 0.010f
         }
     }
 
+    /**
+     * Returns the effective MAD used for comparison.
+     */
     fun effectiveMad(
         feature: FaceBaselineFeature,
         metric: BaselineMetric
     ): Float {
-
         return maxOf(
             metric.mad,
             minimumMadFor(feature)
         )
     }
 
+    /**
+     * Calculates the Modified Z-score relative
+     * to the user's personal baseline.
+     */
     fun modifiedZ(
         feature: FaceBaselineFeature,
         currentValue: Float,
         metric: BaselineMetric
     ): Float {
-
         return MODIFIED_Z_SCALE *
                 (currentValue - metric.median) /
                 effectiveMad(
@@ -234,31 +343,6 @@ internal object FaceStats {
                 )
     }
 
-
-
-
-    /////////////////
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     /**
      * Converts a positive Modified Z deviation
      * into a continuous score from 0 to 4.
@@ -266,7 +350,6 @@ internal object FaceStats {
     fun positiveZToScore(
         modifiedZ: Float
     ): Float {
-
         val z =
             modifiedZ.coerceAtLeast(0f)
 
@@ -313,12 +396,16 @@ internal object FaceStats {
 
             else ->
                 4f
+
         }.coerceIn(
             minimumValue = 0f,
             maximumValue = 4f
         )
     }
 
+    /**
+     * Performs linear interpolation between two ranges.
+     */
     fun interpolate(
         value: Float,
         inputStart: Float,
@@ -326,7 +413,6 @@ internal object FaceStats {
         outputStart: Float,
         outputEnd: Float
     ): Float {
-
         val progress =
             (
                     (value - inputStart) /

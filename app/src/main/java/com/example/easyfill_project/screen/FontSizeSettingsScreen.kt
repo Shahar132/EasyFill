@@ -65,7 +65,10 @@ fun FontSizeSettingsScreen(
                 .wrapContentWidth(Alignment.End)
                 .padding(top = 24.dp),
             shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
+            border = BorderStroke(
+                2.dp,
+                MaterialTheme.colorScheme.onSurface
+            ),
             colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -104,7 +107,11 @@ fun FontSizeOptionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(0.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
         Row(
             modifier = Modifier

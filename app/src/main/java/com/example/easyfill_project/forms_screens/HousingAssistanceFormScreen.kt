@@ -27,7 +27,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.imeNestedScroll
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HousingAssistanceFormScreen(
     navController: NavHostController,
@@ -612,6 +614,7 @@ fun HousingAssistanceFormScreen(
      * The outer Box lets the form scroll behind the chatbot.
      * The chatbot itself is outside the scrolling Column.
      */
+    val formScrollState = rememberScrollState()
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -619,16 +622,13 @@ fun HousingAssistanceFormScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
-                .imePadding()
-                .verticalScroll(
-                    rememberScrollState()
-                )
+                .verticalScroll(formScrollState)
+                .imeNestedScroll()
         ) {
             FormProgressBar(
                 currentStep = currentStep,
                 sections = sections
             )
-
             Spacer(
                 modifier = Modifier.height(10.dp)
             )

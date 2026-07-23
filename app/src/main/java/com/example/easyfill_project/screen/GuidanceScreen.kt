@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -14,7 +15,8 @@ import androidx.compose.ui.unit.sp
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-//make it scrollable
+
+// Make it scrollable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.painterResource
@@ -33,7 +35,6 @@ fun GuidanceScreen() {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-
         Image(
             painter = painterResource(id = R.drawable.userguideillustration),
             contentDescription = "Guidance header",
@@ -49,8 +50,8 @@ fun GuidanceScreen() {
             title = "מהי מטרת האפליקציה?",
             content = "האפליקציה נועדה לעזור לך להתמודד עם תהליכים בירוקרטיים בצורה פשוטה וברורה," +
                     "היא מלווה אותך שלב אחר שלב במילוי טפסים, מסבירה כל חלק בצורה קלה להבנה, ועוזרת לך להתקדם בקצב שלך."
-
         )
+
         ExpandableItem(
             title = "איך מתחילים להשתמש באפליקציה?",
             content = "לאחר התחברות, בחר/י במסך הבית את האפשרות 'התחלת תהליך' והמשיך/י לפי ההנחיות הבאות."
@@ -75,7 +76,11 @@ fun ExpandableItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(vertical = 6.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
 
         Column {
@@ -85,9 +90,8 @@ fun ExpandableItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
-
                     .clickable {
-                        expanded = !expanded // toggle open/close
+                        expanded = !expanded
                     }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -116,13 +120,13 @@ fun ExpandableItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface) // background from theme
+                        .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Text(
                         text = content,
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface //  text color from theme
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

@@ -214,7 +214,7 @@ class FaceCameraManager(
 
         // Default maximum number of camera frames
         // sent to MediaPipe every second.
-        private const val DEFAULT_TARGET_FPS = 30
+        private const val DEFAULT_TARGET_FPS = 15
 
         // Lowest FPS value allowed when creating FaceCameraManager.
         private const val MINIMUM_FPS = 1

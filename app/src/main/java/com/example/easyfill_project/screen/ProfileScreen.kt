@@ -1,5 +1,6 @@
 package com.example.easyfill_project.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -176,10 +177,12 @@ fun ProfileScreen(
                                     auth.currentUser?.verifyBeforeUpdateEmail(newEmail)
                                         ?.addOnSuccessListener {
                                             showEmailField = false
-                                            emailStatus = "נשלח אימייל אימות לכתובת החדשה, נא לאשר"
+                                            emailStatus =
+                                                "נשלח אימייל אימות לכתובת החדשה, נא לאשר"
                                         }
                                         ?.addOnFailureListener { e ->
-                                            emailStatus = "שגיאה בעדכון אימייל: ${e.message}"
+                                            emailStatus =
+                                                "שגיאה בעדכון אימייל: ${e.message}"
                                         }
                                 } else {
                                     emailStatus = "הכנס אימייל חדש"
@@ -233,7 +236,8 @@ fun ProfileScreen(
                                             passwordStatus = "שגיאה בעדכון סיסמה"
                                         }
                                 } else {
-                                    passwordStatus = "הסיסמה חייבת להכיל לפחות 6 תווים"
+                                    passwordStatus =
+                                        "הסיסמה חייבת להכיל לפחות 6 תווים"
                                 }
                             },
                             colors = ButtonDefaults.textButtonColors(
@@ -303,12 +307,16 @@ fun ProfileScreen(
                                             .delete()
                                             .addOnSuccessListener {
                                                 uploadedFiles =
-                                                    uploadedFiles.filter { it.fileId != file.fileId }
-                                                filesStatus = "הקובץ נמחק בהצלחה"
+                                                    uploadedFiles.filter {
+                                                        it.fileId != file.fileId
+                                                    }
+                                                filesStatus =
+                                                    "הקובץ נמחק בהצלחה"
                                             }
                                     }
                                     .addOnFailureListener { e ->
-                                        filesStatus = "שגיאה במחיקת הקובץ: ${e.message}"
+                                        filesStatus =
+                                            "שגיאה במחיקת הקובץ: ${e.message}"
                                     }
                             }
                         }
@@ -357,56 +365,69 @@ fun ProfileScreen(
                         val uploadsRef = storage.reference
                             .child("users/$currentUserId/uploads")
 
-                        uploadsRef.listAll().addOnSuccessListener { storageResult ->
-                            val deleteStorageTasks = storageResult.items.map { fileRef ->
-                                fileRef.delete()
-                            }
+                        uploadsRef.listAll()
+                            .addOnSuccessListener { storageResult ->
+                                val deleteStorageTasks =
+                                    storageResult.items.map { fileRef ->
+                                        fileRef.delete()
+                                    }
 
-                            val allStorageDeletedTask =
-                                if (deleteStorageTasks.isNotEmpty()) {
-                                    Tasks.whenAll(deleteStorageTasks)
-                                } else {
-                                    Tasks.forResult(null)
-                                }
+                                val allStorageDeletedTask =
+                                    if (deleteStorageTasks.isNotEmpty()) {
+                                        Tasks.whenAll(deleteStorageTasks)
+                                    } else {
+                                        Tasks.forResult(null)
+                                    }
 
-                            allStorageDeletedTask.addOnSuccessListener {
-                                val userDocRef = firestore.collection("users").document(currentUserId)
+                                allStorageDeletedTask.addOnSuccessListener {
+                                    val userDocRef = firestore
+                                        .collection("users")
+                                        .document(currentUserId)
 
-                                userDocRef.collection("uploadedFiles")
-                                    .get()
-                                    .addOnSuccessListener { snapshot ->
-                                        val deleteUploadedFilesTasks =
-                                            snapshot.documents.map { document ->
-                                                document.reference.delete()
-                                            }
+                                    userDocRef.collection("uploadedFiles")
+                                        .get()
+                                        .addOnSuccessListener { snapshot ->
+                                            val deleteUploadedFilesTasks =
+                                                snapshot.documents.map { document ->
+                                                    document.reference.delete()
+                                                }
 
-                                        val allUploadedFilesDeletedTask =
-                                            if (deleteUploadedFilesTasks.isNotEmpty()) {
-                                                Tasks.whenAll(deleteUploadedFilesTasks)
-                                            } else {
-                                                Tasks.forResult(null)
-                                            }
+                                            val allUploadedFilesDeletedTask =
+                                                if (deleteUploadedFilesTasks.isNotEmpty()) {
+                                                    Tasks.whenAll(
+                                                        deleteUploadedFilesTasks
+                                                    )
+                                                } else {
+                                                    Tasks.forResult(null)
+                                                }
 
-                                        allUploadedFilesDeletedTask.addOnSuccessListener {
-                                            userDocRef.delete()
+                                            allUploadedFilesDeletedTask
                                                 .addOnSuccessListener {
-                                                    currentUser.delete()
+                                                    userDocRef.delete()
                                                         .addOnSuccessListener {
-                                                            navController.navigate("register") {
-                                                                popUpTo(0)
-                                                            }
+                                                            currentUser.delete()
+                                                                .addOnSuccessListener {
+                                                                    navController.navigate(
+                                                                        "register"
+                                                                    ) {
+                                                                        popUpTo(0)
+                                                                    }
+                                                                }
+                                                                .addOnFailureListener { e ->
+                                                                    println(
+                                                                        "Error deleting auth user: ${e.message}"
+                                                                    )
+                                                                }
                                                         }
                                                         .addOnFailureListener { e ->
-                                                            println("Error deleting auth user: ${e.message}")
+                                                            println(
+                                                                "Error deleting user document: ${e.message}"
+                                                            )
                                                         }
                                                 }
-                                                .addOnFailureListener { e ->
-                                                    println("Error deleting user document: ${e.message}")
-                                                }
                                         }
-                                    }
+                                }
                             }
-                        }
                     }
                 }
             )
@@ -425,7 +446,11 @@ fun ProfileSectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(14.dp)
+        elevation = CardDefaults.cardElevation(14.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(

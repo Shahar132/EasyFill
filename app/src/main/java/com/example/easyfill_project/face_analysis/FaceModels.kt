@@ -6,7 +6,7 @@ package com.example.easyfill_project.face_analysis
  */
 enum class FaceBaselineFeature {
 
-    // Raw MediaPipe features.
+    // Raw MediaPipe eye features.
     EYE_BLINK_LEFT,
     EYE_BLINK_RIGHT,
 
@@ -16,6 +16,7 @@ enum class FaceBaselineFeature {
     EYE_WIDE_LEFT,
     EYE_WIDE_RIGHT,
 
+    // Raw MediaPipe eyebrow features.
     BROW_DOWN_LEFT,
     BROW_DOWN_RIGHT,
 
@@ -23,6 +24,12 @@ enum class FaceBaselineFeature {
 
     BROW_OUTER_UP_LEFT,
     BROW_OUTER_UP_RIGHT,
+
+    // Normalized landmark geometry features.
+    BROW_EYE_DISTANCE_LEFT,
+    BROW_EYE_DISTANCE_RIGHT,
+    INNER_BROW_DISTANCE,
+    BROW_GEOMETRY_ASYMMETRY,
 
     // Blink metrics.
     BLINK_RATE,
@@ -67,6 +74,44 @@ enum class FaceBaselineFeature {
 }
 
 /**
+ * Normalized eyebrow geometry calculated from face landmarks.
+ *
+ * The distances are normalized using the distance between
+ * the eyes. This reduces sensitivity to changes in the
+ * user's distance from the camera.
+ */
+data class BrowGeometryData(
+
+    // Normalized distance between the left eyebrow and left eye.
+    val leftBrowEyeDistanceRatio: Float,
+
+    // Normalized distance between the right eyebrow and right eye.
+    val rightBrowEyeDistanceRatio: Float,
+
+    // Normalized distance between the inner eyebrow areas.
+    val innerBrowDistanceRatio: Float,
+
+    // Difference between the left and right brow-to-eye ratios.
+    val asymmetry: Float,
+
+    // Raw distance used for normalization and reliability checks.
+    val interEyeDistance: Float,
+
+    // False when required landmarks are missing or unreliable.
+    val isReliable: Boolean
+) {
+
+    /**
+     * Average normalized distance between both eyebrows and eyes.
+     */
+    val averageBrowEyeDistanceRatio: Float
+        get() = (
+                leftBrowEyeDistanceRatio +
+                        rightBrowEyeDistanceRatio
+                ) / 2f
+}
+
+/**
  * Normal value and variation of one feature.
  */
 data class BaselineMetric(
@@ -90,7 +135,6 @@ data class FaceBaseline(
     fun getMetric(
         feature: FaceBaselineFeature
     ): BaselineMetric? {
-
         return rawMetrics[feature]
             ?: derivedMetrics[feature]
     }
@@ -98,12 +142,14 @@ data class FaceBaseline(
     fun isFeatureReady(
         feature: FaceBaselineFeature
     ): Boolean {
-
         return feature in rawMetrics ||
                 feature in derivedMetrics
     }
 }
 
+/**
+ * Current stage of the facial-analysis pipeline.
+ */
 enum class FaceAnalysisPhase {
     IDLE,
     LOADING_BASELINE,
@@ -113,6 +159,9 @@ enum class FaceAnalysisPhase {
     ERROR
 }
 
+/**
+ * Current state reported by the facial-analysis controller.
+ */
 data class FaceAnalysisState(
     val phase: FaceAnalysisPhase =
         FaceAnalysisPhase.IDLE,
@@ -125,6 +174,9 @@ data class FaceAnalysisState(
     val validWindowCount: Int = 0
 )
 
+/**
+ * Main facial signal that contributed to the current score.
+ */
 enum class FaceDistressContributor {
     NONE,
     EYE_SQUINT,
@@ -136,8 +188,7 @@ enum class FaceDistressContributor {
 }
 
 /**
- * Result of one raw feature
- * inside one 500 ms window.
+ * Result of one feature inside one 500 ms window.
  */
 data class FaceWindowFeatureResult(
     val feature: FaceBaselineFeature,
@@ -161,22 +212,36 @@ data class FaceWindowResult(
     Map<FaceBaselineFeature, FaceWindowFeatureResult>
 ) {
 
+    /**
+     * Returns the normalized score of one feature.
+     */
     fun scoreOf(
         feature: FaceBaselineFeature
     ): Float {
-
         return featureResults[feature]
             ?.score
             ?: 0f
     }
 
+    /**
+     * Returns the current median of one feature.
+     */
     fun medianOf(
         feature: FaceBaselineFeature
     ): Float {
-
         return featureResults[feature]
             ?.currentMedian
             ?: 0f
+    }
+
+    /**
+     * Returns true when the window contains
+     * a result for the requested feature.
+     */
+    fun hasFeature(
+        feature: FaceBaselineFeature
+    ): Boolean {
+        return feature in featureResults
     }
 }
 
@@ -200,6 +265,9 @@ data class FaceDistressResult(
     val derivedMetrics: Map<FaceBaselineFeature, Float>
 )
 
+/**
+ * Current face-detection status.
+ */
 data class FaceDetectionStatus(
     val faceDetected: Boolean,
     val landmarkCount: Int,

@@ -85,7 +85,10 @@ fun BackgroundSoundsScreen(navController: NavHostController) {
                 .wrapContentWidth(Alignment.End)
                 .padding(top = 24.dp),
             shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
+            border = BorderStroke(
+                2.dp,
+                MaterialTheme.colorScheme.onSurface
+            ),
             colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -123,6 +126,10 @@ fun SoundOptionCard(
         onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
         )
     ) {
         Row(

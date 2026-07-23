@@ -1,6 +1,7 @@
 package com.example.easyfill_project.screen
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,9 +27,11 @@ import androidx.core.content.edit
 
 
 @Composable
-fun PersonalSettingScreen(navController: NavHostController,
-                          autoReadEnabled: Boolean,
-                          onAutoReadChange: (Boolean) -> Unit) {
+fun PersonalSettingScreen(
+    navController: NavHostController,
+    autoReadEnabled: Boolean,
+    onAutoReadChange: (Boolean) -> Unit
+) {
 
 
     Column(
@@ -90,11 +93,14 @@ fun PersonalSettingScreen(navController: NavHostController,
             )
 
             // Empty space (right)
-           Spacer(modifier = Modifier.weight(0.3f))
+            Spacer(modifier = Modifier.weight(0.3f))
         }
 
         val context = LocalContext.current
-        val prefs = context.getSharedPreferences("user_settings", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(
+            "user_settings",
+            Context.MODE_PRIVATE
+        )
 
         Spacer(modifier = Modifier.height(25.dp))
 
@@ -106,7 +112,11 @@ fun PersonalSettingScreen(navController: NavHostController,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             ),
-            elevation = CardDefaults.cardElevation(6.dp)
+            elevation = CardDefaults.cardElevation(6.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.secondary
+            )
         ) {
             Row(
                 modifier = Modifier
@@ -132,20 +142,22 @@ fun PersonalSettingScreen(navController: NavHostController,
                     },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.primary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        checkedTrackColor = MaterialTheme.colorScheme.primary.copy(
+                            alpha = 0.5f
+                        ),
 
                         uncheckedThumbColor = MaterialTheme.colorScheme.onSurface,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        uncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.3f
+                        )
                     )
                 )
             }
         }
 
-        }
+    }
 
-        }
-
-
+}
 
 
 @Composable
@@ -161,7 +173,11 @@ fun PersonalSettingCard(
             .clickable {
                 onClick()
             },
-        elevation = CardDefaults.cardElevation(6.dp)
+        elevation = CardDefaults.cardElevation(6.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary
+        )
     ) {
 
         Column(

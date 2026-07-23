@@ -108,7 +108,7 @@ import kotlinx.coroutines.launch
 
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
-
+import com.example.easyfill_project.face_analysis.FaceDetectionTestScreen
 
 
 // Main navigation function
@@ -121,8 +121,12 @@ fun AppNavigation() {
     // Defines all app routes (screens)
     NavHost(
         navController = navController,
-        startDestination = "main" // First screen when app opens
+        startDestination = "main"
     ) {
+
+        composable("faceDetectionTest") {
+            FaceDetectionTestScreen()
+        }
 
         // First screen (NO drawer here - will be on the home screen)
         composable("main") {
