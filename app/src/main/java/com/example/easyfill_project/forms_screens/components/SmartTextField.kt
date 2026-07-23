@@ -59,6 +59,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
 
 
 @Composable
@@ -83,6 +84,18 @@ fun SmartTextField(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    /*
+ * Observe the global distress mode.
+ *
+ * A new recording must not begin while the previous
+ * recording is still waiting for voice, face, or hand
+ * processing to finish.
+ */
+    val currentDistressMode by
+    DistressScoringManager
+        .mode
+        .collectAsState()
 
     var isListening by remember {
         mutableStateOf(false)
@@ -154,18 +167,9 @@ fun SmartTextField(
 
         onDispose {
 
-            speechManager.stopSpeechRecognition()
-
             /*
-             * If the composable disappears while a recording
-             * session is still active, cancel that session.
-             *
-             * We do not directly call:
-             *
-             * setMode(FORM_FILLING)
-             *
-             * because the recording manager may still be waiting
-             * for its final hand or voice result.
+             * If the user leaves this field while a voice-recording
+             * session is still active, cancel the recording.
              */
             if (
                 DistressScoringManager.mode.value ==
@@ -174,6 +178,11 @@ fun SmartTextField(
                 DistressScoringManager
                     .cancelVoiceRecordingSession()
             }
+
+            /*
+             * Release speech-recognition resources owned by this field.
+             */
+            speechManager.stopSpeechRecognition()
         }
     }
 
@@ -352,9 +361,28 @@ fun SmartTextField(
                      * Speech-to-text recording button.
                      */
                     IconButton(
-                        enabled = !isListening,
+                        enabled =
+                            !isListening &&
+                                    currentDistressMode ==
+                                    DistressMode.FORM_FILLING,
 
                         onClick = {
+                            /*
+                             * Defensive protection:
+                             * do not start a new recording while the previous
+                             * recording result is still being processed.
+                             */
+                            if (
+                                DistressScoringManager.mode.value ==
+                                DistressMode.VOICE_RECORDING
+                            ) {
+                                Log.d(
+                                    "VOICE_RECORDING_SESSION",
+                                    "New recording ignored because the previous recording is still being processed."
+                                )
+
+                                return@IconButton
+                            }
 
                             val hasPermission =
                                 ContextCompat
@@ -460,17 +488,24 @@ fun SmartTextField(
 
                                             Log.d(
                                                 "VOICE_ANALYSIS",
-                                                "Recording excluded from distress analysis. " +
+                                                "Voice modality unavailable for this recording. " +
                                                         "duration=${analysis.durationSeconds}, " +
                                                         "textBlank=${analysis.finalText.isBlank()}"
                                             )
 
                                             /*
-                                             * The recording may still be used to fill the text field,
-                                             * but it is not used for distress analysis.
+                                             * Voice processing completed, but the recording was not
+                                             * reliable enough to produce a voice score.
+                                             *
+                                             * Submit null instead of cancelling the whole multimodal
+                                             * recording.
+                                             *
+                                             * Face and hand may still participate in the final score.
                                              */
                                             DistressScoringManager
-                                                .cancelVoiceRecordingSession()
+                                                .submitVoiceRecordingVoiceScore(
+                                                    score = null
+                                                )
 
                                             return@startSpeechRecognition
                                         }
@@ -500,11 +535,17 @@ fun SmartTextField(
 
                                             Log.e(
                                                 "VOICE_ANALYSIS",
-                                                "Cannot analyze voice because no user is signed in."
+                                                "Voice modality unavailable because no user is signed in."
                                             )
 
+                                            /*
+                                             * Voice cannot be compared with a personal baseline,
+                                             * but face and hand may still be available.
+                                             */
                                             DistressScoringManager
-                                                .cancelVoiceRecordingSession()
+                                                .submitVoiceRecordingVoiceScore(
+                                                    score = null
+                                                )
 
                                             return@startSpeechRecognition
                                         }
@@ -531,11 +572,18 @@ fun SmartTextField(
 
                                                     Log.e(
                                                         "VOICE_ANALYSIS",
-                                                        "Voice baseline document does not exist."
+                                                        "Voice modality unavailable because the baseline document does not exist."
                                                     )
 
+                                                    /*
+                                                     * The voice component completed without a usable score.
+                                                     *
+                                                     * Keep the multimodal session active for face and hand.
+                                                     */
                                                     DistressScoringManager
-                                                        .cancelVoiceRecordingSession()
+                                                        .submitVoiceRecordingVoiceScore(
+                                                            score = null
+                                                        )
 
                                                     return@addOnSuccessListener
                                                 }
@@ -556,19 +604,19 @@ fun SmartTextField(
                                                  * document.
                                                  */
                                                 if (
-                                                    baselineSpeechRate ==
-                                                    null ||
-                                                    baselineRmsVariation ==
-                                                    null
+                                                    baselineSpeechRate == null ||
+                                                    baselineRmsVariation == null
                                                 ) {
 
                                                     Log.e(
                                                         "VOICE_ANALYSIS",
-                                                        "Voice baseline is missing required values."
+                                                        "Voice modality unavailable because the baseline is missing required values."
                                                     )
 
                                                     DistressScoringManager
-                                                        .cancelVoiceRecordingSession()
+                                                        .submitVoiceRecordingVoiceScore(
+                                                            score = null
+                                                        )
 
                                                     return@addOnSuccessListener
                                                 }
@@ -648,27 +696,43 @@ fun SmartTextField(
                                                             "totalVoiceScore=$voiceScore"
                                                 )
                                             }
-                                            .addOnFailureListener {
-                                                    error ->
+                                            .addOnFailureListener { error ->
 
                                                 Log.e(
                                                     "VOICE_ANALYSIS",
-                                                    "Failed to get baseline",
+                                                    "Failed to load voice baseline. Voice modality will be unavailable.",
                                                     error
                                                 )
 
                                                 /*
-                                                 * Firestore failed, so a
-                                                 * complete recording result
-                                                 * cannot be produced.
+                                                 * Firestore failure prevents voice scoring only.
+                                                 *
+                                                 * It does not prevent a multimodal result based on
+                                                 * the available face and hand analyses.
                                                  */
                                                 DistressScoringManager
-                                                    .cancelVoiceRecordingSession()
+                                                    .submitVoiceRecordingVoiceScore(
+                                                        score = null
+                                                    )
                                             }
                                     },
                                     onFailure = {
+
+                                        Log.e(
+                                            "VOICE_ANALYSIS",
+                                            "Speech recognition failed. Voice modality will be unavailable."
+                                        )
+
+                                        /*
+                                         * Mark voice processing as completed but unavailable.
+                                         *
+                                         * onFinished will still request the recording-stop event,
+                                         * allowing hand and face to submit their final results.
+                                         */
                                         DistressScoringManager
-                                            .cancelVoiceRecordingSession()
+                                            .submitVoiceRecordingVoiceScore(
+                                                score = null
+                                            )
                                     },
                                     /*
                                      * CHANGE C:

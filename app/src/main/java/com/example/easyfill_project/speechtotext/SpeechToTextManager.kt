@@ -20,6 +20,21 @@ class SpeechToTextManager(
 
     private var analysisSent = false
 
+    /*
+ * Callbacks belonging to the currently active recording.
+ *
+ * They allow stopAndAnalyze() to finish safely even when
+ * SpeechRecognizer cannot deliver a final callback.
+ */
+    private var activeSendAnalysis: (() -> Unit)? =
+        null
+
+    private var activeFinish: (() -> Unit)? =
+        null
+
+    private var activeFailure: (() -> Unit)? =
+        null
+
     fun startSpeechRecognition(
         onResult: (String) -> Unit,
         onSpeechStarted: () -> Unit,
@@ -50,13 +65,27 @@ class SpeechToTextManager(
         var finished = false
 
         fun finishOnce() {
+
             if (finished) {
                 return
             }
 
             finished = true
-            Log.d("STT", "Finished once")
+
+            Log.d(
+                "STT",
+                "Finished once"
+            )
+
             onFinished()
+
+            /*
+             * The recording has completed, so these callbacks must
+             * not be reused by a later manual-stop request.
+             */
+            activeSendAnalysis = null
+            activeFinish = null
+            activeFailure = null
         }
 
         fun sendAnalysisOnce() {
@@ -69,10 +98,27 @@ class SpeechToTextManager(
             }
 
             val currentAnalyzer = analyzer ?: run {
+
+                /*
+                 * Voice analysis cannot be produced because the analyzer
+                 * is unexpectedly unavailable.
+                 *
+                 * Notify the caller so SmartTextField can submit a null
+                 * voice result and allow face and hand analysis to continue.
+                 */
                 Log.e(
                     "STT_ANALYSIS",
-                    "Analyzer is null"
+                    "Analyzer is null. Voice analysis cannot be produced."
                 )
+
+                /*
+                 * Mark this attempt as handled so another callback does
+                 * not try to send the same analysis again.
+                 */
+                analysisSent = true
+
+                onFailure()
+
                 return
             }
 
@@ -107,6 +153,24 @@ class SpeechToTextManager(
             )
 
             onAnalysisResult(result)
+        }
+
+
+        /*
+ * Save the current recording callbacks so manual stopping
+ * can safely complete the session if Android does not return
+ * onResults() or onError().
+ */
+        activeSendAnalysis = {
+            sendAnalysisOnce()
+        }
+
+        activeFinish = {
+            finishOnce()
+        }
+
+        activeFailure = {
+            onFailure()
         }
 
         val intent =
@@ -316,9 +380,33 @@ class SpeechToTextManager(
             "Calling startListening"
         )
 
-        speechRecognizer?.startListening(
-            intent
-        )
+        try {
+
+            speechRecognizer?.startListening(
+                intent
+            )
+
+        } catch (error: Exception) {
+
+            Log.e(
+                "STT",
+                "Failed to start speech recognition.",
+                error
+            )
+
+            /*
+             * Voice recording could not begin.
+             *
+             * SmartTextField will submit a null voice result.
+             */
+            onFailure()
+
+            /*
+             * Close the recording UI and request completion of
+             * the hand and face recording components.
+             */
+            finishOnce()
+        }
     }
 
     fun stopSpeechRecognition() {
@@ -332,9 +420,14 @@ class SpeechToTextManager(
         speechRecognizer?.stopListening()
         speechRecognizer?.destroy()
         speechRecognizer = null
+
+        activeSendAnalysis = null
+        activeFinish = null
+        activeFailure = null
     }
 
     fun stopAndAnalyze() {
+
         Log.d(
             "STT",
             "Manual stop requested"
@@ -342,11 +435,42 @@ class SpeechToTextManager(
 
         analyzer?.stopSpeech()
 
-        /*
-         * stopListening() should cause Android to deliver
-         * onResults() or onError(), where the analysis is sent.
-         */
-        speechRecognizer?.stopListening()
+        val currentRecognizer =
+            speechRecognizer
+
+        if (currentRecognizer != null) {
+
+            /*
+             * Android should now invoke onResults() or onError().
+             *
+             * Those callbacks will send analysis and call finishOnce().
+             */
+            currentRecognizer.stopListening()
+
+        } else {
+
+            /*
+             * No recognizer exists, so Android cannot provide another
+             * callback.
+             *
+             * Try to finish the locally collected audio analysis.
+             */
+            Log.e(
+                "STT",
+                "Manual stop requested but SpeechRecognizer is null."
+            )
+
+            val sendAnalysis =
+                activeSendAnalysis
+
+            if (sendAnalysis != null) {
+                sendAnalysis()
+            } else {
+                activeFailure?.invoke()
+            }
+
+            activeFinish?.invoke()
+        }
     }
 
     fun normalizeHebrewNumbers(

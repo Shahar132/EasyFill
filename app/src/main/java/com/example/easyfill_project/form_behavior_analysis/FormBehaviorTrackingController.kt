@@ -349,7 +349,16 @@ object FormBehaviorTrackingController {
 
         lastOverallFormBehaviorResult = FormBehaviorOverallResult()
 
-        DistressScoringManager.updateFormBehaviorScore(0)
+        /*
+         * Form-behavior tracking is no longer active.
+         *
+         * Do not submit score 0, because 0 means the analysis was
+         * available and reliably detected no distress.
+         *
+         * Clearing means the modality is unavailable.
+         */
+        DistressScoringManager
+            .clearFormBehaviorScore()
     }
 
     private fun buildSample(

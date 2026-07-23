@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.math.roundToInt
+import android.os.SystemClock
 
 object DistressScoringManager {
 
@@ -16,21 +17,71 @@ object DistressScoringManager {
      * ============================================================
      */
 
-    // Current representative hand-movement score: 0–4.
-    private val _handScore = MutableStateFlow(0)
-    val handScore: StateFlow<Int> = _handScore
+    /*
+  * Public StateFlows continue using Int values so the existing
+  * UI and DistressSnapshot code do not need to change.
+  *
+  * Separate nullable Double values below are used for the real
+  * weighted calculation.
+  *
+  * null means:
+  * the modality is unavailable.
+  *
+  * 0.0 means:
+  * the modality was analyzed and found no distress.
+  */
 
-    // Current voice-analysis score: 0–4.
-    private val _voiceScore = MutableStateFlow(0)
-    val voiceScore: StateFlow<Int> = _voiceScore
+    // Representative hand score displayed by the UI.
+    private val _handScore =
+        MutableStateFlow(0)
 
-    // Face score: currently unused, but kept for future development.
-    private val _faceScore = MutableStateFlow(0)
-    val faceScore: StateFlow<Int> = _faceScore
+    val handScore: StateFlow<Int> =
+        _handScore
 
-    // Current form-behavior score: 0–4.
-    private val _formBehaviorScore = MutableStateFlow(0)
-    val formBehaviorScore: StateFlow<Int> = _formBehaviorScore
+    // Representative voice score displayed by the UI.
+    private val _voiceScore =
+        MutableStateFlow(0)
+
+    val voiceScore: StateFlow<Int> =
+        _voiceScore
+
+    // Representative face score displayed by the UI.
+    private val _faceScore =
+        MutableStateFlow(0)
+
+    val faceScore: StateFlow<Int> =
+        _faceScore
+
+    // Representative form-behavior score displayed by the UI.
+    private val _formBehaviorScore =
+        MutableStateFlow(0)
+
+    val formBehaviorScore: StateFlow<Int> =
+        _formBehaviorScore
+
+    /*
+     * Precise form-filling values used for weighted fusion.
+     *
+     * These are nullable so unavailable information is not
+     * incorrectly treated as a calm score of zero.
+     */
+    private var currentFormHandScore: Double? =
+        null
+
+    private var currentFormFaceScore: Double? =
+        null
+
+    private var currentFormBehaviorScore: Double? =
+        null
+
+    /*
+     * Timestamp belonging to the most recent reliable face score.
+     *
+     * Face results are produced frequently, but the last score must
+     * not remain active forever after the user leaves the camera.
+     */
+    private var currentFormFaceTimestampMs: Long? =
+        null
 
     /**
      * Current interaction mode.
@@ -85,20 +136,46 @@ object DistressScoringManager {
      * It remains a Double so that precision is preserved
      * until the final weighted calculation.
      */
-    private var recordingHandAverage: Double? = null
+    /*
+ * Final modality results for the current recording.
+ *
+ * A null score means that the modality completed but did not
+ * have enough reliable information.
+ */
+    private var recordingHandAverage: Double? =
+        null
 
-    /**
-     * Final voice score for the current recording.
+    private var recordingVoiceScore: Double? =
+        null
+
+    private var recordingFaceAverage: Double? =
+        null
+
+    /*
+     * Completion must be stored separately from the score.
      *
-     * This value is calculated after the user's voice analysis
-     * is compared with the stored Firestore baseline.
+     * Example:
+     *
+     * recordingFaceCompleted = true
+     * recordingFaceAverage = null
+     *
+     * means face analysis finished, but no reliable face samples
+     * were available during the recording.
      */
-    private var recordingVoiceScore: Int? = null
+    private var recordingHandCompleted =
+        false
 
-    /**
-     * Prevents the same recording result from being emitted twice.
+    private var recordingVoiceCompleted =
+        false
+
+    private var recordingFaceCompleted =
+        false
+
+    /*
+     * Prevents publishing the same recording result twice.
      */
-    private var recordingResultPublished = false
+    private var recordingResultPublished =
+        false
 
     /*
      * ============================================================
@@ -177,8 +254,18 @@ object DistressScoringManager {
         /*
          * Remove all results from a previous recording.
          */
+        /*
+ * Clear every result and completion flag from the
+ * previous recording.
+ */
         recordingHandAverage = null
         recordingVoiceScore = null
+        recordingFaceAverage = null
+
+        recordingHandCompleted = false
+        recordingVoiceCompleted = false
+        recordingFaceCompleted = false
+
         recordingResultPublished = false
 
         /*
@@ -187,16 +274,24 @@ object DistressScoringManager {
          * This prevents a previous recording's score from being
          * displayed as part of the new recording.
          */
+        /*
+ * Remove values displayed from the previous recording.
+ */
         _handScore.value = 0
         _voiceScore.value = 0
+        _faceScore.value = 0
         _totalScore.value = 0
 
         /*
-         * Keep the manager in VOICE_RECORDING mode until both:
-         *
-         * 1. The hand average arrives.
-         * 2. The voice score arrives.
-         */
+          * Keep the manager in VOICE_RECORDING mode until:
+          *
+          * 1. Hand processing completes.
+          * 2. Voice processing completes.
+          * 3. Face processing completes.
+          *
+          * A component may complete with a null score when its
+          * information was unavailable.
+          */
         _mode.value = DistressMode.VOICE_RECORDING
 
         /*
@@ -246,7 +341,7 @@ object DistressScoringManager {
             """
             Recording stop requested.
             stopEventEmitted=$emitted
-            Waiting for final hand average and voice score.
+            Waiting for hand, voice and face analysis to complete.
             """.trimIndent()
         )
     }
@@ -265,45 +360,55 @@ object DistressScoringManager {
      *
      * The average is not rounded here.
      */
+    /**
+     * Receives the completed hand result for the current recording.
+     *
+     * average:
+     *
+     * 0.0 means reliable hand analysis found no distress.
+     * null means no reliable hand window was available.
+     */
     fun submitVoiceRecordingHandAverage(
-        average: Double
+        average: Double?
     ) {
-
         if (_mode.value != DistressMode.VOICE_RECORDING) {
             Log.d(
                 "VOICE_RECORDING_SESSION",
                 """
-                Hand average ignored.
-                Voice-recording mode is not active.
-                receivedAverage=$average
-                """.trimIndent()
+            Hand result ignored.
+            Voice-recording mode is not active.
+            receivedAverage=$average
+            """.trimIndent()
             )
+
             return
         }
 
         /*
-         * coerceIn does not round the value.
+         * Store the score when available.
          *
-         * It only ensures that the average remains
-         * inside the valid range of 0.0–4.0.
+         * Keep null when hand information was unavailable.
          */
         recordingHandAverage =
-            average.coerceIn(0.0, 4.0)
+            average?.coerceIn(
+                minimumValue = 0.0,
+                maximumValue = 4.0
+            )
+
+        /*
+         * Processing finished even when the result is null.
+         */
+        recordingHandCompleted = true
 
         Log.d(
             "VOICE_RECORDING_SESSION",
             """
-            Recording hand average received.
-            handAverage=$recordingHandAverage
-            """.trimIndent()
+        Recording hand analysis completed.
+        handAvailable=${recordingHandAverage != null}
+        handAverage=$recordingHandAverage
+        """.trimIndent()
         )
 
-        /*
-         * If the voice score has already arrived,
-         * the result will now be calculated.
-         *
-         * Otherwise, the manager continues waiting.
-         */
         tryPublishVoiceRecordingResult()
     }
 
@@ -311,184 +416,314 @@ object DistressScoringManager {
      * Receives the final voice score after speech analysis
      * and Firestore baseline comparison have finished.
      */
+    /**
+     * Receives the completed voice result for the current recording.
+     *
+     * score:
+     *
+     * 0 means reliable voice analysis found no distress.
+     * null means voice information was unavailable or unreliable.
+     */
     fun submitVoiceRecordingVoiceScore(
-        score: Int
+        score: Int?
     ) {
-
         if (_mode.value != DistressMode.VOICE_RECORDING) {
             Log.d(
                 "VOICE_RECORDING_SESSION",
                 """
-                Voice score ignored.
-                Voice-recording mode is not active.
-                receivedScore=$score
-                """.trimIndent()
+            Voice result ignored.
+            Voice-recording mode is not active.
+            receivedScore=$score
+            """.trimIndent()
             )
+
             return
         }
 
+        /*
+         * Preserve the voice value as Double for the final
+         * weighted calculation.
+         */
         recordingVoiceScore =
-            score.coerceIn(0, 4)
+            score
+                ?.coerceIn(0, 4)
+                ?.toDouble()
+
+        recordingVoiceCompleted = true
 
         Log.d(
             "VOICE_RECORDING_SESSION",
             """
-            Recording voice score received.
-            voiceScore=$recordingVoiceScore
-            """.trimIndent()
+        Recording voice analysis completed.
+        voiceAvailable=${recordingVoiceScore != null}
+        voiceScore=$recordingVoiceScore
+        """.trimIndent()
         )
 
-        /*
-         * If the hand average has already arrived,
-         * the result will now be calculated.
-         *
-         * Otherwise, the manager continues waiting.
-         */
         tryPublishVoiceRecordingResult()
     }
 
     /**
-     * Calculates and publishes the recording result only
-     * after both required inputs are available.
+     * Receives the average of all reliable face results collected
+     * during the current recording.
      *
-     * It does not matter which input arrives first.
+     * average:
+     *
+     * 0.0 means face analysis was reliable and showed no distress.
+     * null means no reliable face result was available.
+     */
+    fun submitVoiceRecordingFaceAverage(
+        average: Double?
+    ) {
+        if (_mode.value != DistressMode.VOICE_RECORDING) {
+            Log.d(
+                "VOICE_RECORDING_SESSION",
+                """
+            Face result ignored.
+            Voice-recording mode is not active.
+            receivedAverage=$average
+            """.trimIndent()
+            )
+
+            return
+        }
+
+        recordingFaceAverage =
+            average?.coerceIn(
+                minimumValue = 0.0,
+                maximumValue = 4.0
+            )
+
+        recordingFaceCompleted = true
+
+        Log.d(
+            "VOICE_RECORDING_SESSION",
+            """
+        Recording face analysis completed.
+        faceAvailable=${recordingFaceAverage != null}
+        faceAverage=$recordingFaceAverage
+        """.trimIndent()
+        )
+
+        tryPublishVoiceRecordingResult()
+    }
+
+    /**
+     * Publishes the final recording result only after all three
+     * modality pipelines have finished.
+     *
+     * A completed modality may have a null score. In that case,
+     * the remaining available weights are normalized.
      */
     private fun tryPublishVoiceRecordingResult() {
 
         /*
-         * Never publish the same recording twice.
+         * Never publish one recording more than once.
          */
         if (recordingResultPublished) {
             Log.d(
                 "VOICE_RECORDING_SESSION",
                 "Recording result was already published."
             )
+
             return
         }
 
         /*
-         * Wait if MotionTrackingController has not yet
-         * submitted the recording hand average.
+         * Wait for completion rather than waiting for non-null scores.
+         *
+         * A null score may be a valid completed result meaning
+         * that the modality was unavailable.
          */
-        val handAverage =
-            recordingHandAverage ?: run {
+        if (!recordingHandCompleted) {
+            Log.d(
+                "VOICE_RECORDING_SESSION",
+                "Waiting for recording hand analysis."
+            )
 
-                Log.d(
-                    "VOICE_RECORDING_SESSION",
-                    "Waiting for recording hand average."
-                )
+            return
+        }
 
-                return
-            }
+        if (!recordingVoiceCompleted) {
+            Log.d(
+                "VOICE_RECORDING_SESSION",
+                "Waiting for recording voice analysis."
+            )
+
+            return
+        }
+
+        if (!recordingFaceCompleted) {
+            Log.d(
+                "VOICE_RECORDING_SESSION",
+                "Waiting for recording face analysis."
+            )
+
+            return
+        }
 
         /*
-         * Wait if voice analysis has not yet submitted
-         * the final voice score.
-         */
-        val voiceScore =
-            recordingVoiceScore ?: run {
-
-                Log.d(
-                    "VOICE_RECORDING_SESSION",
-                    "Waiting for recording voice score."
-                )
-
-                return
-            }
-
-        /*
-         * Both values are now available.
+         * Recording weights:
          *
-         * Keep the hand average as a Double.
+         * Voice = 35%
+         * Face  = 35%
+         * Hand  = 30%
          *
-         * Example:
-         *
-         * voice = 3
-         * handAverage = 1.5
-         *
-         * weightedScore =
-         * 3 × 0.60 + 1.5 × 0.40
-         *
-         * weightedScore =
-         * 1.8 + 0.6
-         *
-         * weightedScore =
-         * 2.4
+         * Missing modalities are excluded and the available
+         * weights are normalized.
          */
         val weightedScore =
-            voiceScore * 0.60 +
-                    handAverage * 0.40
+            calculateNormalizedWeightedScore(
+                components = listOf(
+                    WeightedComponent(
+                        score = recordingVoiceScore,
+                        weight = RECORDING_VOICE_WEIGHT
+                    ),
+
+                    WeightedComponent(
+                        score = recordingFaceAverage,
+                        weight = RECORDING_FACE_WEIGHT
+                    ),
+
+                    WeightedComponent(
+                        score = recordingHandAverage,
+                        weight = RECORDING_HAND_WEIGHT
+                    )
+                )
+            ) ?: 0.0
 
         /*
-         * Round only once, after the complete weighted
-         * calculation has finished.
-         *
-         * coerceIn then guarantees that the final integer
-         * remains inside the valid 0–4 range.
+         * Round only after the complete weighted calculation.
          */
         val finalLevel =
             weightedScore
                 .roundToInt()
                 .coerceIn(0, 4)
 
+        /*
+ * Preserve null values inside the completed result.
+ *
+ * Do not replace an unavailable modality with zero.
+ *
+ * zero:
+ * available and calm.
+ *
+ * null:
+ * unavailable.
+ */
         val result =
             VoiceRecordingDistressResult(
                 level = finalLevel,
-                voiceScore = voiceScore,
-                handAverage = handAverage,
-                weightedScore = weightedScore
+
+                /*
+                 * Voice is internally stored as Double for weighting,
+                 * but the voice scoring system produces an integer
+                 * distress level.
+                 */
+                voiceScore =
+                    recordingVoiceScore
+                        ?.roundToInt()
+                        ?.coerceIn(0, 4),
+
+                /*
+                 * Keep the precise recording face average.
+                 */
+                faceAverage =
+                    recordingFaceAverage,
+
+                /*
+                 * Keep the precise recording hand average.
+                 */
+                handAverage =
+                    recordingHandAverage,
+
+                /*
+                 * Availability values show which modalities actually
+                 * participated in the normalized weighted result.
+                 */
+                voiceAvailable =
+                    recordingVoiceScore != null,
+
+                faceAvailable =
+                    recordingFaceAverage != null,
+
+                handAvailable =
+                    recordingHandAverage != null,
+
+                weightedScore =
+                    weightedScore
             )
 
         /*
-         * Mark the recording as published before emitting,
-         * preventing another callback from publishing it again.
+         * Mark the result before emitting it.
          */
         recordingResultPublished = true
 
         /*
-         * Update the public StateFlow values.
+         * Update representative public scores.
          *
-         * The actual weighted calculation above used the precise
-         * Double hand average.
-         *
-         * _handScore is an Int StateFlow, so we round only the
-         * displayed representative hand value here.
+         * These public StateFlows remain integers for the
+         * existing UI.
          */
-        _voiceScore.value = voiceScore
+        _voiceScore.value =
+            recordingVoiceScore
+                ?.roundToInt()
+                ?.coerceIn(0, 4)
+                ?: 0
+
+        _faceScore.value =
+            recordingFaceAverage
+                ?.roundToInt()
+                ?.coerceIn(0, 4)
+                ?: 0
 
         _handScore.value =
-            handAverage
-                .roundToInt()
-                .coerceIn(0, 4)
+            recordingHandAverage
+                ?.roundToInt()
+                ?.coerceIn(0, 4)
+                ?: 0
 
-        _totalScore.value = finalLevel
+        _totalScore.value =
+            finalLevel
 
         val emitted =
-            _completedVoiceRecordings.tryEmit(result)
+            _completedVoiceRecordings.tryEmit(
+                result
+            )
 
         Log.d(
             "VOICE_RECORDING_RESULT",
             """
-            Completed voice-recording result:
-            voiceScore=$voiceScore
-            handAverage=$handAverage
-            weightedScore=$weightedScore
-            finalLevel=$finalLevel
+            Completed multimodal recording result:
+        
+            voiceCompleted=$recordingVoiceCompleted
+            voiceAvailable=${result.voiceAvailable}
+            voiceScore=${result.voiceScore}
+        
+            faceCompleted=$recordingFaceCompleted
+            faceAvailable=${result.faceAvailable}
+            faceAverage=${result.faceAverage}
+        
+            handCompleted=$recordingHandCompleted
+            handAvailable=${result.handAvailable}
+            handAverage=${result.handAverage}
+        
+            weightedScore=${result.weightedScore}
+            finalLevel=${result.level}
             emitted=$emitted
             """.trimIndent()
-        )
+                )
 
         /*
-         * The recording result has already been calculated
-         * with VOICE_RECORDING weights.
+         * The final recording result has already been calculated
+         * using recording weights.
          *
-         * It is now safe to return to form-filling mode.
-         *
-         * We intentionally do not call updateTotal() here,
-         * because that would immediately replace the recording
-         * result using form-filling weights.
+         * Return to form mode without calling updateTotal(),
+         * because that would immediately overwrite the result
+         * using form weights.
          */
-        _mode.value = DistressMode.FORM_FILLING
+        _mode.value =
+            DistressMode.FORM_FILLING
 
         printStatus()
     }
@@ -510,6 +745,12 @@ object DistressScoringManager {
          */
         recordingHandAverage = null
         recordingVoiceScore = null
+        recordingFaceAverage = null
+
+        recordingHandCompleted = false
+        recordingVoiceCompleted = false
+        recordingFaceCompleted = false
+
         recordingResultPublished = false
 
         /*
@@ -532,6 +773,7 @@ object DistressScoringManager {
          * Remove incomplete recording values.
          */
         _voiceScore.value = 0
+        _faceScore.value = 0
         _totalScore.value = 0
 
         Log.d(
@@ -557,10 +799,38 @@ object DistressScoringManager {
      * Individual recording hand windows are no longer stored here.
      * MotionTrackingController owns and averages those windows.
      */
-    fun updateHandScore(score: Int) {
-
-        _handScore.value =
+    /**
+     * Updates the latest hand score during form filling.
+     */
+    fun updateHandScore(
+        score: Int
+    ) {
+        val safeScore =
             score.coerceIn(0, 4)
+
+        /*
+         * Store the exact available score internally.
+         */
+        currentFormHandScore =
+            safeScore.toDouble()
+
+        /*
+         * Keep the existing UI StateFlow updated.
+         */
+        _handScore.value =
+            safeScore
+
+        updateTotal()
+    }
+
+    /**
+     * Marks hand information as unavailable.
+     *
+     * This is different from a valid hand score of zero.
+     */
+    fun clearFormHandScore() {
+        currentFormHandScore = null
+        _handScore.value = 0
 
         updateTotal()
     }
@@ -582,18 +852,114 @@ object DistressScoringManager {
         updateTotal()
     }
 
-    fun updateFaceScore(score: Int) {
+    /**
+     * Stores the latest reliable continuous face score during
+     * normal form filling.
+     *
+     * score is kept as Float/Double until final weighting.
+     */
+    fun updateFormFaceScore(
+        score: Float,
+        timestampMs: Long
+    ) {
+        if (_mode.value != DistressMode.FORM_FILLING) {
+            /*
+             * Recording face results are collected separately
+             * and submitted as one final average.
+             */
+            return
+        }
 
+        if (!score.isFinite()) {
+            return
+        }
+
+        val safeScore =
+            score.coerceIn(
+                minimumValue = 0f,
+                maximumValue = 4f
+            )
+
+        currentFormFaceScore =
+            safeScore.toDouble()
+
+        /*
+ * Store the local monotonic reception time.
+ *
+ * This guarantees that the timestamp uses the same clock
+ * as getFreshFormFaceScore().
+ */
+        currentFormFaceTimestampMs =
+            SystemClock.uptimeMillis()
+
+        /*
+         * Round only for the representative UI value.
+         *
+         * Weighted fusion still uses currentFormFaceScore.
+         */
         _faceScore.value =
+            safeScore
+                .roundToInt()
+                .coerceIn(0, 4)
+
+        updateTotal()
+
+        Log.d(
+            "DISTRESS_FACE_SCORE",
+            """
+        Reliable form face score received:
+        continuousScore=$safeScore
+        displayedLevel=${_faceScore.value}
+        timestampMs=$timestampMs
+        """.trimIndent()
+        )
+    }
+
+    /**
+     * Marks the form face component as unavailable.
+     *
+     * Called when the form screen closes.
+     */
+    fun clearFormFaceScore() {
+        currentFormFaceScore = null
+        currentFormFaceTimestampMs = null
+        _faceScore.value = 0
+
+        updateTotal()
+
+        Log.d(
+            "DISTRESS_FACE_SCORE",
+            "Form face score cleared."
+        )
+    }
+
+    /**
+     * Updates the latest available form-behavior score.
+     */
+    fun updateFormBehaviorScore(
+        score: Int
+    ) {
+        val safeScore =
             score.coerceIn(0, 4)
+
+        currentFormBehaviorScore =
+            safeScore.toDouble()
+
+        _formBehaviorScore.value =
+            safeScore
 
         updateTotal()
     }
 
-    fun updateFormBehaviorScore(score: Int) {
-
-        _formBehaviorScore.value =
-            score.coerceIn(0, 4)
+    /**
+     * Marks form-behavior information as unavailable.
+     *
+     * This should later replace places where zero currently means
+     * that no active field information exists.
+     */
+    fun clearFormBehaviorScore() {
+        currentFormBehaviorScore = null
+        _formBehaviorScore.value = 0
 
         updateTotal()
     }
@@ -617,33 +983,184 @@ object DistressScoringManager {
      *
      * This function does not emit a completed measurement event.
      */
+    /**
+     * Recalculates the current live form-filling score.
+     *
+     * Recording mode does not calculate its final result here.
+     * Recording results are calculated only after hand, voice
+     * and face processing have all completed.
+     */
     private fun updateTotal() {
 
-        val hand = _handScore.value
-        val voice = _voiceScore.value
-        val form = _formBehaviorScore.value
+        when (_mode.value) {
 
-        val weightedScore =
-            when (_mode.value) {
-
-                DistressMode.VOICE_RECORDING -> {
-                    voice * 0.60 +
-                            hand * 0.40
-                }
-
-                DistressMode.FORM_FILLING -> {
-                    form * 0.60 +
-                            hand * 0.40
-                }
+            DistressMode.VOICE_RECORDING -> {
+                /*
+                 * Do not calculate an incomplete recording score.
+                 *
+                 * The final recording score is published only by
+                 * tryPublishVoiceRecordingResult().
+                 */
+                printStatus()
+                return
             }
 
-        _totalScore.value =
-            weightedScore
-                .roundToInt()
-                .coerceIn(0, 4)
+            DistressMode.FORM_FILLING -> {
+
+                /*
+                 * Use the face score only if it is still recent.
+                 */
+                val freshFaceScore =
+                    getFreshFormFaceScore()
+
+                /*
+                 * Form-filling weights:
+                 *
+                 * Field behavior = 30%
+                 * Face analysis  = 35%
+                 * Hand movement  = 35%
+                 */
+                val weightedScore =
+                    calculateNormalizedWeightedScore(
+                        components = listOf(
+                            WeightedComponent(
+                                score =
+                                    currentFormBehaviorScore,
+                                weight =
+                                    FORM_BEHAVIOR_WEIGHT
+                            ),
+
+                            WeightedComponent(
+                                score =
+                                    freshFaceScore,
+                                weight =
+                                    FORM_FACE_WEIGHT
+                            ),
+
+                            WeightedComponent(
+                                score =
+                                    currentFormHandScore,
+                                weight =
+                                    FORM_HAND_WEIGHT
+                            )
+                        )
+                    )
+
+                /*
+                 * If no modality is available, the public total
+                 * returns to zero.
+                 */
+                _totalScore.value =
+                    weightedScore
+                        ?.roundToInt()
+                        ?.coerceIn(0, 4)
+                        ?: 0
+            }
+        }
 
         printStatus()
     }
+
+    /**
+     * Returns the most recent face score only while it is fresh.
+     *
+     * A stale score is cleared so it cannot affect later
+     * form-filling windows after the face disappears.
+     */
+    private fun getFreshFormFaceScore():
+            Double? {
+
+        val score =
+            currentFormFaceScore
+                ?: return null
+
+        val timestampMs =
+            currentFormFaceTimestampMs
+                ?: return null
+
+        val ageMs =
+            SystemClock.uptimeMillis() -
+                    timestampMs
+
+        if (
+            ageMs < 0L ||
+            ageMs > FACE_SCORE_FRESHNESS_MS
+        ) {
+            currentFormFaceScore = null
+            currentFormFaceTimestampMs = null
+            _faceScore.value = 0
+
+            Log.d(
+                "DISTRESS_FACE_SCORE",
+                "Face score became unavailable because it was stale. ageMs=$ageMs"
+            )
+
+            return null
+        }
+
+        return score
+    }
+
+    /**
+     * Calculates a weighted score using only available modalities.
+     *
+     * Example:
+     *
+     * Field = 2.0 with weight 0.30
+     * Face  = null
+     * Hand  = 3.0 with weight 0.35
+     *
+     * availableWeight = 0.65
+     *
+     * result =
+     * (2.0 × 0.30 + 3.0 × 0.35) / 0.65
+     */
+    private fun calculateNormalizedWeightedScore(
+        components: List<WeightedComponent>
+    ): Double? {
+
+        val availableComponents =
+            components.filter { component ->
+                component.score != null &&
+                        component.score.isFinite() &&
+                        component.weight > 0.0
+            }
+
+        if (availableComponents.isEmpty()) {
+            return null
+        }
+
+        val availableWeight =
+            availableComponents.sumOf { component ->
+                component.weight
+            }
+
+        if (availableWeight <= 0.0) {
+            return null
+        }
+
+        val weightedSum =
+            availableComponents.sumOf { component ->
+                component.score!! *
+                        component.weight
+            }
+
+        return (
+                weightedSum /
+                        availableWeight
+                ).coerceIn(
+                minimumValue = 0.0,
+                maximumValue = 4.0
+            )
+    }
+
+    /**
+     * One optional score and its configured weight.
+     */
+    private data class WeightedComponent(
+        val score: Double?,
+        val weight: Double
+    )
 
     /*
      * ============================================================
@@ -676,6 +1193,11 @@ object DistressScoringManager {
 
             return
         }
+
+        /*
+ * Recalculate with the most recent available modality values.
+ */
+        updateTotal()
 
         val result =
             DistressWindowResult(
@@ -715,14 +1237,71 @@ object DistressScoringManager {
         Log.d(
             "DISTRESS_SCORE",
             """
-            Mode = ${_mode.value}
-            Hand score = ${_handScore.value}
-            Voice score = ${_voiceScore.value}
-            Form behavior score = ${_formBehaviorScore.value}
-            Face score = ${_faceScore.value}
-            Total score = ${_totalScore.value}
-            Distress = ${isDistressDetected()}
-            """.trimIndent()
+        Mode = ${_mode.value}
+
+        Displayed hand score = ${_handScore.value}
+        Form hand available = ${currentFormHandScore != null}
+
+        Displayed voice score = ${_voiceScore.value}
+
+        Displayed face score = ${_faceScore.value}
+        Form face stored = ${'$'}{currentFormFaceScore != null}
+
+        Displayed form score = ${_formBehaviorScore.value}
+        Form behavior available = ${currentFormBehaviorScore != null}
+
+        Recording hand completed = $recordingHandCompleted
+        Recording hand average = $recordingHandAverage
+
+        Recording voice completed = $recordingVoiceCompleted
+        Recording voice score = $recordingVoiceScore
+
+        Recording face completed = $recordingFaceCompleted
+        Recording face average = $recordingFaceAverage
+
+        Total score = ${_totalScore.value}
+        Distress = ${isDistressDetected()}
+        """.trimIndent()
         )
     }
+
+    /*
+ * ============================================================
+ * MULTIMODAL WEIGHTS AND AVAILABILITY
+ * ============================================================
+ */
+
+    /*
+     * Form-filling weights.
+     */
+    private const val FORM_BEHAVIOR_WEIGHT =
+        0.30
+
+    private const val FORM_FACE_WEIGHT =
+        0.35
+
+    private const val FORM_HAND_WEIGHT =
+        0.35
+
+    /*
+     * Recording weights.
+     */
+    private const val RECORDING_VOICE_WEIGHT =
+        0.35
+
+    private const val RECORDING_FACE_WEIGHT =
+        0.35
+
+    private const val RECORDING_HAND_WEIGHT =
+        0.30
+
+    /*
+     * A reliable face result is normally produced approximately
+     * every 500 ms.
+     *
+     * Three seconds allows short detection interruptions without
+     * keeping an old score active for too long.
+     */
+    private const val FACE_SCORE_FRESHNESS_MS =
+        3_000L
 }

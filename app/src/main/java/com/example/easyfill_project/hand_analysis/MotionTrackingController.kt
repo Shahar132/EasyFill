@@ -158,36 +158,38 @@ class MotionTrackingController(
                                 false
 
                             /*
-                             * If the recording ended before one
-                             * complete five-second motion window,
-                             * the list may be empty.
-                             *
-                             * In that case, use 0.0.
-                             *
-                             * Otherwise, calculate the precise
-                             * Double average.
-                             *
-                             * No rounding happens here.
-                             */
-                            val handAverage =
-                                if (
-                                    voiceRecordingHandScores
-                                        .isEmpty()
-                                ) {
-                                    0.0
-                                } else {
-                                    voiceRecordingHandScores
-                                        .average()
-                                }
+                          * Calculate one final hand result for the recording.
+                          *
+                          * When at least one complete five-second hand window exists:
+                          * calculate the precise Double average.
+                          *
+                          * When no complete window exists:
+                          * return null.
+                          *
+                          * null means that hand information was unavailable.
+                          *
+                          * This is different from 0.0:
+                          *
+                          * 0.0 means that hand analysis was available and reliably
+                          * detected no unusual hand movement.
+                          */
+                            val handAverage: Double? =
+                                voiceRecordingHandScores
+                                    .takeIf { scores ->
+                                        scores.isNotEmpty()
+                                    }
+                                    ?.average()
 
                             Log.d(
                                 "VOICE_HAND_SESSION",
                                 """
                                 Recording hand session completed.
                                 windowScores=$voiceRecordingHandScores
+                                completedWindowCount=${voiceRecordingHandScores.size}
+                                handAvailable=${handAverage != null}
                                 handAverage=$handAverage
                                 """.trimIndent()
-                            )
+                                                        )
 
                             /*
                              * Send only one final hand average
@@ -486,9 +488,18 @@ class MotionTrackingController(
             false
 
         /*
-         * Keep your existing sensor cleanup.
-         */
+   * Stop the motion sensors and return the last unfinished
+   * sensor analysis, which is intentionally ignored here.
+   */
         motionManager.stopAndAnalyze()
+
+        /*
+         * Hand tracking is no longer active.
+         *
+         * Mark hand information as unavailable so the most recent
+         * form hand score is not reused after this screen closes.
+         */
+        distressManager.clearFormHandScore()
 
         Log.d(
             "MOTION_FLOW",

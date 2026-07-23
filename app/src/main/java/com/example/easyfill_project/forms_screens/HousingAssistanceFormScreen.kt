@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 import com.example.easyfill_project.hand_analysis.MotionTrackingController
 import com.example.easyfill_project.form_behavior_analysis.FormBehaviorTrackingController
@@ -35,6 +36,19 @@ import com.example.easyfill_project.chatbot.model.DistressSnapshot
 import com.example.easyfill_project.chatbot.ui.FloatingChatOverlay
 import com.example.easyfill_project.distress_scoring.DistressMode
 import com.example.easyfill_project.distress_scoring.DistressUiEvent
+
+
+//imports regarding the face analysis
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.easyfill_project.face_analysis.FaceMonitoringSession
+import com.example.easyfill_project.distress_scoring.DistressScoringManager
+import com.example.easyfill_project.face_analysis.FaceRecordingScoreAggregator
+
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 
 
 @Composable
@@ -93,19 +107,457 @@ fun HousingAssistanceFormScreen(
     ) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+
+    /*
+ * Whether camera permission is currently granted.
+ */
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    /*
+     * Requests camera permission for continuous face analysis.
+     */
+    val cameraPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract =
+                ActivityResultContracts.RequestPermission()
+        ) { granted ->
+
+            hasCameraPermission = granted
+
+            Log.d(
+                "FACE_PERMISSION",
+                "Camera permission granted=$granted"
+            )
+        }
+
+    /*
+ * Request permission once when the housing form opens.
+ */
+    LaunchedEffect(Unit) {
+
+        if (!hasCameraPermission) {
+            cameraPermissionLauncher.launch(
+                Manifest.permission.CAMERA
+            )
+        }
+    }
+
+    /*
+     * CameraX needs the lifecycle of the current screen.
+     *
+     * The face camera will be connected to this lifecycle so CameraX
+     * knows when the screen is active, stopped or destroyed.
+     */
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val formId = "housing_assistance"
 
-    val motionController = remember {
+    /*
+ * ============================================================
+ * HAND AND FACE MONITORING
+ * ============================================================
+ */
+
+    /*
+     * Create one hand-motion controller for this form-screen instance.
+     *
+     * remember prevents a new controller from being created after
+     * every Compose recomposition.
+     */
+    val motionController = remember(context) {
         MotionTrackingController(context)
     }
 
+    /*
+     * Coroutine scope used by MotionTrackingController.
+     */
     val motionScope = rememberCoroutineScope()
 
-    DisposableEffect(Unit) {//It starts sensors for 30 seconds to create baseline.
-        motionController.startTracking(motionScope)
+    /*
+ * Collects reliable face scores only while a voice
+ * recording is active.
+ *
+ * remember ensures that recomposition does not create a new
+ * list and lose scores from the current recording.
+ */
+    val faceRecordingAggregator =
+        remember {
+            FaceRecordingScoreAggregator()
+        }
+
+    /*
+ * ============================================================
+ * FACE RECORDING LIFECYCLE
+ * ============================================================
+ *
+ * Listen to the same recording lifecycle events already used
+ * by MotionTrackingController.
+ *
+ * beginVoiceRecordingSession()
+ *      ↓
+ * voiceRecordingStarted event
+ *      ↓
+ * start collecting face scores
+ *
+ * requestVoiceRecordingStop()
+ *      ↓
+ * voiceRecordingStopped event
+ *      ↓
+ * calculate the face average
+ *      ↓
+ * submit it to DistressScoringManager
+ */
+    /*
+ * Listen to recording lifecycle events for face aggregation.
+ *
+ * LaunchedEffect provides a CoroutineScope tied to this
+ * composable. Both child collectors are automatically cancelled
+ * when the screen leaves the composition.
+ */
+    LaunchedEffect(
+        faceRecordingAggregator
+    ) {
+
+        /*
+         * Recording start collector.
+         */
+        launch {
+            DistressScoringManager
+                .voiceRecordingStarted
+                .collect {
+
+                    /*
+                     * Clear scores from a previous recording and
+                     * start collecting face scores for the new one.
+                     */
+                    faceRecordingAggregator
+                        .startRecording()
+
+                    Log.d(
+                        "VOICE_FACE_SESSION",
+                        "Received recording-start event."
+                    )
+                }
+        }
+
+        /*
+         * Recording stop collector.
+         */
+        launch {
+            DistressScoringManager
+                .voiceRecordingStopped
+                .collect {
+
+                    /*
+                     * Stop collecting and calculate one recording
+                     * face average.
+                     *
+                     * null means that no reliable face result
+                     * existed during the recording.
+                     */
+                    val faceAverage =
+                        faceRecordingAggregator
+                            .finishRecording()
+
+                    /*
+                     * Submit the value even when it is null.
+                     *
+                     * The manager uses a separate completion flag,
+                     * so null means completed but unavailable.
+                     */
+                    DistressScoringManager
+                        .submitVoiceRecordingFaceAverage(
+                            average = faceAverage
+                        )
+
+                    Log.d(
+                        "VOICE_FACE_SESSION",
+                        """
+                    Submitted completed face result.
+                    faceAvailable=${faceAverage != null}
+                    faceAverage=$faceAverage
+                    """.trimIndent()
+                    )
+                }
+        }
+    }
+
+    /*
+     * Create one face-monitoring session for this form screen.
+     *
+     * FaceMonitoringSession owns:
+     *
+     * - FaceCameraManager
+     * - FaceLandmarkerHelper
+     * - FaceAnalysisController
+     * - FaceDistressAnalyzer
+     *
+     * It will remain active while the user is inside this form.
+     */
+    val faceMonitoringSession = remember(
+        context,
+        lifecycleOwner,
+        faceRecordingAggregator
+    ) {
+        FaceMonitoringSession(
+            context = context,
+            lifecycleOwner = lifecycleOwner,
+
+            /*
+             * Receives the current state of the face-analysis pipeline.
+             *
+             * This is useful for checking whether the system is:
+             *
+             * - loading an existing baseline
+             * - calibrating
+             * - analyzing
+             * - reporting an error
+             */
+            onAnalysisStateChanged = { state ->
+                Log.d(
+                    "FACE_FORM_SESSION",
+                    "phase=${state.phase}, " +
+                            "message=${state.message}, " +
+                            "baselineReady=${state.baselineReady}"
+                )
+            },
+
+            /*
+             * Receives the full stabilized face result.
+             *
+             * This is not one raw camera-frame result.
+             *
+             * FaceDistressAnalyzer has already:
+             *
+             * - grouped frames into 500 ms windows
+             * - checked that enough valid frames exist
+             * - compared features to the personal baseline
+             * - checked persistence across recent windows
+             * - smoothed the face score
+             */
+            onDistressResult = { result ->
+
+                /*
+                 * Only reliable and stabilized face results participate
+                 * in either form or recording distress scoring.
+                 */
+                if (result.isReliable) {
+
+                    /*
+                     * Route the reliable face score according to the
+                     * application's current analysis mode.
+                     */
+                    when (
+                        DistressScoringManager
+                            .mode
+                            .value
+                    ) {
+
+                        /*
+                         * During ordinary form filling:
+                         *
+                         * Save the latest reliable face score.
+                         *
+                         * It will be combined with the next completed
+                         * five-second hand window using:
+                         *
+                         * field = 30%
+                         * face  = 35%
+                         * hand  = 35%
+                         */
+                        DistressMode.FORM_FILLING -> {
+
+                            DistressScoringManager
+                                .updateFormFaceScore(
+                                    score = result.score,
+                                    timestampMs =
+                                        result.windowEndTimestampMs
+                                )
+                        }
+
+                        /*
+                         * During voice recording:
+                         *
+                         * Do not update the live form score.
+                         *
+                         * Add every reliable continuous face score to
+                         * the recording-level aggregator.
+                         */
+                        DistressMode.VOICE_RECORDING -> {
+
+                            faceRecordingAggregator
+                                .addReliableScore(
+                                    score = result.score
+                                )
+                        }
+                    }
+
+                    Log.d(
+                        "FACE_DISTRESS_RESULT",
+                        """
+            mode=${DistressScoringManager.mode.value}
+            score=${result.score}
+            level=${result.level}
+            reliable=${result.isReliable}
+            topContributor=${result.topContributor}
+            """.trimIndent()
+                    )
+                }
+            },
+
+            /*
+             * onScoreReady returns only the rounded level 0–4.
+             *
+             * We do not use it for weighted fusion because
+             * onDistressResult gives us the more precise Float score.
+             */
+            onScoreReady = { level ->
+                Log.d(
+                    "FACE_FORM_LEVEL",
+                    "Face level=$level"
+                )
+            },
+
+            /*
+             * Reports whether MediaPipe currently detects a face.
+             *
+             * We log it for testing.
+             *
+             * The score manager will use timestamp freshness instead
+             * of immediately clearing the score after one missed frame.
+             */
+            onDetectionStatusChanged = { status ->
+                Log.d(
+                    "FACE_DETECTION_STATUS",
+                    "detected=${status.faceDetected}, " +
+                            "landmarks=${status.landmarkCount}, " +
+                            "message=${status.message}"
+                )
+            }
+        )
+    }
+
+    /*
+     * Start hand and face monitoring when this screen enters
+     * the Compose composition.
+     *
+     * Stop and release both components when the user leaves
+     * the form screen.
+     */
+    DisposableEffect(
+        motionController,
+        faceMonitoringSession,
+        faceRecordingAggregator
+    ) {
+
+        /*
+         * Start the existing hand-motion pipeline.
+         */
+        motionController.startTracking(
+            scope = motionScope
+        )
+
 
         onDispose {
+
+            /*
+             * If the user leaves the form while a voice-recording
+             * session is still active, cancel the incomplete session
+             * before closing the hand and face components.
+             */
+            if (
+                DistressScoringManager.mode.value ==
+                DistressMode.VOICE_RECORDING
+            ) {
+                DistressScoringManager
+                    .cancelVoiceRecordingSession()
+            }
+
+            /*
+             * Stop hand tracking.
+             *
+             * MotionTrackingController also calls
+             * clearFormHandScore().
+             */
             motionController.stopTracking()
+
+            /*
+             * Stop CameraX, MediaPipe and the face analyzer.
+             */
+            faceMonitoringSession.close()
+
+            /*
+             * Remove any unfinished recording-level face scores.
+             */
+            faceRecordingAggregator.reset()
+
+            /*
+             * Clear all field and step-navigation state belonging
+             * to this form session.
+             *
+             * clear() now marks form behavior as unavailable.
+             */
+            FormBehaviorTrackingController.clear()
+
+            /*
+             * Mark live face information as unavailable.
+             */
+            DistressScoringManager
+                .clearFormFaceScore()
+
+            Log.d(
+                "FACE_FORM_SESSION",
+                "Hand, face and form-behavior monitoring stopped."
+            )
+        }
+    }
+
+    DisposableEffect(
+        faceMonitoringSession,
+        hasCameraPermission
+    ) {
+
+        if (hasCameraPermission) {
+
+            val faceStarted =
+                faceMonitoringSession.start()
+
+            Log.d(
+                "FACE_FORM_SESSION",
+                "Face monitoring started=$faceStarted"
+            )
+
+        } else {
+
+            /*
+             * Camera permission was denied or has not yet been granted.
+             * Face is unavailable, but hand and form analysis continue.
+             */
+            DistressScoringManager
+                .clearFormFaceScore()
+
+            Log.d(
+                "FACE_FORM_SESSION",
+                "Face monitoring not started because camera permission is unavailable."
+            )
+        }
+
+        onDispose {
+            /*
+             * Permission-state changes should stop only the camera,
+             * not the complete hand/form tracking session.
+             */
+            faceMonitoringSession.close()
+
+            DistressScoringManager
+                .clearFormFaceScore()
         }
     }
 

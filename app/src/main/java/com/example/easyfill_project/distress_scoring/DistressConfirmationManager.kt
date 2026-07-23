@@ -240,16 +240,25 @@ class DistressConfirmationManager(
         Log.d(
             "DISTRESS_CONFIRM",
             """
-        Completed voice recording:
-        level=$level
-        voiceScore=${result.voiceScore}
-        handAverage=${result.handAverage}
-        weightedScore=${result.weightedScore}
-        dismissedSuggestion=${dismissedRecordingSuggestion?.id}
-        dismissedSuggestionLevel=${dismissedRecordingSuggestion?.level}
-        recordingsSinceDismissal=$recordingsSinceDismissal
-        """.trimIndent()
-        )
+            Completed multimodal voice recording:
+            level=$level
+        
+            voiceAvailable=${result.voiceAvailable}
+            voiceScore=${result.voiceScore}
+        
+            faceAvailable=${result.faceAvailable}
+            faceAverage=${result.faceAverage}
+        
+            handAvailable=${result.handAvailable}
+            handAverage=${result.handAverage}
+        
+            weightedScore=${result.weightedScore}
+        
+            dismissedSuggestion=${dismissedRecordingSuggestion?.id}
+            dismissedSuggestionLevel=${dismissedRecordingSuggestion?.level}
+            recordingsSinceDismissal=$recordingsSinceDismissal
+            """.trimIndent()
+                )
 
         /*
          * Recording results must never complete a partially confirmed
