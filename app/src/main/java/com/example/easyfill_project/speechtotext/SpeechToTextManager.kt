@@ -56,8 +56,11 @@ class SpeechToTextManager(
             return
         }
 
-        speechRecognizer?.destroy()
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+//        speechRecognizer?.destroy()
+//        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        if (speechRecognizer == null) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        }
 
         analyzer = SpeechAudioAnalyzer()
         analysisSent = false

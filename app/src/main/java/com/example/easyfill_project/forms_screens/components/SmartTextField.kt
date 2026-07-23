@@ -60,6 +60,13 @@ import kotlinx.coroutines.launch
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.staticCompositionLocalOf
+
+// Provides form-level validation messages to every SmartTextField.
+internal val LocalFormValidationMessages =
+    staticCompositionLocalOf<Map<String, String>> {
+        emptyMap()
+    }
 
 
 @Composable
@@ -134,13 +141,19 @@ fun SmartTextField(
         FieldValidationMessages.getMessage(error)
     }
 
-    // Shows the field's own error first, then an optional cross-field error.
+    // Reads a validation message produced by the full-form validator.
+    val formValidationMessage =
+        LocalFormValidationMessages.current[fieldId]
+
+    // Form-level issues remain visible until their values become valid.
+    // Regular field validation appears only after the user leaves the field.
     val displayedValidationMessage =
-        if (shouldShowValidationError) {
-            validationMessage ?: externalValidationMessage
-        } else {
-            null
-        }
+        formValidationMessage
+            ?: if (shouldShowValidationError) {
+                validationMessage ?: externalValidationMessage
+            } else {
+                null
+            }
 
     /*
      * Request microphone permission when needed.
@@ -440,15 +453,27 @@ fun SmartTextField(
                                      * and writes it into the field.
                                      */
                                     onResult = { text ->
-
-                                        FormBehaviorTrackingController
-                                            .onFieldValueChanged(
+                                        // Applies the same field rules to recognized speech.
+                                        val sanitizedValue =
+                                            FieldInputRules.sanitizeTypedInput(
                                                 fieldId = fieldId,
-                                                oldValue = value,
-                                                newValue = text
+                                                input = text
                                             )
 
-                                        onValueChange(text)
+                                        // Ignores speech that contains no valid value for this field.
+                                        if (
+                                            sanitizedValue.isNotBlank() &&
+                                            sanitizedValue != value
+                                        ) {
+                                            FormBehaviorTrackingController
+                                                .onFieldValueChanged(
+                                                    fieldId = fieldId,
+                                                    oldValue = value,
+                                                    newValue = sanitizedValue
+                                                )
+
+                                            onValueChange(sanitizedValue)
+                                        }
                                     },
 
                                     onSpeechStarted = {

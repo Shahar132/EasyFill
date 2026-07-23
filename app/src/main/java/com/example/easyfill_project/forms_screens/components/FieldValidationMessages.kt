@@ -57,4 +57,17 @@ internal object FieldValidationMessages {
                 "כתובת הדואר האלקטרוני אינה תקינה"
         }
     }
+
+
+    // Returns the message displayed when a required field is empty.
+    fun getMissingFieldMessage(
+        fieldDisplayName: String
+    ): String {
+        return "יש למלא את השדה: $fieldDisplayName"
+    }
+
+    // Returns the message displayed when no assistance option was selected.
+    fun getMissingAssistanceSelectionMessage(): String {
+        return "יש לבחור לפחות סוג סיוע אחד"
+    }
 }

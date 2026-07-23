@@ -96,6 +96,7 @@ object HousingAssistancePdfSchema {
                 )
             )
         ),
+
         PdfSectionDefinition(
             title = "מצב משפחתי",
             fields = listOf(
@@ -113,6 +114,7 @@ object HousingAssistancePdfSchema {
                 )
             )
         ),
+
         PdfSectionDefinition(
             title = "פירוט הכנסות",
             fields = listOf(
@@ -138,6 +140,7 @@ object HousingAssistancePdfSchema {
                 )
             )
         ),
+
         PdfSectionDefinition(
             title = "בחירת הסיוע בדיור",
             fields = listOf(
@@ -178,8 +181,14 @@ object HousingAssistancePdfSchema {
                 )
             )
         ),
+
         PdfSectionDefinition(
             title = "פרטי הדירה בשכירות",
+
+            // Displays and validates this section only when
+            // rent assistance was selected.
+            showWhenSelectedKey = "rentAssistance",
+
             fields = listOf(
                 PdfFieldDefinition(
                     firebaseKey = "rentStreet",

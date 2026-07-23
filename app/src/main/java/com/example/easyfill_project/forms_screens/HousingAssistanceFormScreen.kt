@@ -49,8 +49,9 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.example.easyfill_project.forms_screens.components.LocalFormValidationMessages
 
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HousingAssistanceFormScreen(
     navController: NavHostController,
@@ -577,6 +578,28 @@ fun HousingAssistanceFormScreen(
 
     var formData by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
+    var validationIssues by remember {
+        mutableStateOf<List<FormIssue>>(emptyList())
+    }
+
+    val validationMessagesByField = remember(validationIssues) {
+        validationIssues.associate { issue ->
+            issue.fieldId to issue.message
+        }
+    }
+
+    LaunchedEffect(
+        formData,
+        validationIssues.isNotEmpty()
+    ) {
+        if (validationIssues.isNotEmpty()) {
+            validationIssues =
+                HousingAssistanceFormValidator.validateForm(
+                    formData = formData
+                )
+        }
+    }
+
     // Compares the declared number of children with the entered ages.
     val childrenAgesCountError =
         FieldInputRules.validateChildrenAgesCount(
@@ -828,57 +851,87 @@ fun HousingAssistanceFormScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            CompositionLocalProvider(
+                LocalFormValidationMessages provides
+                        validationMessagesByField
+            ) {
+                when (currentStep) {
+                    0 -> PersonalDetailsSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
 
-            when (currentStep) {
-                0 -> PersonalDetailsSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
+                        // Forwards the selected field to AppNavigation.
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                    // Forwards the selected field to AppNavigation.
-                    onFocusedFieldChange = onFocusedFieldChange,
-                    chatbotContent = {}
-                )
-                1 -> MailingAddressSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
+                    1 -> MailingAddressSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
 
-                    // Sends the selected income field toward AppNavigation.
-                    onFocusedFieldChange = onFocusedFieldChange,
-                    chatbotContent = {}
-                )
+                        // Sends the selected income field toward AppNavigation.
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                2 -> FamilyStatusSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
+                    2 -> FamilyStatusSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
 
-                    // Sends the children-count comparison error to the ages field.
-                    childrenAgesValidationMessage =
-                        childrenAgesCountMessage,
+                        // Sends the children-count comparison error to the ages field.
+                        childrenAgesValidationMessage =
+                            childrenAgesCountMessage,
 
-                    // Sends the selected family-status text field upward.
-                    onFocusedFieldChange = onFocusedFieldChange,
-                    chatbotContent = {}
-                )
+                        // Sends the selected family-status text field upward.
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                3 -> IncomeDetailsSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
+                    3 -> IncomeDetailsSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
 
-                    // Sends the selected income field toward AppNavigation.
-                    onFocusedFieldChange = onFocusedFieldChange,
-                    chatbotContent = {}
-                )
-                4 -> AssistanceSelectionSection(formData, ::updateField,chatbotContent = {})
+                        // Sends the selected income field toward AppNavigation.
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
 
-                5 -> RentAssistanceSection(
-                    formData = formData,
-                    onFieldChange = ::updateField,
+                    4 -> AssistanceSelectionSection(formData, ::updateField, chatbotContent = {})
 
-                    // Sends the selected rent field toward AppNavigation.
-                    onFocusedFieldChange = onFocusedFieldChange,
-                    chatbotContent = {}
-                )
-                6 -> SummarySection(navController)
+                    5 -> RentAssistanceSection(
+                        formData = formData,
+                        onFieldChange = ::updateField,
+
+                        // Sends the selected rent field toward AppNavigation.
+                        onFocusedFieldChange = onFocusedFieldChange,
+                        chatbotContent = {}
+                    )
+
+                    6 -> SummarySection(
+                        formData = formData,
+
+                        onValidationIssuesFound = { issues ->
+                            validationIssues = issues
+
+                            val firstIssue =
+                                issues.firstOrNull()
+
+                            if (firstIssue != null) {
+                                val targetStep =
+                                    firstIssue.sectionIndex
+
+                                FormBehaviorTrackingController
+                                    .onStepChanged(
+                                        fromStep = currentStep,
+                                        toStep = targetStep
+                                    )
+
+                                saveStep(targetStep)
+                                currentStep = targetStep
+                            }
+                        }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
