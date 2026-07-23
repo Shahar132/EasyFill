@@ -109,6 +109,16 @@ import kotlinx.coroutines.launch
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 import com.example.easyfill_project.distress_scoring.DistressConfirmationManager
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.example.easyfill_project.settings.UserSettings
+import com.example.easyfill_project.settings.UserSettingsRepository
+import kotlinx.coroutines.launch
+
 
 // Main navigation function
 @Composable
@@ -258,6 +268,49 @@ fun AppWithDrawer(
 
     // Regarding TTS
     val context = LocalContext.current
+
+    /*
+ * Repository containing only settings manually selected
+ * by the user from the Settings screens.
+ */
+    val userSettingsRepository = remember(context) {
+        UserSettingsRepository(
+            context = context.applicationContext
+        )
+    }
+
+    /*
+     * Holds the last saved settings loaded from DataStore.
+     *
+     * This is separate from the effective runtime settings,
+     * because the chatbot may apply temporary changes.
+     */
+    var savedUserSettings by remember {
+        mutableStateOf(UserSettings())
+    }
+
+    /*
+     * Loads saved preferences when the application starts
+     * and whenever the user manually changes a setting.
+     */
+    LaunchedEffect(userSettingsRepository) {
+        userSettingsRepository.userSettings.collect { settings ->
+
+            savedUserSettings = settings
+
+            /*
+             * A DataStore update represents a manual settings
+             * change, so apply it to the live UI.
+             */
+            contrastMode = settings.contrastMode
+            fontSizeMode = settings.fontSizeMode
+
+            applySavedSound(
+                context = context,
+                soundName = settings.selectedSound
+            )
+        }
+    }
 
     val ttsManager = remember {
         TextToSpeechManager(context)
@@ -917,7 +970,22 @@ fun AppWithDrawer(
                                     }
 
                                     BackgroundSoundsScreen(
-                                        innerNavController
+                                        selectedSound =
+                                            SoundManager.selectedSound,
+
+                                        /*
+                                         * This callback is used only by the manual
+                                         * Background Sounds settings screen.
+                                         */
+                                        onSoundSelected = { selectedSound ->
+                                            scope.launch {
+                                                userSettingsRepository.saveSelectedSound(
+                                                    selectedSound
+                                                )
+                                            }
+                                        },
+
+                                        navController = innerNavController
                                     )
                                 }
 
@@ -930,11 +998,20 @@ fun AppWithDrawer(
 
                                     ContrastSettingsScreen(
                                         selectedMode = contrastMode,
-                                        onModeSelected = {
-                                            contrastMode = it
+
+                                        /*
+                                         * This callback belongs only to the manual
+                                         * Contrast Settings screen, so save it.
+                                         */
+                                        onModeSelected = { selectedMode ->
+                                            scope.launch {
+                                                userSettingsRepository.saveContrastMode(
+                                                    selectedMode
+                                                )
+                                            }
                                         },
-                                        navController =
-                                            innerNavController
+
+                                        navController = innerNavController
                                     )
                                 }
 
@@ -947,11 +1024,20 @@ fun AppWithDrawer(
 
                                     FontSizeSettingsScreen(
                                         selectedMode = fontSizeMode,
-                                        onModeSelected = {
-                                            fontSizeMode = it
+
+                                        /*
+                                         * This callback belongs only to the manual
+                                         * Font Size Settings screen, so save it.
+                                         */
+                                        onModeSelected = { selectedMode ->
+                                            scope.launch {
+                                                userSettingsRepository.saveFontSizeMode(
+                                                    selectedMode
+                                                )
+                                            }
                                         },
-                                        navController =
-                                            innerNavController
+
+                                        navController = innerNavController
                                     )
                                 }
 
@@ -1243,4 +1329,38 @@ fun AppWithDrawer(
             }
         }
     }
+}
+
+/**
+ * Applies a sound that was loaded from the user's saved preferences.
+ */
+private fun applySavedSound(
+    context: android.content.Context,
+    soundName: String
+) {
+    if (soundName == "none") {
+        SoundManager.stop()
+        return
+    }
+
+    val savedSound =
+        PersonalizationCatalog.sounds
+            .firstOrNull { sound ->
+                sound.key == soundName
+            }
+
+    if (savedSound == null) {
+        /*
+         * The saved sound may no longer exist after an app update.
+         * In that case, safely use no sound.
+         */
+        SoundManager.stop()
+        return
+    }
+
+    SoundManager.play(
+        context = context,
+        soundName = savedSound.key,
+        soundRes = savedSound.soundRes
+    )
 }

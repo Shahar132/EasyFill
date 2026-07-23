@@ -24,17 +24,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
 @Composable
-fun BackgroundSoundsScreen(navController: NavHostController) {
-
-    val context = LocalContext.current
-    val selectedSound = SoundManager.selectedSound
-
+fun BackgroundSoundsScreen(
+    selectedSound: String,
+    onSoundSelected: (String) -> Unit,
+    navController: NavHostController
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -59,20 +58,26 @@ fun BackgroundSoundsScreen(navController: NavHostController) {
             title = "ללא צליל",
             selected = selectedSound == "none",
             onClick = {
-                SoundManager.stop()
+                /*
+                 * The parent saves this manual selection
+                 * to DataStore.
+                 */
+                onSoundSelected("none")
             }
         )
 
         PersonalizationCatalog.sounds.forEach { sound ->
             SoundOptionCard(
                 title = sound.displayName,
-                selected = selectedSound == sound.key,
+                selected =
+                    selectedSound == sound.key,
                 onClick = {
-                    SoundManager.play(
-                        context = context,
-                        soundName = sound.key,
-                        soundRes = sound.soundRes
-                    )
+                    /*
+                     * Pass only the selected sound key.
+                     *
+                     * AppWithDrawer saves and applies it.
+                     */
+                    onSoundSelected(sound.key)
                 }
             )
         }
@@ -80,22 +85,34 @@ fun BackgroundSoundsScreen(navController: NavHostController) {
         Spacer(modifier = Modifier.height(3.dp))
 
         OutlinedButton(
-            onClick = { navController.navigate("Personal Settings") },
+            onClick = {
+                navController.navigate(
+                    "Personal Settings"
+                )
+            },
             modifier = Modifier
                 .wrapContentWidth(Alignment.End)
                 .padding(top = 24.dp),
             shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface),
-            colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            )
+            border = BorderStroke(
+                2.dp,
+                MaterialTheme.colorScheme.onSurface
+            ),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    containerColor =
+                        MaterialTheme.colorScheme.surface,
+                    contentColor =
+                        MaterialTheme.colorScheme.onSurface
+                )
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment =
+                    Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowForward,
+                    imageVector =
+                        Icons.Default.ArrowForward,
                     contentDescription = "Back"
                 )
 
@@ -103,7 +120,8 @@ fun BackgroundSoundsScreen(navController: NavHostController) {
 
                 Text(
                     text = "חזרה למסך הקודם",
-                    style = MaterialTheme.typography.bodyMedium
+                    style =
+                        MaterialTheme.typography.bodyMedium
                 )
             }
         }
@@ -122,18 +140,21 @@ fun SoundOptionCard(
             .padding(vertical = 6.dp),
         onClick = onClick,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor =
+                MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.secondary
+            color =
+                MaterialTheme.colorScheme.secondary
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment =
+                Alignment.CenterVertically
         ) {
             RadioButton(
                 selected = selected,
@@ -144,8 +165,10 @@ fun SoundOptionCard(
 
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                style =
+                    MaterialTheme.typography.bodyLarge,
+                color =
+                    MaterialTheme.colorScheme.onSurface
             )
         }
     }

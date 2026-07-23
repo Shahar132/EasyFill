@@ -8,10 +8,14 @@ import androidx.compose.runtime.setValue
 
 object SoundManager {
 
-    // Compose observes this value.
-    //
-    // "none" means no background sound is currently playing.
-    // Otherwise it contains the sound key, for example "calm".
+    /**
+     * The sound that is currently active in the app.
+     *
+     * This is effective runtime state. It may represent either:
+     *
+     * 1. The user's saved preference.
+     * 2. A temporary chatbot adaptation.
+     */
     var selectedSound by mutableStateOf("none")
         private set
 
@@ -22,29 +26,49 @@ object SoundManager {
         soundName: String,
         soundRes: Int
     ) {
-        // Stops the previous sound before starting another one.
+        /*
+         * Avoid restarting the same sound whenever
+         * Compose recomposes or DataStore emits again.
+         */
+        if (
+            selectedSound == soundName &&
+            mediaPlayer?.isPlaying == true
+        ) {
+            return
+        }
+
         stopOnlySound()
 
-        // Saves the key of the new sound.
-        // Compose immediately notices this change.
         selectedSound = soundName
 
-        mediaPlayer = MediaPlayer.create(context, soundRes)
+        mediaPlayer =
+            MediaPlayer.create(
+                context.applicationContext,
+                soundRes
+            )
+
         mediaPlayer?.isLooping = true
         mediaPlayer?.start()
     }
 
     fun stop() {
-        // Stops and releases the current sound.
         stopOnlySound()
-
-        // Updates the state to show that no sound is playing.
         selectedSound = "none"
     }
 
     private fun stopOnlySound() {
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
+        mediaPlayer?.run {
+            try {
+                if (isPlaying) {
+                    stop()
+                }
+            } catch (_: IllegalStateException) {
+                // Player was already in an invalid state.
+            }
+
+            release()
+        }
+
         mediaPlayer = null
     }
 }
