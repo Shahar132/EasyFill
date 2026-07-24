@@ -98,6 +98,15 @@ class DistressConfirmationManager(
 
     private var pendingSuggestionHandled = true
 
+
+    /*
+     * Tracks whether the user has already opened the current pending suggestion.
+     *
+     * An unopened form-filling suggestion may be upgraded to a higher confirmed
+     * level. Once opened, it keeps the existing chatbot behavior without upgrades.
+     */
+    private var pendingSuggestionWasOpened = false
+
     /**
      * The exact original recording suggestion for which the user pressed
      * "Not now".
@@ -180,6 +189,37 @@ class DistressConfirmationManager(
 
     // Rotating calming-message position for every distress level.
     private val nextCalmingIndexByLevel = mutableMapOf<Int, Int>()
+
+
+
+    /**
+     * Marks the current pending suggestion as opened by the user.
+     *
+     * Any partially collected higher-level candidate is discarded,
+     * and the existing chatbot behavior continues unchanged.
+     */
+    fun onPendingSuggestionOpened() {
+
+        if (!hasPendingSuggestion()) {
+            return
+        }
+
+        pendingSuggestionWasOpened = true
+
+        /*
+         * Do not use windows collected before the user opened
+         * the current suggestion.
+         */
+        clearCandidate()
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Pending suggestion was opened. Future level upgrades are disabled."
+        )
+    }
+
+
+
 
     /**
      * Receives one completed FORM_FILLING measurement window.
@@ -656,19 +696,98 @@ class DistressConfirmationManager(
         }
 
         /*
-         * A visible or unopened suggestion is already waiting.
-         *
-         * Non-zero sensor changes may continue, but they must not close,
-         * replace, or reset the current alert and popup.
+         * A chatbot item is already waiting for the user.
          */
         if (hasPendingSuggestion()) {
-            clearCandidate()
+
+            val waitingLevel =
+                pendingSuggestionLevel
+                    ?: run {
+                        clearCandidate()
+                        return
+                    }
+
+            /*
+             * Only an unopened default form-filling suggestion
+             * may be upgraded to a higher confirmed level.
+             *
+             * Once the user opens it, all existing chatbot
+             * behavior continues unchanged.
+             */
+            val canUpgradeUnopenedSuggestion =
+                !pendingSuggestionWasOpened &&
+                        source ==
+                        DistressUiEvent.DistressAlertSource.FORM_FILLING &&
+                        pendingSuggestionSource ==
+                        DistressUiEvent.DistressAlertSource.FORM_FILLING &&
+                        _uiEvent.value is
+                                DistressUiEvent.ShowDefaultSuggestion
+
+            if (!canUpgradeUnopenedSuggestion) {
+                clearCandidate()
+
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Pending suggestion keeps existing behavior. " +
+                            "opened=$pendingSuggestionWasOpened, " +
+                            "newLevel=$level, " +
+                            "waitingLevel=$waitingLevel"
+                )
+
+                return
+            }
+
+            /*
+             * The waiting suggestion may only move upward.
+             * Equal or lower levels do not change it.
+             */
+            if (level <= waitingLevel) {
+                clearCandidate()
+
+                Log.d(
+                    "DISTRESS_CONFIRM",
+                    "Unopened suggestion was not upgraded. " +
+                            "newLevel=$level, " +
+                            "waitingLevel=$waitingLevel"
+                )
+
+                return
+            }
+
+            /*
+             * Keep the existing consecutive-window confirmation rule.
+             *
+             * Example:
+             * waiting level = 1
+             * windows = 2, 2
+             * result = upgrade to level 2.
+             */
+            if (candidateLevel == level) {
+                candidateWindowCount += 1
+            } else {
+                candidateLevel = level
+                candidateWindowCount = 1
+            }
 
             Log.d(
                 "DISTRESS_CONFIRM",
-                "Measurement ignored for chatbot UI while suggestion is pending. " +
-                        "newLevel=$level, pendingLevel=$pendingSuggestionLevel"
+                "Collecting unopened-suggestion upgrade. " +
+                        "waitingLevel=$waitingLevel, " +
+                        "candidateLevel=$candidateLevel, " +
+                        "candidateCount=$candidateWindowCount"
             )
+
+            if (
+                candidateWindowCount <
+                requiredMatchingWindows
+            ) {
+                return
+            }
+
+            upgradeUnopenedSuggestion(
+                newLevel = level
+            )
+
             return
         }
 
@@ -823,6 +942,11 @@ class DistressConfirmationManager(
         pendingSuggestionSource = source
         pendingSuggestionHandled = false
 
+        /*
+         * A newly created suggestion has not been opened yet.
+         */
+        pendingSuggestionWasOpened = false
+
         emitEvent(
             DistressUiEvent.ShowDefaultSuggestion(
                 eventId = newEventId(),
@@ -842,6 +966,87 @@ class DistressConfirmationManager(
             "Default suggestion requested for level $level from $source"
         )
     }
+
+
+
+
+    /**
+     * Replaces an unopened default form-filling suggestion after
+     * a higher level passed the existing confirmation rule.
+     *
+     * This does not change any accepted, dismissed, recording,
+     * calming-message, or follow-up behavior.
+     */
+    private fun upgradeUnopenedSuggestion(
+        newLevel: Int
+    ) {
+        val previousLevel =
+            pendingSuggestionLevel
+                ?: return
+
+        if (
+            pendingSuggestionWasOpened ||
+            newLevel <= previousLevel
+        ) {
+            clearCandidate()
+            return
+        }
+
+        /*
+         * Continue the chatbot flow from the newly confirmed level.
+         */
+        _confirmedLevel.value =
+            newLevel
+
+        pendingSuggestionLevel =
+            newLevel
+
+        pendingSuggestionSource =
+            DistressUiEvent
+                .DistressAlertSource
+                .FORM_FILLING
+
+        pendingSuggestionHandled =
+            false
+
+        /*
+         * The replacement suggestion is also unopened.
+         * It may still be upgraded again before the user opens it.
+         */
+        pendingSuggestionWasOpened =
+            false
+
+        clearCandidate()
+
+        /*
+         * Replace the current unopened event with the higher-level event.
+         */
+        emitEvent(
+            DistressUiEvent.ShowDefaultSuggestion(
+                eventId = newEventId(),
+                level = newLevel,
+                source =
+                    DistressUiEvent
+                        .DistressAlertSource
+                        .FORM_FILLING,
+                excludedSuggestionIds =
+                    acceptedSuggestionIds.toSet()
+            )
+        )
+
+        Log.d(
+            "DISTRESS_CONFIRM",
+            "Unopened suggestion upgraded: " +
+                    "$previousLevel -> $newLevel"
+        )
+    }
+
+
+
+
+
+
+
 
     /**
      * Called by FloatingChatOverlay only after an action suggestion
@@ -1499,19 +1704,23 @@ class DistressConfirmationManager(
     }
 
     /**
-     * Immediate short-term reset for level 0.
+     * Immediately resets the short-term distress state
+     * when no chatbot item is waiting for the user.
      */
     private fun resetShortTermState() {
+
         /*
-         * A sensor reset is not allowed to close an alert that still awaits
-         * an explicit user decision.
+         * A sensor reset must not close or replace a chatbot
+         * item that is still waiting for the user.
          */
         if (hasPendingSuggestion()) {
             clearCandidate()
+
             Log.d(
                 "DISTRESS_CONFIRM",
                 "Short-term reset skipped because a suggestion is pending."
             )
+
             return
         }
 
@@ -1539,6 +1748,7 @@ class DistressConfirmationManager(
             "Short-term distress state reset at level 0."
         )
     }
+
 
     /**
      * Resets only measurement values after the user explicitly handles an alert.

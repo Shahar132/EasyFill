@@ -101,6 +101,14 @@ fun HousingAssistanceFormScreen(
 // Reports that the user closed a calming message.
     onCalmingMessageClosed: () -> Unit = {},
 
+
+
+
+/*
+ * Reports that the user opened the current pending chatbot suggestion.
+ */
+    onPendingSuggestionOpened: () -> Unit = {},
+
 // Sends an undo request back to AppNavigation.
     onUndoBotAction: (
         BotAction,
@@ -1034,6 +1042,13 @@ fun HousingAssistanceFormScreen(
                 appState = botAppState,
 
                 distressUiEvent = distressUiEvent,
+
+                /*
+               * Forward the chatbot-open event to the parent.
+               */
+                onPendingSuggestionOpened = {
+                    onPendingSuggestionOpened()
+                },
 
                 // Forward the action to the parent.
                 onBotAction = { action ->

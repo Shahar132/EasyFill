@@ -106,6 +106,8 @@ fun FloatingChatOverlay(
 
     // Reports that a general calming message was closed.
     onCalmingMessageClosed: () -> Unit = {},
+    // Reports that the user opened the current pending suggestion.
+    onPendingSuggestionOpened: () -> Unit = {},
 
     onNavigateToColorSettings: () -> Unit = {},
     onNavigateToFontSettings: () -> Unit = {},
@@ -420,6 +422,14 @@ fun FloatingChatOverlay(
                     if (suggestion != null) {
 
                         if (!isChatOpen) {
+                            /*
+                             * Mark the current suggestion as opened before displaying it.
+                             *
+                             * From this moment, the manager keeps the existing chatbot
+                             * behavior and no longer upgrades this suggestion.
+                             */
+                            onPendingSuggestionOpened()
+
                             /*
                              * The alert is visible.
                              * Pressing the chatbot icon opens the suggestion popup.

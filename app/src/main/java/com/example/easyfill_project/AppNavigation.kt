@@ -1032,6 +1032,15 @@ fun AppWithDrawer(
 
                                         distressUiEvent = distressUiEvent,
 
+                                        /*
+                                         * Notify the existing confirmation manager when
+                                         * the user opens the pending chatbot suggestion.
+                                         */
+                                            onPendingSuggestionOpened = {
+                                            distressConfirmationManager
+                                                .onPendingSuggestionOpened()
+                                        },
+
                                         onSuggestionAccepted = { suggestion ->
                                             distressConfirmationManager.onActionAccepted(suggestion)
                                         },
@@ -1138,6 +1147,15 @@ fun AppWithDrawer(
                                         botAppState = botAppState,
 
                                         distressUiEvent = distressUiEvent,
+
+                                        /*
+                                         * Notify the existing confirmation manager when
+                                         * the user opens the pending chatbot suggestion.
+                                         */
+                                        onPendingSuggestionOpened = {
+                                            distressConfirmationManager
+                                                .onPendingSuggestionOpened()
+                                        },
 
                                         onSuggestionAccepted = { suggestion ->
                                             distressConfirmationManager.onActionAccepted(suggestion)
