@@ -79,22 +79,17 @@ import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.SetOptions
-import java.util.UUID
 
 /*
- * Saves and loads the user's accumulated personal motion
+ * Saves and loads the user's fixed-size accumulated motion
  * baseline from Firestore.
  *
  * Firestore structure:
  *
  * users/{userId}/motionParameters/baseline
- *     - calculated personal profile
- *     - accumulated metadata
  *
- * users/{userId}/motionParameters/baseline/windows/{windowId}
- *     - one valid two-second baseline window summary
+ * Only one document is stored. Historical two-second windows
+ * are not saved in Firestore.
  */
 class MotionBaselineRepository {
 
@@ -116,16 +111,13 @@ class MotionBaselineRepository {
 
         private const val BASELINE_DOCUMENT =
             "baseline"
-
-        private const val WINDOWS_COLLECTION =
-            "windows"
     }
 
     /*
-     * Saves the first valid baseline.
+     * Saves the first valid accumulated baseline.
      *
-     * The profile and all initial window summaries are written
-     * in one atomic batch.
+     * set() replaces the previous baseline document, so fields
+     * from an older baseline structure are not retained.
      */
     fun saveInitialBaseline(
         baselineData: MotionBaselineData,
@@ -137,10 +129,13 @@ class MotionBaselineRepository {
                 onFailure = onFailure
             ) ?: return
 
-        if (baselineData.windows.isEmpty()) {
+        val profile =
+            baselineData.profile
+
+        if (!isProfileValid(profile)) {
             onFailure(
                 IllegalArgumentException(
-                    "Cannot save an initial baseline without windows"
+                    "Cannot save an invalid initial motion baseline"
                 )
             )
             return
@@ -151,52 +146,22 @@ class MotionBaselineRepository {
                 userId = userId
             )
 
-        val sessionId =
-            UUID.randomUUID().toString()
-
-        val batch =
-            db.batch()
-
-        /*
-         * Initial save replaces the profile document.
-         *
-         * The user will manually delete the old Firebase
-         * baseline once before testing the new structure.
-         */
-        batch.set(
-            baselineDocument,
-            profileToMap(
-                profile = baselineData.profile,
-                includeCreatedAt = true
-            )
-        )
-
-        baselineData.windows.forEach { window ->
-
-            val windowDocument =
-                baselineDocument
-                    .collection(WINDOWS_COLLECTION)
-                    .document()
-
-            batch.set(
-                windowDocument,
-                windowToMap(
-                    window = window,
-                    sessionId = sessionId
+        baselineDocument
+            .set(
+                profileToMap(
+                    profile = profile,
+                    includeCreatedAt = true
                 )
             )
-        }
-
-        batch.commit()
             .addOnSuccessListener {
 
                 Log.d(
                     TAG,
                     """
-                    Initial motion baseline saved.
-                    sessions=${baselineData.profile.validSessionCount}
-                    windows=${baselineData.profile.totalWindowCount}
-                    seconds=${baselineData.profile.totalBaselineSeconds}
+                    Initial fixed-size motion baseline saved.
+                    sessions=${profile.validSessionCount}
+                    windows=${profile.totalWindowCount}
+                    seconds=${profile.totalBaselineSeconds}
                     """.trimIndent()
                 )
 
@@ -215,18 +180,13 @@ class MotionBaselineRepository {
     }
 
     /*
-     * Appends one new valid ten-second baseline session.
+     * Updates the existing accumulated baseline document.
      *
-     * Only the new two-second windows are written.
-     * Previously stored windows are not deleted or replaced.
-     *
-     * updatedProfile must already be recalculated from:
-     *
-     * existing windows + new windows
+     * No new Firestore document is created and no historical
+     * window summaries are stored.
      */
-    fun appendBaselineSession(
+    fun updateBaseline(
         updatedProfile: MotionBaselineProfile,
-        newWindows: List<MotionBaselineWindowSummary>,
         onSuccess: () -> Unit = {},
         onFailure: (Exception) -> Unit = {}
     ) {
@@ -235,10 +195,10 @@ class MotionBaselineRepository {
                 onFailure = onFailure
             ) ?: return
 
-        if (newWindows.isEmpty()) {
+        if (!isProfileValid(updatedProfile)) {
             onFailure(
                 IllegalArgumentException(
-                    "Cannot append an empty baseline session"
+                    "Cannot save an invalid updated motion baseline"
                 )
             )
             return
@@ -249,52 +209,26 @@ class MotionBaselineRepository {
                 userId = userId
             )
 
-        val sessionId =
-            UUID.randomUUID().toString()
-
-        val batch =
-            db.batch()
-
         /*
-         * Merge keeps the original createdAt value while
-         * updating the calculated personal profile.
+         * update() modifies the existing baseline document
+         * while preserving its original createdAt value.
          */
-        batch.set(
-            baselineDocument,
-            profileToMap(
-                profile = updatedProfile,
-                includeCreatedAt = false
-            ),
-            SetOptions.merge()
-        )
-
-        newWindows.forEach { window ->
-
-            val windowDocument =
-                baselineDocument
-                    .collection(WINDOWS_COLLECTION)
-                    .document()
-
-            batch.set(
-                windowDocument,
-                windowToMap(
-                    window = window,
-                    sessionId = sessionId
+        baselineDocument
+            .update(
+                profileToMap(
+                    profile = updatedProfile,
+                    includeCreatedAt = false
                 )
             )
-        }
-
-        batch.commit()
             .addOnSuccessListener {
 
                 Log.d(
                     TAG,
                     """
-                    Motion baseline session appended.
-                    addedWindows=${newWindows.size}
-                    totalSessions=${updatedProfile.validSessionCount}
-                    totalWindows=${updatedProfile.totalWindowCount}
-                    totalSeconds=${updatedProfile.totalBaselineSeconds}
+                    Existing motion baseline updated.
+                    sessions=${updatedProfile.validSessionCount}
+                    windows=${updatedProfile.totalWindowCount}
+                    seconds=${updatedProfile.totalBaselineSeconds}
                     """.trimIndent()
                 )
 
@@ -304,7 +238,7 @@ class MotionBaselineRepository {
 
                 Log.e(
                     TAG,
-                    "Failed to append motion baseline session",
+                    "Failed to update the existing motion baseline",
                     error
                 )
 
@@ -313,11 +247,9 @@ class MotionBaselineRepository {
     }
 
     /*
-     * Loads the calculated profile and every historical valid
-     * two-second baseline window.
+     * Loads the single accumulated baseline document.
      *
-     * null means that no complete valid baseline currently
-     * exists.
+     * null means that no valid baseline currently exists.
      */
     fun getBaseline(
         onSuccess: (MotionBaselineData?) -> Unit,
@@ -335,10 +267,9 @@ class MotionBaselineRepository {
 
         baselineDocument
             .get()
-            .addOnSuccessListener { profileDocument ->
+            .addOnSuccessListener { document ->
 
-                if (!profileDocument.exists()) {
-
+                if (!document.exists()) {
                     Log.d(
                         TAG,
                         "No saved motion baseline exists"
@@ -348,14 +279,13 @@ class MotionBaselineRepository {
                     return@addOnSuccessListener
                 }
 
-                val profileData =
-                    profileDocument.data
+                val data =
+                    document.data
 
-                if (profileData == null) {
-
+                if (data == null) {
                     Log.d(
                         TAG,
-                        "Motion baseline profile document is empty"
+                        "Motion baseline document is empty"
                     )
 
                     onSuccess(null)
@@ -364,99 +294,43 @@ class MotionBaselineRepository {
 
                 val profile =
                     mapToProfile(
-                        data = profileData
+                        data = data
                     )
 
                 if (profile == null) {
-
                     Log.d(
                         TAG,
-                        "Motion baseline profile is invalid"
+                        """
+                        Saved motion baseline is invalid or uses
+                        an unsupported previous structure.
+                        """.trimIndent()
                     )
 
                     onSuccess(null)
                     return@addOnSuccessListener
                 }
 
-                baselineDocument
-                    .collection(WINDOWS_COLLECTION)
-                    .orderBy(
-                        "createdAt",
-                        Query.Direction.ASCENDING
+                Log.d(
+                    TAG,
+                    """
+                    Fixed-size motion baseline loaded.
+                    sessions=${profile.validSessionCount}
+                    windows=${profile.totalWindowCount}
+                    seconds=${profile.totalBaselineSeconds}
+                    """.trimIndent()
+                )
+
+                onSuccess(
+                    MotionBaselineData(
+                        profile = profile
                     )
-                    .get()
-                    .addOnSuccessListener { windowDocuments ->
-
-                        val windows =
-                            windowDocuments.documents
-                                .mapNotNull { document ->
-
-                                    val data =
-                                        document.data
-                                            ?: return@mapNotNull null
-
-                                    mapToWindow(
-                                        data = data
-                                    )
-                                }
-
-                        /*
-                         * The profile and stored history must
-                         * describe the same accumulated data.
-                         */
-                        val historyIsComplete =
-                            windows.isNotEmpty() &&
-                                    windows.size ==
-                                    profile.totalWindowCount
-
-                        if (!historyIsComplete) {
-
-                            Log.d(
-                                TAG,
-                                """
-                                Motion baseline history is incomplete.
-                                expectedWindows=${profile.totalWindowCount}
-                                loadedWindows=${windows.size}
-                                """.trimIndent()
-                            )
-
-                            onSuccess(null)
-                            return@addOnSuccessListener
-                        }
-
-                        Log.d(
-                            TAG,
-                            """
-                            Motion baseline loaded.
-                            sessions=${profile.validSessionCount}
-                            windows=${profile.totalWindowCount}
-                            seconds=${profile.totalBaselineSeconds}
-                            """.trimIndent()
-                        )
-
-                        onSuccess(
-                            MotionBaselineData(
-                                profile = profile,
-                                windows = windows
-                            )
-                        )
-                    }
-                    .addOnFailureListener { error ->
-
-                        Log.e(
-                            TAG,
-                            "Failed to load baseline windows",
-                            error
-                        )
-
-                        onFailure(error)
-                    }
+                )
             }
             .addOnFailureListener { error ->
 
                 Log.e(
                     TAG,
-                    "Failed to load motion baseline profile",
+                    "Failed to load motion baseline",
                     error
                 )
 
@@ -465,7 +339,7 @@ class MotionBaselineRepository {
     }
 
     /*
-     * Returns the currently authenticated user ID.
+     * Returns the authenticated Firebase user ID.
      */
     private fun getAuthenticatedUserId(
         onFailure: (Exception) -> Unit
@@ -489,62 +363,71 @@ class MotionBaselineRepository {
     private fun getBaselineDocument(
         userId: String
     ) =
-        db.collection(USERS_COLLECTION)
-            .document(userId)
-            .collection(PARAMETERS_COLLECTION)
-            .document(BASELINE_DOCUMENT)
+        db.collection(
+            USERS_COLLECTION
+        )
+            .document(
+                userId
+            )
+            .collection(
+                PARAMETERS_COLLECTION
+            )
+            .document(
+                BASELINE_DOCUMENT
+            )
 
     /*
-     * Converts the accumulated personal profile into
+     * Converts the fixed-size accumulated profile into
      * Firestore fields.
      */
     private fun profileToMap(
         profile: MotionBaselineProfile,
         includeCreatedAt: Boolean
     ): Map<String, Any> {
+
         val data =
             mutableMapOf<String, Any>(
-                "accelerationP95Median" to
-                        profile.accelerationP95Median,
+                "accelerationP95Mean" to
+                        profile.accelerationP95Mean,
 
-                "accelerationP95Mad" to
-                        profile.accelerationP95Mad,
+                "accelerationP95M2" to
+                        profile.accelerationP95M2,
 
-                "gyroscopeP95Median" to
-                        profile.gyroscopeP95Median,
+                "gyroscopeP95Mean" to
+                        profile.gyroscopeP95Mean,
 
-                "gyroscopeP95Mad" to
-                        profile.gyroscopeP95Mad,
+                "gyroscopeP95M2" to
+                        profile.gyroscopeP95M2,
 
-                "accelerationVariationMedian" to
-                        profile.accelerationVariationMedian,
+                "accelerationVariationMean" to
+                        profile.accelerationVariationMean,
 
-                "accelerationVariationMad" to
-                        profile.accelerationVariationMad,
+                "accelerationVariationM2" to
+                        profile.accelerationVariationM2,
 
-                "gyroscopeVariationMedian" to
-                        profile.gyroscopeVariationMedian,
+                "gyroscopeVariationMean" to
+                        profile.gyroscopeVariationMean,
 
-                "gyroscopeVariationMad" to
-                        profile.gyroscopeVariationMad,
+                "gyroscopeVariationM2" to
+                        profile.gyroscopeVariationM2,
 
-                "bandAveragePowerMedian" to
-                        profile.bandAveragePowerMedian,
+                "bandAveragePowerMean" to
+                        profile.bandAveragePowerMean,
 
-                "bandAveragePowerMad" to
-                        profile.bandAveragePowerMad,
+                "bandAveragePowerM2" to
+                        profile.bandAveragePowerM2,
 
-                "peakNeighborhoodPowerMedian" to
-                        profile.peakNeighborhoodPowerMedian,
+                "peakNeighborhoodPowerMean" to
+                        profile.peakNeighborhoodPowerMean,
 
-                "peakNeighborhoodPowerMad" to
-                        profile.peakNeighborhoodPowerMad,
+                "peakNeighborhoodPowerM2" to
+                        profile.peakNeighborhoodPowerM2,
 
-                "rhythmicEnergyShareMedian" to
-                        profile.rhythmicEnergyShareMedian,
+                "rhythmicEnergyShareMean" to
+                        profile.rhythmicEnergyShareMean,
 
-                "rhythmicEnergyShareMad" to
-                        profile.rhythmicEnergyShareMad,
+                "rhythmicEnergyShareM2" to
+                        profile.rhythmicEnergyShareM2,
 
                 "totalBaselineSeconds" to
                         profile.totalBaselineSeconds,
@@ -568,130 +451,81 @@ class MotionBaselineRepository {
     }
 
     /*
-     * Converts one two-second baseline window into Firestore
-     * fields.
-     */
-    private fun windowToMap(
-        window: MotionBaselineWindowSummary,
-        sessionId: String
-    ): Map<String, Any> {
-        return hashMapOf(
-            "sessionId" to
-                    sessionId,
-
-            "durationSeconds" to
-                    window.durationSeconds,
-
-            "accelerationP95" to
-                    window.accelerationP95,
-
-            "gyroscopeP95" to
-                    window.gyroscopeP95,
-
-            "accelerationVariation" to
-                    window.accelerationVariation,
-
-            "gyroscopeVariation" to
-                    window.gyroscopeVariation,
-
-            "peakFrequencyHz" to
-                    window.peakFrequencyHz,
-
-            "bandAveragePower" to
-                    window.bandAveragePower,
-
-            "peakNeighborhoodPower" to
-                    window.peakNeighborhoodPower,
-
-            "concentrationRatio" to
-                    window.concentrationRatio,
-
-            "narrowbandRatio" to
-                    window.narrowbandRatio,
-
-            "rhythmicEnergyShare" to
-                    window.rhythmicEnergyShare,
-
-            "createdAt" to
-                    FieldValue.serverTimestamp()
-        )
-    }
-
-    /*
-     * Converts Firestore profile fields into the application
-     * baseline model.
+     * Converts Firestore fields into the accumulated baseline
+     * profile used by the application.
      */
     private fun mapToProfile(
         data: Map<String, Any>
     ): MotionBaselineProfile? {
-        val accelerationP95Median =
+
+        val accelerationP95Mean =
             data.doubleValue(
-                key = "accelerationP95Median"
+                key = "accelerationP95Mean"
             ) ?: return null
 
-        val accelerationP95Mad =
+        val accelerationP95M2 =
             data.doubleValue(
-                key = "accelerationP95Mad"
+                key = "accelerationP95M2"
             ) ?: return null
 
-        val gyroscopeP95Median =
+        val gyroscopeP95Mean =
             data.doubleValue(
-                key = "gyroscopeP95Median"
+                key = "gyroscopeP95Mean"
             ) ?: return null
 
-        val gyroscopeP95Mad =
+        val gyroscopeP95M2 =
             data.doubleValue(
-                key = "gyroscopeP95Mad"
+                key = "gyroscopeP95M2"
             ) ?: return null
 
-        val accelerationVariationMedian =
+        val accelerationVariationMean =
             data.doubleValue(
-                key = "accelerationVariationMedian"
+                key = "accelerationVariationMean"
             ) ?: return null
 
-        val accelerationVariationMad =
+        val accelerationVariationM2 =
             data.doubleValue(
-                key = "accelerationVariationMad"
+                key = "accelerationVariationM2"
             ) ?: return null
 
-        val gyroscopeVariationMedian =
+        val gyroscopeVariationMean =
             data.doubleValue(
-                key = "gyroscopeVariationMedian"
+                key = "gyroscopeVariationMean"
             ) ?: return null
 
-        val gyroscopeVariationMad =
+        val gyroscopeVariationM2 =
             data.doubleValue(
-                key = "gyroscopeVariationMad"
+                key = "gyroscopeVariationM2"
             ) ?: return null
 
-        val bandAveragePowerMedian =
+        val bandAveragePowerMean =
             data.doubleValue(
-                key = "bandAveragePowerMedian"
+                key = "bandAveragePowerMean"
             ) ?: return null
 
-        val bandAveragePowerMad =
+        val bandAveragePowerM2 =
             data.doubleValue(
-                key = "bandAveragePowerMad"
+                key = "bandAveragePowerM2"
             ) ?: return null
 
-        val peakNeighborhoodPowerMedian =
+        val peakNeighborhoodPowerMean =
             data.doubleValue(
-                key = "peakNeighborhoodPowerMedian"
+                key = "peakNeighborhoodPowerMean"
             ) ?: return null
 
-        val peakNeighborhoodPowerMad =
+        val peakNeighborhoodPowerM2 =
             data.doubleValue(
-                key = "peakNeighborhoodPowerMad"
+                key = "peakNeighborhoodPowerM2"
             ) ?: return null
 
-        val rhythmicEnergyShareMedian =
+        val rhythmicEnergyShareMean =
             data.doubleValue(
-                key = "rhythmicEnergyShareMedian"
+                key = "rhythmicEnergyShareMean"
             ) ?: return null
 
-        val rhythmicEnergyShareMad =
+        val rhythmicEnergyShareM2 =
             data.doubleValue(
-                key = "rhythmicEnergyShareMad"
+                key = "rhythmicEnergyShareM2"
             ) ?: return null
 
         val totalBaselineSeconds =
@@ -709,221 +543,132 @@ class MotionBaselineRepository {
                 key = "totalWindowCount"
             ) ?: return null
 
-        val valuesAreValid =
-            accelerationP95Median.isFinite() &&
-                    accelerationP95Mad.isFinite() &&
-                    gyroscopeP95Median.isFinite() &&
-                    gyroscopeP95Mad.isFinite() &&
-                    accelerationVariationMedian.isFinite() &&
-                    accelerationVariationMad.isFinite() &&
-                    gyroscopeVariationMedian.isFinite() &&
-                    gyroscopeVariationMad.isFinite() &&
-                    bandAveragePowerMedian.isFinite() &&
-                    bandAveragePowerMad.isFinite() &&
-                    peakNeighborhoodPowerMedian.isFinite() &&
-                    peakNeighborhoodPowerMad.isFinite() &&
-                    rhythmicEnergyShareMedian.isFinite() &&
-                    rhythmicEnergyShareMad.isFinite() &&
-                    totalBaselineSeconds.isFinite() &&
-                    totalBaselineSeconds > 0.0 &&
-                    validSessionCount > 0 &&
-                    totalWindowCount > 0
+        val profile =
+            MotionBaselineProfile(
+                accelerationP95Mean =
+                    accelerationP95Mean,
 
-        if (!valuesAreValid) {
-            return null
+                accelerationP95M2 =
+                    accelerationP95M2,
+
+                gyroscopeP95Mean =
+                    gyroscopeP95Mean,
+
+                gyroscopeP95M2 =
+                    gyroscopeP95M2,
+
+                accelerationVariationMean =
+                    accelerationVariationMean,
+
+                accelerationVariationM2 =
+                    accelerationVariationM2,
+
+                gyroscopeVariationMean =
+                    gyroscopeVariationMean,
+
+                gyroscopeVariationM2 =
+                    gyroscopeVariationM2,
+
+                bandAveragePowerMean =
+                    bandAveragePowerMean,
+
+                bandAveragePowerM2 =
+                    bandAveragePowerM2,
+
+                peakNeighborhoodPowerMean =
+                    peakNeighborhoodPowerMean,
+
+                peakNeighborhoodPowerM2 =
+                    peakNeighborhoodPowerM2,
+
+                rhythmicEnergyShareMean =
+                    rhythmicEnergyShareMean,
+
+                rhythmicEnergyShareM2 =
+                    rhythmicEnergyShareM2,
+
+                totalBaselineSeconds =
+                    totalBaselineSeconds,
+
+                validSessionCount =
+                    validSessionCount,
+
+                totalWindowCount =
+                    totalWindowCount
+            )
+
+        return profile.takeIf {
+            isProfileValid(
+                profile = it
+            )
         }
-
-        return MotionBaselineProfile(
-            accelerationP95Median =
-                accelerationP95Median,
-
-            accelerationP95Mad =
-                accelerationP95Mad,
-
-            gyroscopeP95Median =
-                gyroscopeP95Median,
-
-            gyroscopeP95Mad =
-                gyroscopeP95Mad,
-
-            accelerationVariationMedian =
-                accelerationVariationMedian,
-
-            accelerationVariationMad =
-                accelerationVariationMad,
-
-            gyroscopeVariationMedian =
-                gyroscopeVariationMedian,
-
-            gyroscopeVariationMad =
-                gyroscopeVariationMad,
-
-            bandAveragePowerMedian =
-                bandAveragePowerMedian,
-
-            bandAveragePowerMad =
-                bandAveragePowerMad,
-
-            peakNeighborhoodPowerMedian =
-                peakNeighborhoodPowerMedian,
-
-            peakNeighborhoodPowerMad =
-                peakNeighborhoodPowerMad,
-
-            rhythmicEnergyShareMedian =
-                rhythmicEnergyShareMedian,
-
-            rhythmicEnergyShareMad =
-                rhythmicEnergyShareMad,
-
-            totalBaselineSeconds =
-                totalBaselineSeconds,
-
-            validSessionCount =
-                validSessionCount,
-
-            totalWindowCount =
-                totalWindowCount
-        )
     }
 
     /*
-     * Converts one Firestore window document into the
-     * application baseline-window model.
+     * Validates the fixed-size accumulated statistics before
+     * loading or saving them.
      */
-    private fun mapToWindow(
-        data: Map<String, Any>
-    ): MotionBaselineWindowSummary? {
-        val durationSeconds =
-            data.doubleValue(
-                key = "durationSeconds"
-            ) ?: return null
+    private fun isProfileValid(
+        profile: MotionBaselineProfile
+    ): Boolean {
 
-        val accelerationP95 =
-            data.doubleValue(
-                key = "accelerationP95"
-            ) ?: return null
+        return profile.accelerationP95Mean.isFinite() &&
+                profile.accelerationP95Mean >= 0.0 &&
+                profile.accelerationP95M2.isFinite() &&
+                profile.accelerationP95M2 >= 0.0 &&
 
-        val gyroscopeP95 =
-            data.doubleValue(
-                key = "gyroscopeP95"
-            ) ?: return null
+                profile.gyroscopeP95Mean.isFinite() &&
+                profile.gyroscopeP95Mean >= 0.0 &&
+                profile.gyroscopeP95M2.isFinite() &&
+                profile.gyroscopeP95M2 >= 0.0 &&
 
-        val accelerationVariation =
-            data.doubleValue(
-                key = "accelerationVariation"
-            ) ?: return null
+                profile.accelerationVariationMean.isFinite() &&
+                profile.accelerationVariationMean >= 0.0 &&
+                profile.accelerationVariationM2.isFinite() &&
+                profile.accelerationVariationM2 >= 0.0 &&
 
-        val gyroscopeVariation =
-            data.doubleValue(
-                key = "gyroscopeVariation"
-            ) ?: return null
+                profile.gyroscopeVariationMean.isFinite() &&
+                profile.gyroscopeVariationMean >= 0.0 &&
+                profile.gyroscopeVariationM2.isFinite() &&
+                profile.gyroscopeVariationM2 >= 0.0 &&
 
-        val peakFrequencyHz =
-            data.doubleValue(
-                key = "peakFrequencyHz"
-            ) ?: return null
+                profile.bandAveragePowerMean.isFinite() &&
+                profile.bandAveragePowerMean >= 0.0 &&
+                profile.bandAveragePowerM2.isFinite() &&
+                profile.bandAveragePowerM2 >= 0.0 &&
 
-        val bandAveragePower =
-            data.doubleValue(
-                key = "bandAveragePower"
-            ) ?: return null
+                profile.peakNeighborhoodPowerMean.isFinite() &&
+                profile.peakNeighborhoodPowerMean >= 0.0 &&
+                profile.peakNeighborhoodPowerM2.isFinite() &&
+                profile.peakNeighborhoodPowerM2 >= 0.0 &&
 
-        val peakNeighborhoodPower =
-            data.doubleValue(
-                key = "peakNeighborhoodPower"
-            ) ?: return null
+                profile.rhythmicEnergyShareMean.isFinite() &&
+                profile.rhythmicEnergyShareMean in 0.0..1.0 &&
+                profile.rhythmicEnergyShareM2.isFinite() &&
+                profile.rhythmicEnergyShareM2 >= 0.0 &&
 
-        val concentrationRatio =
-            data.doubleValue(
-                key = "concentrationRatio"
-            ) ?: return null
+                profile.totalBaselineSeconds.isFinite() &&
+                profile.totalBaselineSeconds > 0.0 &&
 
-        val narrowbandRatio =
-            data.doubleValue(
-                key = "narrowbandRatio"
-            ) ?: return null
-
-        val rhythmicEnergyShare =
-            data.doubleValue(
-                key = "rhythmicEnergyShare"
-            ) ?: return null
-
-        val valuesAreValid =
-            durationSeconds.isFinite() &&
-                    durationSeconds > 0.0 &&
-                    accelerationP95.isFinite() &&
-                    accelerationP95 >= 0.0 &&
-                    gyroscopeP95.isFinite() &&
-                    gyroscopeP95 >= 0.0 &&
-                    accelerationVariation.isFinite() &&
-                    accelerationVariation >= 0.0 &&
-                    gyroscopeVariation.isFinite() &&
-                    gyroscopeVariation >= 0.0 &&
-                    peakFrequencyHz.isFinite() &&
-                    peakFrequencyHz >= 0.0 &&
-                    bandAveragePower.isFinite() &&
-                    bandAveragePower >= 0.0 &&
-                    peakNeighborhoodPower.isFinite() &&
-                    peakNeighborhoodPower >= 0.0 &&
-                    concentrationRatio.isFinite() &&
-                    concentrationRatio >= 0.0 &&
-                    narrowbandRatio.isFinite() &&
-                    narrowbandRatio >= 0.0 &&
-                    rhythmicEnergyShare.isFinite() &&
-                    rhythmicEnergyShare in 0.0..1.0
-
-        if (!valuesAreValid) {
-            return null
-        }
-
-        return MotionBaselineWindowSummary(
-            durationSeconds =
-                durationSeconds,
-
-            accelerationP95 =
-                accelerationP95,
-
-            gyroscopeP95 =
-                gyroscopeP95,
-
-            accelerationVariation =
-                accelerationVariation,
-
-            gyroscopeVariation =
-                gyroscopeVariation,
-
-            peakFrequencyHz =
-                peakFrequencyHz,
-
-            bandAveragePower =
-                bandAveragePower,
-
-            peakNeighborhoodPower =
-                peakNeighborhoodPower,
-
-            concentrationRatio =
-                concentrationRatio,
-
-            narrowbandRatio =
-                narrowbandRatio,
-
-            rhythmicEnergyShare =
-                rhythmicEnergyShare
-        )
+                profile.validSessionCount > 0 &&
+                profile.totalWindowCount > 0
     }
 
     private fun Map<String, Any>.doubleValue(
         key: String
     ): Double? {
-        return (this[key] as? Number)
-            ?.toDouble()
+
+        return (
+                this[key] as? Number
+                )?.toDouble()
     }
 
     private fun Map<String, Any>.intValue(
         key: String
     ): Int? {
-        return (this[key] as? Number)
-            ?.toInt()
+
+        return (
+                this[key] as? Number
+                )?.toInt()
     }
 }

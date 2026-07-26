@@ -695,17 +695,18 @@ private const val MIN_SUSTAINED_MOVEMENT_WINDOWS = 4
 
 
 /*
- * Robust personal normal-range calculation.
+ * Personal normal-range calculation.
  *
- * 1.4826 converts MAD into a robust standard-deviation
- * estimate for approximately normal data.
+ * The accumulated baseline stores a mean and M2 for every
+ * learned feature. M2 and totalWindowCount are used to derive
+ * the sample standard deviation without storing old windows.
  */
-private const val MAD_TO_STANDARD_DEVIATION = 1.4826
-private const val PERSONAL_NORMAL_MAD_MULTIPLIER = 2.5
+private const val PERSONAL_NORMAL_STANDARD_DEVIATION_MULTIPLIER = 2.5
 
 /*
- * When very few windows exist, MAD may be zero or extremely
- * small. This relative floor prevents unstable division.
+ * When very few windows exist, standard deviation may be zero
+ * or extremely small. These floors prevent unstable
+ * comparisons and division.
  */
 private const val MIN_RELATIVE_NORMAL_SCALE = 0.15
 private const val MIN_ABSOLUTE_NORMAL_SCALE = 1e-9
@@ -1003,8 +1004,7 @@ class MotionTrackingController(
 
 
     /*
-     * Loads both the accumulated profile and all historical
-     * baseline-window summaries.
+     * Loads the single fixed-size accumulated profile.
      */
     private suspend fun loadBaselineWithTimeout():
             Result<MotionBaselineData?> {
@@ -1145,10 +1145,7 @@ class MotionTrackingController(
             val baseline =
                 MotionBaselineData(
                     profile =
-                        profile,
-
-                    windows =
-                        windows
+                        profile
                 )
 
             if (canPersist) {
@@ -1286,35 +1283,25 @@ class MotionTrackingController(
             return
         }
 
-        val allWindows =
-            existingBaseline.windows +
-                    newWindows
-
         val updatedProfile =
-            calculateBaselineProfile(
-                windows =
-                    allWindows,
+            mergeBaselineProfile(
+                existingProfile =
+                    existingBaseline.profile,
 
-                validSessionCount =
-                    existingBaseline
-                        .profile
-                        .validSessionCount +
-                            1
+                newWindows =
+                    newWindows
             )
 
         baselineRepository
-            .appendBaselineSession(
+            .updateBaseline(
                 updatedProfile =
                     updatedProfile,
-
-                newWindows =
-                    newWindows,
 
                 onSuccess = {
                     Log.d(
                         "MOTION_BASELINE_UPDATE",
                         """
-                        Baseline history updated successfully.
+                        Fixed-size baseline updated successfully.
                         totalSessions=${updatedProfile.validSessionCount}
                         totalWindows=${updatedProfile.totalWindowCount}
                         totalSeconds=${updatedProfile.totalBaselineSeconds}
@@ -1326,7 +1313,7 @@ class MotionTrackingController(
                     Log.e(
                         "MOTION_BASELINE_UPDATE",
                         """
-                        Failed to append the new baseline session.
+                        Failed to update the fixed-size baseline.
                         Existing baseline remains available.
                         """.trimIndent(),
                         error
@@ -1542,20 +1529,26 @@ class MotionTrackingController(
 
         val upperBandPower =
             personalUpperNormal(
-                median =
-                    profile.bandAveragePowerMedian,
+                mean =
+                    profile.bandAveragePowerMean,
 
-                mad =
-                    profile.bandAveragePowerMad
+                m2 =
+                    profile.bandAveragePowerM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperPeakPower =
             personalUpperNormal(
-                median =
-                    profile.peakNeighborhoodPowerMedian,
+                mean =
+                    profile.peakNeighborhoodPowerMean,
 
-                mad =
-                    profile.peakNeighborhoodPowerMad
+                m2 =
+                    profile.peakNeighborhoodPowerM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val personalRhythmicThreshold =
@@ -1659,20 +1652,26 @@ class MotionTrackingController(
 
         val upperAcceleration =
             personalUpperNormal(
-                median =
-                    profile.accelerationP95Median,
+                mean =
+                    profile.accelerationP95Mean,
 
-                mad =
-                    profile.accelerationP95Mad
+                m2 =
+                    profile.accelerationP95M2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperGyroscope =
             personalUpperNormal(
-                median =
-                    profile.gyroscopeP95Median,
+                mean =
+                    profile.gyroscopeP95Mean,
 
-                mad =
-                    profile.gyroscopeP95Mad
+                m2 =
+                    profile.gyroscopeP95M2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val extremeWindowCount =
@@ -1692,10 +1691,8 @@ class MotionTrackingController(
 
 
     /*
-     * Calculates the robust personal profile from every
-     * historical valid window.
-     *
-     * No old valid window is deleted.
+     * Creates the first fixed-size accumulated profile from
+     * the five temporary two-second windows.
      */
     private fun calculateBaselineProfile(
         windows: List<MotionBaselineWindowSummary>,
@@ -1706,83 +1703,104 @@ class MotionTrackingController(
             "Cannot calculate a baseline profile without windows"
         }
 
-        val accelerationP95Values =
-            windows.map { window ->
-                window.accelerationP95
-            }
+        val accelerationP95 =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.accelerationP95
+                    }
+            )
 
-        val gyroscopeP95Values =
-            windows.map { window ->
-                window.gyroscopeP95
-            }
+        val gyroscopeP95 =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.gyroscopeP95
+                    }
+            )
 
-        val accelerationVariationValues =
-            windows.map { window ->
-                window.accelerationVariation
-            }
+        val accelerationVariation =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.accelerationVariation
+                    }
+            )
 
-        val gyroscopeVariationValues =
-            windows.map { window ->
-                window.gyroscopeVariation
-            }
+        val gyroscopeVariation =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.gyroscopeVariation
+                    }
+            )
 
-        val bandPowerValues =
-            windows.map { window ->
-                window.bandAveragePower
-            }
+        val bandAveragePower =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.bandAveragePower
+                    }
+            )
 
-        val peakPowerValues =
-            windows.map { window ->
-                window.peakNeighborhoodPower
-            }
+        val peakNeighborhoodPower =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.peakNeighborhoodPower
+                    }
+            )
 
-        val rhythmicShareValues =
-            windows.map { window ->
-                window.rhythmicEnergyShare
-            }
+        val rhythmicEnergyShare =
+            calculateFeatureStatistics(
+                values =
+                    windows.map { window ->
+                        window.rhythmicEnergyShare
+                    }
+            )
 
         return MotionBaselineProfile(
-            accelerationP95Median =
-                accelerationP95Values.median(),
+            accelerationP95Mean =
+                accelerationP95.mean,
 
-            accelerationP95Mad =
-                accelerationP95Values.mad(),
+            accelerationP95M2 =
+                accelerationP95.m2,
 
-            gyroscopeP95Median =
-                gyroscopeP95Values.median(),
+            gyroscopeP95Mean =
+                gyroscopeP95.mean,
 
-            gyroscopeP95Mad =
-                gyroscopeP95Values.mad(),
+            gyroscopeP95M2 =
+                gyroscopeP95.m2,
 
-            accelerationVariationMedian =
-                accelerationVariationValues.median(),
+            accelerationVariationMean =
+                accelerationVariation.mean,
 
-            accelerationVariationMad =
-                accelerationVariationValues.mad(),
+            accelerationVariationM2 =
+                accelerationVariation.m2,
 
-            gyroscopeVariationMedian =
-                gyroscopeVariationValues.median(),
+            gyroscopeVariationMean =
+                gyroscopeVariation.mean,
 
-            gyroscopeVariationMad =
-                gyroscopeVariationValues.mad(),
+            gyroscopeVariationM2 =
+                gyroscopeVariation.m2,
 
-            bandAveragePowerMedian =
-                bandPowerValues.median(),
+            bandAveragePowerMean =
+                bandAveragePower.mean,
 
-            bandAveragePowerMad =
-                bandPowerValues.mad(),
+            bandAveragePowerM2 =
+                bandAveragePower.m2,
 
-            peakNeighborhoodPowerMedian =
-                peakPowerValues.median(),
+            peakNeighborhoodPowerMean =
+                peakNeighborhoodPower.mean,
 
-            peakNeighborhoodPowerMad =
-                peakPowerValues.mad(),
+            peakNeighborhoodPowerM2 =
+                peakNeighborhoodPower.m2,
 
-            rhythmicEnergyShareMedian =
-                rhythmicShareValues.median(),
+            rhythmicEnergyShareMean =
+                rhythmicEnergyShare.mean,
 
-            rhythmicEnergyShareMad =
-                rhythmicShareValues.mad(),
+            rhythmicEnergyShareM2 =
+                rhythmicEnergyShare.m2,
 
             totalBaselineSeconds =
                 windows.sumOf { window ->
@@ -1794,6 +1812,211 @@ class MotionTrackingController(
 
             totalWindowCount =
                 windows.size
+        )
+    }
+
+
+    /*
+     * Merges one accepted ten-second session into the
+     * fixed-size accumulated profile.
+     *
+     * Historical windows are not required because the mean,
+     * M2 and sample count contain the information needed for
+     * an exact aggregate merge.
+     */
+    private fun mergeBaselineProfile(
+        existingProfile: MotionBaselineProfile,
+        newWindows: List<MotionBaselineWindowSummary>
+    ): MotionBaselineProfile {
+
+        require(
+            existingProfile.totalWindowCount > 0
+        ) {
+            "Existing baseline must contain at least one window"
+        }
+
+        require(newWindows.isNotEmpty()) {
+            "Cannot merge an empty baseline session"
+        }
+
+        val existingCount =
+            existingProfile.totalWindowCount
+
+        val accelerationP95 =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.accelerationP95Mean,
+
+                existingM2 =
+                    existingProfile.accelerationP95M2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.accelerationP95
+                    }
+            )
+
+        val gyroscopeP95 =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.gyroscopeP95Mean,
+
+                existingM2 =
+                    existingProfile.gyroscopeP95M2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.gyroscopeP95
+                    }
+            )
+
+        val accelerationVariation =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.accelerationVariationMean,
+
+                existingM2 =
+                    existingProfile.accelerationVariationM2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.accelerationVariation
+                    }
+            )
+
+        val gyroscopeVariation =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.gyroscopeVariationMean,
+
+                existingM2 =
+                    existingProfile.gyroscopeVariationM2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.gyroscopeVariation
+                    }
+            )
+
+        val bandAveragePower =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.bandAveragePowerMean,
+
+                existingM2 =
+                    existingProfile.bandAveragePowerM2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.bandAveragePower
+                    }
+            )
+
+        val peakNeighborhoodPower =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.peakNeighborhoodPowerMean,
+
+                existingM2 =
+                    existingProfile.peakNeighborhoodPowerM2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.peakNeighborhoodPower
+                    }
+            )
+
+        val rhythmicEnergyShare =
+            mergeFeatureStatistics(
+                existingMean =
+                    existingProfile.rhythmicEnergyShareMean,
+
+                existingM2 =
+                    existingProfile.rhythmicEnergyShareM2,
+
+                existingCount =
+                    existingCount,
+
+                newValues =
+                    newWindows.map { window ->
+                        window.rhythmicEnergyShare
+                    }
+            )
+
+        return MotionBaselineProfile(
+            accelerationP95Mean =
+                accelerationP95.mean,
+
+            accelerationP95M2 =
+                accelerationP95.m2,
+
+            gyroscopeP95Mean =
+                gyroscopeP95.mean,
+
+            gyroscopeP95M2 =
+                gyroscopeP95.m2,
+
+            accelerationVariationMean =
+                accelerationVariation.mean,
+
+            accelerationVariationM2 =
+                accelerationVariation.m2,
+
+            gyroscopeVariationMean =
+                gyroscopeVariation.mean,
+
+            gyroscopeVariationM2 =
+                gyroscopeVariation.m2,
+
+            bandAveragePowerMean =
+                bandAveragePower.mean,
+
+            bandAveragePowerM2 =
+                bandAveragePower.m2,
+
+            peakNeighborhoodPowerMean =
+                peakNeighborhoodPower.mean,
+
+            peakNeighborhoodPowerM2 =
+                peakNeighborhoodPower.m2,
+
+            rhythmicEnergyShareMean =
+                rhythmicEnergyShare.mean,
+
+            rhythmicEnergyShareM2 =
+                rhythmicEnergyShare.m2,
+
+            totalBaselineSeconds =
+                existingProfile.totalBaselineSeconds +
+                        newWindows.sumOf { window ->
+                            window.durationSeconds
+                        },
+
+            validSessionCount =
+                existingProfile.validSessionCount +
+                        1,
+
+            totalWindowCount =
+                existingCount +
+                        newWindows.size
         )
     }
 
@@ -1872,20 +2095,26 @@ class MotionTrackingController(
 
         val upperBandPower =
             personalUpperNormal(
-                median =
-                    profile.bandAveragePowerMedian,
+                mean =
+                    profile.bandAveragePowerMean,
 
-                mad =
-                    profile.bandAveragePowerMad
+                m2 =
+                    profile.bandAveragePowerM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperPeakPower =
             personalUpperNormal(
-                median =
-                    profile.peakNeighborhoodPowerMedian,
+                mean =
+                    profile.peakNeighborhoodPowerMean,
 
-                mad =
-                    profile.peakNeighborhoodPowerMad
+                m2 =
+                    profile.peakNeighborhoodPowerM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val wholeRhythmicThreshold =
@@ -2263,56 +2492,74 @@ class MotionTrackingController(
 
         val upperAccelerationP95 =
             personalUpperNormal(
-                median =
-                    profile.accelerationP95Median,
+                mean =
+                    profile.accelerationP95Mean,
 
-                mad =
-                    profile.accelerationP95Mad
+                m2 =
+                    profile.accelerationP95M2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperAccelerationVariation =
             personalUpperNormal(
-                median =
-                    profile.accelerationVariationMedian,
+                mean =
+                    profile.accelerationVariationMean,
 
-                mad =
-                    profile.accelerationVariationMad
+                m2 =
+                    profile.accelerationVariationM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperGyroscopeP95 =
             personalUpperNormal(
-                median =
-                    profile.gyroscopeP95Median,
+                mean =
+                    profile.gyroscopeP95Mean,
 
-                mad =
-                    profile.gyroscopeP95Mad
+                m2 =
+                    profile.gyroscopeP95M2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperGyroscopeVariation =
             personalUpperNormal(
-                median =
-                    profile.gyroscopeVariationMedian,
+                mean =
+                    profile.gyroscopeVariationMean,
 
-                mad =
-                    profile.gyroscopeVariationMad
+                m2 =
+                    profile.gyroscopeVariationM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperBandPower =
             personalUpperNormal(
-                median =
-                    profile.bandAveragePowerMedian,
+                mean =
+                    profile.bandAveragePowerMean,
 
-                mad =
-                    profile.bandAveragePowerMad
+                m2 =
+                    profile.bandAveragePowerM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         val upperPeakPower =
             personalUpperNormal(
-                median =
-                    profile.peakNeighborhoodPowerMedian,
+                mean =
+                    profile.peakNeighborhoodPowerMean,
 
-                mad =
-                    profile.peakNeighborhoodPowerMad
+                m2 =
+                    profile.peakNeighborhoodPowerM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         /*
@@ -2737,33 +2984,40 @@ class MotionTrackingController(
 
 
     /*
-     * Robust upper boundary of natural personal motion.
+     * Upper boundary of natural personal motion derived from
+     * the accumulated mean and sample standard deviation.
      */
     private fun personalUpperNormal(
-        median: Double,
-        mad: Double
+        mean: Double,
+        m2: Double,
+        sampleCount: Int
     ): Double {
 
-        val madScale =
-            MAD_TO_STANDARD_DEVIATION *
-                    mad
+        val standardDeviation =
+            calculateStandardDeviation(
+                m2 =
+                    m2,
+
+                sampleCount =
+                    sampleCount
+            )
 
         val relativeScaleFloor =
-            abs(median) *
+            abs(mean) *
                     MIN_RELATIVE_NORMAL_SCALE
 
-        val robustScale =
+        val scale =
             max(
-                madScale,
+                standardDeviation,
                 max(
                     relativeScaleFloor,
                     MIN_ABSOLUTE_NORMAL_SCALE
                 )
             )
 
-        return median +
-                PERSONAL_NORMAL_MAD_MULTIPLIER *
-                robustScale
+        return mean +
+                PERSONAL_NORMAL_STANDARD_DEVIATION_MULTIPLIER *
+                scale
     }
 
 
@@ -2774,11 +3028,14 @@ class MotionTrackingController(
 
         val personalUpper =
             personalUpperNormal(
-                median =
-                    profile.rhythmicEnergyShareMedian,
+                mean =
+                    profile.rhythmicEnergyShareMean,
 
-                mad =
-                    profile.rhythmicEnergyShareMad
+                m2 =
+                    profile.rhythmicEnergyShareM2,
+
+                sampleCount =
+                    profile.totalWindowCount
             )
 
         return max(
@@ -3024,22 +3281,34 @@ class MotionTrackingController(
         Log.d(
             "MOTION_FLOW",
             """
-            Accumulated motion baseline ready.
+            Fixed-size accumulated motion baseline ready.
             sessions=${profile.validSessionCount}
             windows=${profile.totalWindowCount}
             seconds=${profile.totalBaselineSeconds}
 
-            accelerationP95Median=${profile.accelerationP95Median}
-            accelerationP95Mad=${profile.accelerationP95Mad}
+            accelerationP95Mean=${profile.accelerationP95Mean}
+            accelerationP95Std=${calculateStandardDeviation(
+                m2 = profile.accelerationP95M2,
+                sampleCount = profile.totalWindowCount
+            )}
 
-            gyroscopeP95Median=${profile.gyroscopeP95Median}
-            gyroscopeP95Mad=${profile.gyroscopeP95Mad}
+            gyroscopeP95Mean=${profile.gyroscopeP95Mean}
+            gyroscopeP95Std=${calculateStandardDeviation(
+                m2 = profile.gyroscopeP95M2,
+                sampleCount = profile.totalWindowCount
+            )}
 
-            bandPowerMedian=${profile.bandAveragePowerMedian}
-            bandPowerMad=${profile.bandAveragePowerMad}
+            bandPowerMean=${profile.bandAveragePowerMean}
+            bandPowerStd=${calculateStandardDeviation(
+                m2 = profile.bandAveragePowerM2,
+                sampleCount = profile.totalWindowCount
+            )}
 
-            peakPowerMedian=${profile.peakNeighborhoodPowerMedian}
-            peakPowerMad=${profile.peakNeighborhoodPowerMad}
+            peakPowerMean=${profile.peakNeighborhoodPowerMean}
+            peakPowerStd=${calculateStandardDeviation(
+                m2 = profile.peakNeighborhoodPowerM2,
+                sampleCount = profile.totalWindowCount
+            )}
             """.trimIndent()
         )
     }
@@ -3118,44 +3387,149 @@ class MotionTrackingController(
     }
 
 
-    private fun List<Double>.median():
-            Double {
+    /*
+     * Calculates mean and M2 using Welford's numerically stable
+     * online algorithm.
+     */
+    private fun calculateFeatureStatistics(
+        values: List<Double>
+    ): FeatureStatistics {
 
-        require(isNotEmpty()) {
-            "Cannot calculate median of an empty list"
+        require(values.isNotEmpty()) {
+            "Cannot calculate statistics from an empty list"
         }
 
-        val sorted =
-            sorted()
+        var count = 0
+        var mean = 0.0
+        var m2 = 0.0
 
-        val middle =
-            sorted.size / 2
+        values.forEach { value ->
 
-        return if (
-            sorted.size % 2 == 0
-        ) {
-            (
-                    sorted[middle - 1] +
-                            sorted[middle]
-                    ) / 2.0
-        } else {
-            sorted[middle]
+            require(value.isFinite()) {
+                "Baseline feature values must be finite"
+            }
+
+            count += 1
+
+            val delta =
+                value -
+                        mean
+
+            mean +=
+                delta /
+                        count
+
+            val deltaAfterMeanUpdate =
+                value -
+                        mean
+
+            m2 +=
+                delta *
+                        deltaAfterMeanUpdate
         }
+
+        return FeatureStatistics(
+            mean =
+                mean,
+
+            m2 =
+                m2.coerceAtLeast(
+                    0.0
+                ),
+
+            count =
+                count
+        )
     }
 
 
-    private fun List<Double>.mad():
-            Double {
+    /*
+     * Exactly merges historical aggregate statistics with the
+     * temporary windows from one newly accepted session.
+     */
+    private fun mergeFeatureStatistics(
+        existingMean: Double,
+        existingM2: Double,
+        existingCount: Int,
+        newValues: List<Double>
+    ): FeatureStatistics {
 
-        val center =
-            median()
+        require(existingCount > 0) {
+            "Existing feature count must be positive"
+        }
 
-        return map { value ->
-            abs(
-                value -
-                        center
+        require(
+            existingMean.isFinite() &&
+                    existingM2.isFinite() &&
+                    existingM2 >= 0.0
+        ) {
+            "Existing feature statistics are invalid"
+        }
+
+        val newStatistics =
+            calculateFeatureStatistics(
+                values =
+                    newValues
             )
-        }.median()
+
+        val combinedCount =
+            existingCount +
+                    newStatistics.count
+
+        val delta =
+            newStatistics.mean -
+                    existingMean
+
+        val combinedMean =
+            existingMean +
+                    delta *
+                    newStatistics.count /
+                    combinedCount
+
+        val combinedM2 =
+            existingM2 +
+                    newStatistics.m2 +
+                    delta *
+                    delta *
+                    existingCount *
+                    newStatistics.count /
+                    combinedCount
+
+        return FeatureStatistics(
+            mean =
+                combinedMean,
+
+            m2 =
+                combinedM2.coerceAtLeast(
+                    0.0
+                ),
+
+            count =
+                combinedCount
+        )
+    }
+
+
+    private fun calculateStandardDeviation(
+        m2: Double,
+        sampleCount: Int
+    ): Double {
+
+        if (
+            sampleCount < 2 ||
+            !m2.isFinite() ||
+            m2 <= 0.0
+        ) {
+            return 0.0
+        }
+
+        return sqrt(
+            m2 /
+                    (
+                            sampleCount -
+                                    1
+                            )
+        )
     }
 
 
@@ -3238,6 +3612,13 @@ class MotionTrackingController(
         )
     }
 }
+
+
+private data class FeatureStatistics(
+    val mean: Double,
+    val m2: Double,
+    val count: Int
+)
 
 
 private data class TremorEvaluation(

@@ -102,14 +102,16 @@ data class MotionAnalysisResult(
  * Stores the calculated features of one valid two-second
  * baseline window.
  *
- * Raw sensor samples are not stored in Firebase. Only these
- * compact summary values are persisted.
+ * These summaries exist only temporarily in application
+ * memory while a ten-second baseline session is evaluated.
+ *
+ * They are not stored as separate Firestore documents.
  */
 data class MotionBaselineWindowSummary(
     val durationSeconds: Double,
 
     /*
-     * Movement intensity features.
+     * Movement-intensity features.
      */
     val accelerationP95: Double,
     val gyroscopeP95: Double,
@@ -133,57 +135,66 @@ data class MotionBaselineWindowSummary(
 /*
  * Represents the user's accumulated personal motion baseline.
  *
- * Median describes the user's typical natural holding level.
+ * The profile has a fixed size. It does not contain historical
+ * window lists.
  *
- * MAD describes the normal variation between baseline windows
- * and will later be used to calculate personal tremor severity.
+ * For every learned feature, the profile stores:
+ *
+ * mean:
+ * The accumulated average across every accepted two-second
+ * baseline window.
+ *
+ * m2:
+ * The accumulated sum of squared differences from the mean.
+ * Together with totalWindowCount, it allows the application
+ * to calculate variance and standard deviation and to merge
+ * future baseline sessions without storing old windows.
  */
 data class MotionBaselineProfile(
 
     /*
-     * Personal acceleration P95 distribution.
+     * Acceleration P95 distribution.
      */
-    val accelerationP95Median: Double,
-    val accelerationP95Mad: Double,
+    val accelerationP95Mean: Double,
+    val accelerationP95M2: Double,
 
     /*
-     * Personal gyroscope P95 distribution.
+     * Gyroscope P95 distribution.
      */
-    val gyroscopeP95Median: Double,
-    val gyroscopeP95Mad: Double,
+    val gyroscopeP95Mean: Double,
+    val gyroscopeP95M2: Double,
 
     /*
-     * Personal acceleration-variation distribution.
+     * Acceleration-variation distribution.
      */
-    val accelerationVariationMedian: Double,
-    val accelerationVariationMad: Double,
+    val accelerationVariationMean: Double,
+    val accelerationVariationM2: Double,
 
     /*
-     * Personal gyroscope-variation distribution.
+     * Gyroscope-variation distribution.
      */
-    val gyroscopeVariationMedian: Double,
-    val gyroscopeVariationMad: Double,
+    val gyroscopeVariationMean: Double,
+    val gyroscopeVariationM2: Double,
 
     /*
-     * Personal tremor-band power distribution during natural
+     * Tremor-band power measured during natural phone holding.
+     */
+    val bandAveragePowerMean: Double,
+    val bandAveragePowerM2: Double,
+
+    /*
+     * Power around the dominant spectral peak during natural
      * phone holding.
      */
-    val bandAveragePowerMedian: Double,
-    val bandAveragePowerMad: Double,
+    val peakNeighborhoodPowerMean: Double,
+    val peakNeighborhoodPowerM2: Double,
 
     /*
-     * Personal narrow peak-power distribution during natural
-     * phone holding.
-     */
-    val peakNeighborhoodPowerMedian: Double,
-    val peakNeighborhoodPowerMad: Double,
-
-    /*
-     * Normal rhythmic-energy share during natural phone
+     * Rhythmic-energy share measured during natural phone
      * holding.
      */
-    val rhythmicEnergyShareMedian: Double,
-    val rhythmicEnergyShareMad: Double,
+    val rhythmicEnergyShareMean: Double,
+    val rhythmicEnergyShareM2: Double,
 
     /*
      * Accumulated baseline metadata.
@@ -195,17 +206,11 @@ data class MotionBaselineProfile(
 
 
 /*
- * Complete baseline information loaded from Firebase.
+ * Complete baseline information loaded from Firestore.
  *
- * profile:
- * The current robust personal statistics used for detection
- * and severity calculation.
- *
- * windows:
- * Every valid historical two-second baseline summary.
- * New valid sessions are appended without deleting old data.
+ * Only the fixed-size accumulated profile is persisted.
+ * Historical two-second windows are not stored.
  */
 data class MotionBaselineData(
-    val profile: MotionBaselineProfile,
-    val windows: List<MotionBaselineWindowSummary>
+    val profile: MotionBaselineProfile
 )

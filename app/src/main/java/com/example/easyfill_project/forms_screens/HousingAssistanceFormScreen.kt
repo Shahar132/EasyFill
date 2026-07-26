@@ -466,6 +466,14 @@ fun HousingAssistanceFormScreen(
         faceRecordingAggregator
     ) {
 
+                /*
+            * Start the form-behavior session.
+            *
+            * This loads the existing baseline and starts collecting
+            * new field samples for the current form entry.
+            */
+        FormBehaviorTrackingController.startFormSession()
+
         /*
          * Start the existing hand-motion pipeline.
          */
