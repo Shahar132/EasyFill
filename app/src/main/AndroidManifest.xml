@@ -12,6 +12,13 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- Added: required on Android 12+ (API 31+) to actually get
+       sensor sample rates above 200Hz. Without this,
+       SENSOR_DELAY_FASTEST in MotionSensorManager is silently
+       capped at 200Hz instead of throwing, so the app still
+       runs but at a lower rate than requested. -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -48,3 +55,5 @@
     </application>
 
 </manifest>
+
+
