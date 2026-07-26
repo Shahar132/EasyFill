@@ -460,7 +460,7 @@ fun ProfileInfoRow(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = label,
+            contentDescription = null, // Set to null because the Text next to it provides the label
             tint = MaterialTheme.colorScheme.onSurface //for the icons
         )
 
@@ -503,7 +503,7 @@ fun ProfileActionButton(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = text,
+            contentDescription = null, // Set to null so the Button's Text label is used
             tint = MaterialTheme.colorScheme.onPrimary
         )
 
@@ -536,7 +536,7 @@ fun ProfileDeleteButton(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = text,
+            contentDescription = null, // Set to null so the Button's Text label is used
             tint = MaterialTheme.colorScheme.onError
         )
 

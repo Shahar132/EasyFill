@@ -18,6 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,7 +95,7 @@ fun GuidanceSlidesScreen(navController: NavHostController) {
             }
         }
     }
-    }
+}
 
 @Composable
 fun GuidanceCard(
@@ -155,14 +158,21 @@ fun DotsIndicator(
     selectedIndex: Int
 ) {
     Row(
-        modifier = Modifier.padding(bottom = 24.dp),
+        modifier = Modifier
+            .padding(bottom = 24.dp)
+            // Group the dots into a single clean TalkBack announcement:
+            .semantics {
+                contentDescription = "עמוד ${selectedIndex + 1} מתוך $totalDots"
+            },
         horizontalArrangement = Arrangement.Center
     ) {
         repeat(totalDots) { index ->
             Text(
                 text = if (index == selectedIndex) "●" else "○",
                 fontSize = 24.sp,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                // Hide individual dot symbols from screen readers:
+                modifier = Modifier.clearAndSetSemantics { }
             )
         }
     }
