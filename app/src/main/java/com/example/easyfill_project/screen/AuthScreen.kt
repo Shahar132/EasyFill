@@ -20,6 +20,7 @@ import com.google.firebase.auth.FirebaseAuth
 
 //check email pattern
 import android.util.Patterns
+import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -144,7 +145,15 @@ fun AuthScreen(navController: NavHostController) {
                             }
                         }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF1E1796),
+                    contentColor = Color.White,
+                    disabledContainerColor =
+                        Color(0xFF1E1796).copy(alpha = 0.45f),
+                    disabledContentColor =
+                        Color.White.copy(alpha = 0.75f)
+                )
             ) {
                 Text(if (isLoading) "מתחבר..." else "התחבר")
             }
@@ -160,16 +169,29 @@ fun AuthScreen(navController: NavHostController) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            TextButton(onClick = {
-                navController.navigate("register")
-            }) {
+            TextButton(
+                onClick = {
+                    navController.navigate("register")
+                },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = Color(0xFF1E1796)
+                )
+            ) {
                 Text(
-                    buildAnnotatedString {
+                    text = buildAnnotatedString {
                         append("אין לך חשבון? ")
-                        pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+
+                        pushStyle(
+                            SpanStyle(
+                                color = Color(0xFF1E1796),
+                                textDecoration = TextDecoration.Underline
+                            )
+                        )
+
                         append("הרשמה")
                         pop()
-                    }
+                    },
+                    color = Color(0xFF1E1796)
                 )
             }
         }

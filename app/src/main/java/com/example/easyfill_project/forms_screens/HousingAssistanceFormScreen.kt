@@ -924,6 +924,9 @@ fun HousingAssistanceFormScreen(
                     )
 
                     6 -> SummarySection(
+                        formDefinition =
+                            FormsRegistry.getFormById(formId),
+
                         formData = formData,
 
                         onValidationIssuesFound = { issues ->

@@ -320,7 +320,8 @@ fun SmartTextField(
             supportingText =
                 if (displayedValidationMessage != null) {
                     {
-                        Text(displayedValidationMessage)
+                        Text(displayedValidationMessage,
+                        color = MaterialTheme.colorScheme.error)
                     }
                 } else {
                     null
@@ -824,53 +825,53 @@ fun SmartTextField(
                 }
             },
 
-            colors =
-                OutlinedTextFieldDefaults.colors(
-                    focusedTextColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor =
+                    MaterialTheme.colorScheme.onSurface,
 
-                    unfocusedTextColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+                unfocusedTextColor =
+                    MaterialTheme.colorScheme.onSurface,
 
-                    focusedLabelColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+                errorTextColor =
+                    MaterialTheme.colorScheme.onSurface,
 
-                    unfocusedLabelColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+                focusedLabelColor =
+                    MaterialTheme.colorScheme.onSurface,
 
-                    cursorColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+                unfocusedLabelColor =
+                    MaterialTheme.colorScheme.onSurface,
 
-                    focusedBorderColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+                errorLabelColor =
+                    MaterialTheme.colorScheme.error,
 
-                    unfocusedBorderColor =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurface,
+                cursorColor =
+                    MaterialTheme.colorScheme.onSurface,
 
-                    focusedContainerColor =
-                        MaterialTheme
-                            .colorScheme
-                            .surface,
+                errorCursorColor =
+                    MaterialTheme.colorScheme.error,
 
-                    unfocusedContainerColor =
-                        MaterialTheme
-                            .colorScheme
-                            .surface
-                )
+                focusedBorderColor =
+                    MaterialTheme.colorScheme.onSurface,
+
+                unfocusedBorderColor =
+                    MaterialTheme.colorScheme.onSurface,
+
+                // Controls the border whenever isError is true.
+                errorBorderColor =
+                    MaterialTheme.colorScheme.error,
+
+                focusedContainerColor =
+                    MaterialTheme.colorScheme.surface,
+
+                unfocusedContainerColor =
+                    MaterialTheme.colorScheme.surface,
+
+                errorContainerColor =
+                    MaterialTheme.colorScheme.surface,
+
+                errorSupportingTextColor =
+                    MaterialTheme.colorScheme.error
+            )
         )
 
         /*

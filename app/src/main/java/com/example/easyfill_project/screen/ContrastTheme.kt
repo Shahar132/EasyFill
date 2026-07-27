@@ -14,16 +14,23 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             onBackground = Color.Black,//text color that appears ON the background
             onSurface = Color.Black,//text will be black
             onPrimary = Color.Black ,
-            secondary = Color(0xFF2196F3), // blue
+            secondary = Color(0xFF0B78D0), // blue
 
 
             // Disabled button background
-            tertiary = Color(0xFF85B0D0) ,
+            tertiary = Color(0xFF386B8F) ,
              // Background of StatusCard
-              surfaceVariant = Color(0xFFB0C4E3),
+            surfaceVariant = Color(0xFFB0C4E3),
 
             // Text inside StatusCard
             onSurfaceVariant = Color.Black,
+            // Validation message and validation border.
+            error = Color(0xFFB3261E),
+
+            // Text displayed on an error-colored background.
+            onError = Color.White,
+
+
         )
 
         ContrastMode.HIGH -> lightColorScheme(//black and white
@@ -42,7 +49,14 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
 
             surfaceVariant = Color(0xFF949292),
             onSurfaceVariant = Color.White,
-        )
+
+            // Validation message and validation border.
+            error = Color(0xFFFFD600),
+
+            // Text displayed on an error-colored background.
+            onError = Color.Black,
+
+            )
 
         ContrastMode.LOW -> lightColorScheme(//light purple shades
             background = Color.White,
@@ -54,10 +68,17 @@ fun getContrastColorScheme(mode: ContrastMode): ColorScheme {
             secondary = Color(0xFF673AB7), // dark purple
 
             // Disabled button background
-            tertiary = Color(0xFFA59AC0),
+            tertiary = Color(0xFF703F92),
 
             surfaceVariant = Color(0xFFDECFF1),
             onSurfaceVariant = Color.Black,
-        )
+
+            // Validation message and validation border.
+            error = Color(0xFFB3261E),
+
+            // Text displayed on an error-colored background.
+            onError = Color.White,
+
+            )
     }
 }

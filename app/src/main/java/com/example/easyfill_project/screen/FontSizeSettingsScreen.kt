@@ -28,6 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+
 @Composable
 fun FontSizeSettingsScreen(
     selectedMode: FontSizeMode,
@@ -47,17 +53,21 @@ fun FontSizeSettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        PersonalizationCatalog.fontSizes.forEach { option ->
-            FontSizeOptionCard(
-                title = option.displayName,
-                selected = selectedMode == option.mode,
-                onClick = {
-                    onModeSelected(option.mode)
-                }
-            )
+        Column(
+            modifier = Modifier.selectableGroup()
+        ) {
+            PersonalizationCatalog.fontSizes.forEach { option ->
+                FontSizeOptionCard(
+                    title = option.displayName,
+                    selected = selectedMode == option.mode,
+                    onClick = {
+                        onModeSelected(option.mode)
+                    }
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(140.dp))
+        Spacer(modifier = Modifier.height(265.dp))
 
         OutlinedButton(
             onClick = { navController.navigate("Personal Settings") },
@@ -89,7 +99,6 @@ fun FontSizeSettingsScreen(
         }
     }
 }
-
 @Composable
 fun FontSizeOptionCard(
     title: String,
@@ -100,33 +109,59 @@ fun FontSizeOptionCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        onClick = onClick,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor =
+                MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(0.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.secondary
+            color =
+                MaterialTheme.colorScheme.secondary
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+
+                // Makes the complete row one accessible radio option.
+                .selectable(
+                    selected = selected,
+                    onClick = onClick,
+                    role = Role.RadioButton
+                )
+                .semantics(
+                    mergeDescendants = true
+                ) {
+                    // The visible title becomes the accessible label.
+                }
                 .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment =
+                Alignment.CenterVertically
         ) {
             RadioButton(
                 selected = selected,
-                onClick = onClick
+
+                // The row handles the click.
+                onClick = null,
+
+                // Prevents a second accessibility object.
+                modifier =
+                    Modifier.clearAndSetSemantics { }
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(
+                modifier = Modifier.width(12.dp)
+            )
 
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                style =
+                    MaterialTheme.typography.bodyLarge,
+                color =
+                    MaterialTheme.colorScheme.onSurface
             )
         }
     }

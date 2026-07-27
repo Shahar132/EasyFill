@@ -96,16 +96,7 @@ fun DemoFormsOptions(
                     title = "טופס עדכון פרטים אישיים"
                 ),
                 DisplayForm(
-                    title = "בקשה לסיוע בכיסוי חובות"
-                ),
-                DisplayForm(
                     title = "בקשה להחלפת רכב רפואי"
-                ),
-                DisplayForm(
-                    title = "טופס להנפקת תעודת נכה צה\"ל"
-                ),
-                DisplayForm(
-                    title = "הצהרה לעורך דין על החכרת קרקע"
                 )
             )
         )

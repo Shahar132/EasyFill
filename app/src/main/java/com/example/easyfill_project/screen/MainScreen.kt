@@ -86,7 +86,7 @@ fun EasyFillMainScreen(navController: NavHostController) {
                 Text(
                     text = "EasyFill",
                     fontSize = 38.sp,
-                    color = Color(0xFF6C63FF)
+                    color = Color(0xFF1E1796)
                 )
 
                 // Small space between title and subtitle
@@ -96,7 +96,7 @@ fun EasyFillMainScreen(navController: NavHostController) {
                 Text(
                     text = "מילוי קל",
                     fontSize = 22.sp,
-                    color = Color(0xFF6C63FF)
+                    color = Color(0xFF1E1796)
                 )
 
                 // Space before paragraph
@@ -125,7 +125,8 @@ fun EasyFillMainScreen(navController: NavHostController) {
                         .height(55.dp),
                     shape = RoundedCornerShape(30.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF6F61)
+                        containerColor = Color(0xFFEB1400
+                        )
                     )
                 ) {
                     // Text inside the button

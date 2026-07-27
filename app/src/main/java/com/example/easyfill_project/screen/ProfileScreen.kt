@@ -1,25 +1,54 @@
 package com.example.easyfill_project.screen
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.easyfill_project.forms_screens.FormAttachmentsRepository
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
-import com.google.android.gms.tasks.Tasks
 
-//date class for showing the user uploaded files for user
+// Represents an original form file uploaded by the user.
 data class UploadedFile(
     val fileId: String = "",
     val fileName: String = "",
@@ -38,6 +67,7 @@ fun ProfileScreen(
     var emailStatus by remember { mutableStateOf("") }
     var passwordStatus by remember { mutableStateOf("") }
     var filesStatus by remember { mutableStateOf("") }
+    var accountStatus by remember { mutableStateOf("") }
 
     var showNameField by remember { mutableStateOf(false) }
     var showEmailField by remember { mutableStateOf(false) }
@@ -47,37 +77,46 @@ fun ProfileScreen(
     var newEmail by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
 
-    //list of uploaded files
-    var uploadedFiles by remember { mutableStateOf<List<UploadedFile>>(emptyList()) }
+    // Stores the original form files uploaded by the user.
+    var uploadedFiles by remember {
+        mutableStateOf<List<UploadedFile>>(emptyList())
+    }
 
     val auth = FirebaseAuth.getInstance()
     val firestore = FirebaseFirestore.getInstance()
     val userId = auth.currentUser?.uid
 
-    LaunchedEffect(Unit) {
-        if (userId != null) {
-            firestore.collection("users")
-                .document(userId)
-                .get()
-                .addOnSuccessListener { document ->
-                    fullName = document.getString("fullName") ?: ""
-                    email = document.getString("email") ?: ""
-                }
-
-            firestore.collection("users")
-                .document(userId)
-                .collection("uploadedFiles")
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    uploadedFiles = snapshot.documents.map { doc ->
-                        UploadedFile(
-                            fileId = doc.getString("fileId") ?: doc.id,
-                            fileName = doc.getString("fileName") ?: "",
-                            storagePath = doc.getString("storagePath") ?: ""
-                        )
-                    }
-                }
+    // Loads the user's personal information and original uploaded forms.
+    LaunchedEffect(userId) {
+        if (userId == null) {
+            return@LaunchedEffect
         }
+
+        firestore.collection("users")
+            .document(userId)
+            .get()
+            .addOnSuccessListener { document ->
+                fullName = document.getString("fullName") ?: ""
+                email = document.getString("email") ?: ""
+            }
+
+        firestore.collection("users")
+            .document(userId)
+            .collection("uploadedFiles")
+            .get()
+            .addOnSuccessListener { snapshot ->
+                uploadedFiles = snapshot.documents.map { document ->
+                    UploadedFile(
+                        fileId = document.getString("fileId") ?: document.id,
+                        fileName = document.getString("fileName") ?: "",
+                        storagePath = document.getString("storagePath") ?: ""
+                    )
+                }
+            }
+            .addOnFailureListener { exception ->
+                filesStatus =
+                    "טעינת הטפסים נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
+            }
     }
 
     Column(
@@ -96,8 +135,17 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(28.dp))
 
         ProfileSectionCard(title = "פרטים אישיים") {
-            ProfileInfoRow(Icons.Default.Person, "שם מלא", fullName)
-            ProfileInfoRow(Icons.Default.Email, "אימייל", email)
+            ProfileInfoRow(
+                icon = Icons.Default.Person,
+                label = "שם מלא",
+                value = fullName
+            )
+
+            ProfileInfoRow(
+                icon = Icons.Default.Email,
+                label = "אימייל",
+                value = email
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -130,7 +178,11 @@ fun ProfileScreen(
                                             fullName = newName
                                             showNameField = false
                                             nameStatus = "השם עודכן בהצלחה"
-                                            onNameUpdated(newName) // updates top bar immediately callback
+                                            onNameUpdated(newName)
+                                        }
+                                        .addOnFailureListener { exception ->
+                                            nameStatus =
+                                                "שגיאה בעדכון השם: ${exception.message ?: "שגיאה לא ידועה"}"
                                         }
                                 } else {
                                     nameStatus = "הכנס שם מלא"
@@ -174,13 +226,16 @@ fun ProfileScreen(
                         TextButton(
                             onClick = {
                                 if (newEmail.isNotBlank()) {
-                                    auth.currentUser?.verifyBeforeUpdateEmail(newEmail)
+                                    auth.currentUser
+                                        ?.verifyBeforeUpdateEmail(newEmail)
                                         ?.addOnSuccessListener {
                                             showEmailField = false
-                                            emailStatus = "נשלח אימייל אימות לכתובת החדשה, נא לאשר"
+                                            emailStatus =
+                                                "נשלח אימייל אימות לכתובת החדשה, נא לאשר"
                                         }
-                                        ?.addOnFailureListener { e ->
-                                            emailStatus = "שגיאה בעדכון אימייל: ${e.message}"
+                                        ?.addOnFailureListener { exception ->
+                                            emailStatus =
+                                                "שגיאה בעדכון אימייל: ${exception.message ?: "שגיאה לא ידועה"}"
                                         }
                                 } else {
                                     emailStatus = "הכנס אימייל חדש"
@@ -224,17 +279,20 @@ fun ProfileScreen(
                         TextButton(
                             onClick = {
                                 if (newPassword.length >= 6) {
-                                    auth.currentUser?.updatePassword(newPassword)
+                                    auth.currentUser
+                                        ?.updatePassword(newPassword)
                                         ?.addOnSuccessListener {
                                             newPassword = ""
                                             showPasswordField = false
                                             passwordStatus = "הסיסמה עודכנה בהצלחה"
                                         }
-                                        ?.addOnFailureListener {
-                                            passwordStatus = "שגיאה בעדכון סיסמה"
+                                        ?.addOnFailureListener { exception ->
+                                            passwordStatus =
+                                                "שגיאה בעדכון סיסמה: ${exception.message ?: "שגיאה לא ידועה"}"
                                         }
                                 } else {
-                                    passwordStatus = "הסיסמה חייבת להכיל לפחות 6 תווים"
+                                    passwordStatus =
+                                        "הסיסמה חייבת להכיל לפחות 6 תווים"
                                 }
                             },
                             colors = ButtonDefaults.textButtonColors(
@@ -276,7 +334,7 @@ fun ProfileScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Description,
-                        contentDescription = "File",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -291,32 +349,49 @@ fun ProfileScreen(
 
                     IconButton(
                         onClick = {
-                            if (userId != null) {
+                            if (userId == null) {
+                                return@IconButton
+                            }
+
+                            // Deletes Firestore metadata after the Storage file.
+                            fun deleteUploadedFileMetadata() {
+                                firestore.collection("users")
+                                    .document(userId)
+                                    .collection("uploadedFiles")
+                                    .document(file.fileId)
+                                    .delete()
+                                    .addOnSuccessListener {
+                                        uploadedFiles = uploadedFiles.filterNot {
+                                            it.fileId == file.fileId
+                                        }
+                                        filesStatus = "הקובץ נמחק בהצלחה"
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        filesStatus =
+                                            "שגיאה במחיקת המידע: ${exception.message ?: "שגיאה לא ידועה"}"
+                                    }
+                            }
+
+                            if (file.storagePath.isBlank()) {
+                                deleteUploadedFileMetadata()
+                            } else {
                                 FirebaseStorage.getInstance()
                                     .reference
                                     .child(file.storagePath)
                                     .delete()
                                     .addOnSuccessListener {
-                                        firestore.collection("users")
-                                            .document(userId)
-                                            .collection("uploadedFiles")
-                                            .document(file.fileId)
-                                            .delete()
-                                            .addOnSuccessListener {
-                                                uploadedFiles =
-                                                    uploadedFiles.filter { it.fileId != file.fileId }
-                                                filesStatus = "הקובץ נמחק בהצלחה"
-                                            }
+                                        deleteUploadedFileMetadata()
                                     }
-                                    .addOnFailureListener { e ->
-                                        filesStatus = "שגיאה במחיקת הקובץ: ${e.message}"
+                                    .addOnFailureListener { exception ->
+                                        filesStatus =
+                                            "שגיאה במחיקת הקובץ: ${exception.message ?: "שגיאה לא ידועה"}"
                                     }
                             }
                         }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete file",
+                            contentDescription = "מחיקת טופס",
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -334,6 +409,11 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // Shows supporting documents grouped by form and logical document.
+        MyFormDocumentsSection()
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         ProfileSectionCard(title = "אפשרויות יציאה") {
             ProfileActionButton(
                 icon = Icons.Default.Logout,
@@ -341,7 +421,9 @@ fun ProfileScreen(
                 onClick = {
                     auth.signOut()
                     navController.navigate("auth") {
-                        popUpTo("app") { inclusive = true }
+                        popUpTo("app") {
+                            inclusive = true
+                        }
                     }
                 }
             )
@@ -353,66 +435,173 @@ fun ProfileScreen(
                     val currentUser = auth.currentUser
                     val currentUserId = currentUser?.uid
 
-                    if (currentUser != null && currentUserId != null) {
-                        val storage = FirebaseStorage.getInstance()
-                        val uploadsRef = storage.reference
-                            .child("users/$currentUserId/uploads")
+                    if (currentUser == null || currentUserId == null) {
+                        accountStatus = "לא נמצא משתמש מחובר"
+                        return@ProfileDeleteButton
+                    }
 
-                        uploadsRef.listAll().addOnSuccessListener { storageResult ->
-                            val deleteStorageTasks = storageResult.items.map { fileRef ->
-                                fileRef.delete()
-                            }
+                    accountStatus = "מוחק את החשבון..."
 
-                            val allStorageDeletedTask =
-                                if (deleteStorageTasks.isNotEmpty()) {
-                                    Tasks.whenAll(deleteStorageTasks)
-                                } else {
-                                    Tasks.forResult(null)
-                                }
+                    // Deletes all supporting documents before deleting the account.
+                    deleteAllFormAttachments(
+                        onSuccess = {
+                            val storage = FirebaseStorage.getInstance()
+                            val uploadsReference = storage.reference
+                                .child("users/$currentUserId/uploads")
 
-                            allStorageDeletedTask.addOnSuccessListener {
-                                val userDocRef = firestore.collection("users").document(currentUserId)
+                            uploadsReference.listAll()
+                                .addOnSuccessListener { storageResult ->
+                                    val deleteStorageTasks = storageResult.items.map {
+                                            fileReference -> fileReference.delete()
+                                    }
 
-                                userDocRef.collection("uploadedFiles")
-                                    .get()
-                                    .addOnSuccessListener { snapshot ->
-                                        val deleteUploadedFilesTasks =
-                                            snapshot.documents.map { document ->
-                                                document.reference.delete()
-                                            }
+                                    val allStorageDeletedTask =
+                                        if (deleteStorageTasks.isNotEmpty()) {
+                                            Tasks.whenAll(deleteStorageTasks)
+                                        } else {
+                                            Tasks.forResult(null)
+                                        }
 
-                                        val allUploadedFilesDeletedTask =
-                                            if (deleteUploadedFilesTasks.isNotEmpty()) {
-                                                Tasks.whenAll(deleteUploadedFilesTasks)
-                                            } else {
-                                                Tasks.forResult(null)
-                                            }
+                                    allStorageDeletedTask
+                                        .addOnSuccessListener {
+                                            val userDocumentReference =
+                                                firestore.collection("users")
+                                                    .document(currentUserId)
 
-                                        allUploadedFilesDeletedTask.addOnSuccessListener {
-                                            userDocRef.delete()
-                                                .addOnSuccessListener {
-                                                    currentUser.delete()
-                                                        .addOnSuccessListener {
-                                                            navController.navigate("register") {
-                                                                popUpTo(0)
-                                                            }
+                                            userDocumentReference
+                                                .collection("uploadedFiles")
+                                                .get()
+                                                .addOnSuccessListener { snapshot ->
+                                                    val deleteMetadataTasks =
+                                                        snapshot.documents.map { document ->
+                                                            document.reference.delete()
                                                         }
-                                                        .addOnFailureListener { e ->
-                                                            println("Error deleting auth user: ${e.message}")
+
+                                                    val allMetadataDeletedTask =
+                                                        if (deleteMetadataTasks.isNotEmpty()) {
+                                                            Tasks.whenAll(deleteMetadataTasks)
+                                                        } else {
+                                                            Tasks.forResult(null)
+                                                        }
+
+                                                    allMetadataDeletedTask
+                                                        .addOnSuccessListener {
+                                                            userDocumentReference.delete()
+                                                                .addOnSuccessListener {
+                                                                    currentUser.delete()
+                                                                        .addOnSuccessListener {
+                                                                            navController.navigate(
+                                                                                "register"
+                                                                            ) {
+                                                                                popUpTo(0)
+                                                                            }
+                                                                        }
+                                                                        .addOnFailureListener {
+                                                                                exception ->
+                                                                            accountStatus =
+                                                                                "מחיקת המשתמש נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
+                                                                        }
+                                                                }
+                                                                .addOnFailureListener {
+                                                                        exception ->
+                                                                    accountStatus =
+                                                                        "מחיקת נתוני המשתמש נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
+                                                                }
+                                                        }
+                                                        .addOnFailureListener { exception ->
+                                                            accountStatus =
+                                                                "מחיקת נתוני הטפסים נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
                                                         }
                                                 }
-                                                .addOnFailureListener { e ->
-                                                    println("Error deleting user document: ${e.message}")
+                                                .addOnFailureListener { exception ->
+                                                    accountStatus =
+                                                        "טעינת נתוני הטפסים נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
                                                 }
                                         }
-                                    }
-                            }
+                                        .addOnFailureListener { exception ->
+                                            accountStatus =
+                                                "מחיקת קובצי הטפסים נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
+                                        }
+                                }
+                                .addOnFailureListener { exception ->
+                                    accountStatus =
+                                        "טעינת קובצי הטפסים נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
+                                }
+                        },
+                        onFailure = { exception ->
+                            accountStatus =
+                                "מחיקת המסמכים נכשלה: ${exception.message ?: "שגיאה לא ידועה"}"
                         }
-                    }
+                    )
                 }
             )
+
+            if (accountStatus.isNotEmpty()) {
+                Text(
+                    text = accountStatus,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
+}
+
+/**
+ * Deletes every logical form document before account deletion.
+ */
+private fun deleteAllFormAttachments(
+    onSuccess: () -> Unit,
+    onFailure: (Exception) -> Unit
+) {
+    FormAttachmentsRepository.loadAllAttachments(
+        onSuccess = { attachments ->
+            val documentKeys = attachments
+                .map { attachment ->
+                    attachment.formId to attachment.documentId
+                }
+                .distinct()
+
+            deleteDocumentGroupsSequentially(
+                documentKeys = documentKeys,
+                currentIndex = 0,
+                onSuccess = onSuccess,
+                onFailure = onFailure
+            )
+        },
+        onFailure = onFailure
+    )
+}
+
+/**
+ * Deletes logical documents sequentially so every physical file is removed.
+ */
+private fun deleteDocumentGroupsSequentially(
+    documentKeys: List<Pair<String, String>>,
+    currentIndex: Int,
+    onSuccess: () -> Unit,
+    onFailure: (Exception) -> Unit
+) {
+    if (currentIndex >= documentKeys.size) {
+        onSuccess()
+        return
+    }
+
+    val (formId, documentId) = documentKeys[currentIndex]
+
+    FormAttachmentsRepository.deleteDocumentAttachments(
+        formId = formId,
+        documentId = documentId,
+        onSuccess = {
+            deleteDocumentGroupsSequentially(
+                documentKeys = documentKeys,
+                currentIndex = currentIndex + 1,
+                onSuccess = onSuccess,
+                onFailure = onFailure
+            )
+        },
+        onFailure = onFailure
+    )
 }
 
 @Composable
@@ -426,7 +615,9 @@ fun ProfileSectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(14.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 14.dp
+        ),
         border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.secondary
@@ -440,7 +631,6 @@ fun ProfileSectionCard(
             )
 
             Spacer(modifier = Modifier.height(14.dp))
-
             content()
         }
     }
@@ -448,7 +638,7 @@ fun ProfileSectionCard(
 
 @Composable
 fun ProfileInfoRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     value: String
 ) {
@@ -460,8 +650,8 @@ fun ProfileInfoRow(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null, // Set to null because the Text next to it provides the label
-            tint = MaterialTheme.colorScheme.onSurface //for the icons
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(modifier = Modifier.width(14.dp))
@@ -484,7 +674,7 @@ fun ProfileInfoRow(
 
 @Composable
 fun ProfileActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     text: String,
     onClick: () -> Unit
 ) {
@@ -496,14 +686,16 @@ fun ProfileActionButton(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary, //the background of the button
+            containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary
         ),
-        elevation = ButtonDefaults.buttonElevation(3.dp)
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 3.dp
+        )
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null, // Set to null so the Button's Text label is used
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onPrimary
         )
 
@@ -518,7 +710,7 @@ fun ProfileActionButton(
 
 @Composable
 fun ProfileDeleteButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     text: String,
     onClick: () -> Unit
 ) {
@@ -536,7 +728,7 @@ fun ProfileDeleteButton(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null, // Set to null so the Button's Text label is used
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onError
         )
 

@@ -28,6 +28,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+
 @Composable
 fun BackgroundSoundsScreen(
     selectedSound: String,
@@ -54,35 +61,29 @@ fun BackgroundSoundsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        SoundOptionCard(
-            title = "ללא צליל",
-            selected = selectedSound == "none",
-            onClick = {
-                /*
-                 * The parent saves this manual selection
-                 * to DataStore.
-                 */
-                onSoundSelected("none")
-            }
-        )
-
-        PersonalizationCatalog.sounds.forEach { sound ->
+        Column(
+            modifier = Modifier.selectableGroup()
+        ) {
             SoundOptionCard(
-                title = sound.displayName,
-                selected =
-                    selectedSound == sound.key,
+                title = "ללא צליל",
+                selected = selectedSound == "none",
                 onClick = {
-                    /*
-                     * Pass only the selected sound key.
-                     *
-                     * AppWithDrawer saves and applies it.
-                     */
-                    onSoundSelected(sound.key)
+                    onSoundSelected("none")
                 }
             )
+
+            PersonalizationCatalog.sounds.forEach { sound ->
+                SoundOptionCard(
+                    title = sound.displayName,
+                    selected = selectedSound == sound.key,
+                    onClick = {
+                        onSoundSelected(sound.key)
+                    }
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(3.dp))
+        Spacer(modifier = Modifier.height(190.dp))
 
         OutlinedButton(
             onClick = {
@@ -124,7 +125,6 @@ fun BackgroundSoundsScreen(
         }
     }
 }
-
 @Composable
 fun SoundOptionCard(
     title: String,
@@ -135,33 +135,58 @@ fun SoundOptionCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        onClick = onClick,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor =
+                MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.secondary
+            color =
+                MaterialTheme.colorScheme.secondary
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+
+                // Creates one accessible selectable item for the entire card.
+                .selectable(
+                    selected = selected,
+                    onClick = onClick,
+                    role = Role.RadioButton
+                )
+                .semantics(
+                    mergeDescendants = true
+                ) {
+                    contentDescription =
+                        "בחירת צליל רקע: $title"
+                }
                 .padding(14.dp),
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
             RadioButton(
                 selected = selected,
-                onClick = onClick
+
+                // The complete row handles the click.
+                onClick = null,
+
+                // Prevents the radio icon from becoming a second
+                // accessibility object.
+                modifier =
+                    Modifier.clearAndSetSemantics { }
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(
+                modifier = Modifier.width(12.dp)
+            )
 
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                style =
+                    MaterialTheme.typography.bodyLarge,
+                color =
+                    MaterialTheme.colorScheme.onSurface
             )
         }
     }

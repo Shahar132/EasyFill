@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
@@ -20,6 +21,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
+
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 @Composable
 fun RegisterScreen(navController: NavHostController) {
@@ -101,7 +106,24 @@ fun RegisterScreen(navController: NavHostController) {
 
             Button(
                 enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription =
+                            if (isLoading) {
+                                "מתבצעת הרשמה לחשבון"
+                            } else {
+                                "יצירת חשבון חדש"
+                            }
+                    },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF1E1796),
+                    contentColor = Color.White,
+                    disabledContainerColor =
+                        Color(0xFF1E1796).copy(alpha = 0.45f),
+                    disabledContentColor =
+                        Color.White.copy(alpha = 0.75f)
+                ),
                 onClick = {
                     fullNameError = ""
                     emailError = ""
@@ -114,15 +136,21 @@ fun RegisterScreen(navController: NavHostController) {
                     var hasError = false
 
                     if (trimmedFullName.isBlank()) {
-                        fullNameError = "הכנס שם פרטי ושם משפחה"
+                        fullNameError =
+                            "הכנס שם פרטי ושם משפחה"
                         hasError = true
                     }
 
                     if (trimmedEmail.isBlank()) {
                         emailError = "הכנס אימייל"
                         hasError = true
-                    } else if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
-                        emailError = "האימייל שהוזן אינו תקין"
+                    } else if (
+                        !Patterns.EMAIL_ADDRESS
+                            .matcher(trimmedEmail)
+                            .matches()
+                    ) {
+                        emailError =
+                            "האימייל שהוזן אינו תקין"
                         hasError = true
                     }
 
@@ -130,7 +158,8 @@ fun RegisterScreen(navController: NavHostController) {
                         passwordError = "הכנס סיסמה"
                         hasError = true
                     } else if (password.length < 6) {
-                        passwordError = "הסיסמה חייבת להכיל לפחות 6 תווים"
+                        passwordError =
+                            "הסיסמה חייבת להכיל לפחות 6 תווים"
                         hasError = true
                     }
 
@@ -139,7 +168,10 @@ fun RegisterScreen(navController: NavHostController) {
                     isLoading = true
 
                     FirebaseAuth.getInstance()
-                        .createUserWithEmailAndPassword(trimmedEmail, password)
+                        .createUserWithEmailAndPassword(
+                            trimmedEmail,
+                            password
+                        )
                         .addOnSuccessListener { result ->
                             val uid = result.user?.uid
 
@@ -152,7 +184,8 @@ fun RegisterScreen(navController: NavHostController) {
                             val userData = hashMapOf(
                                 "email" to trimmedEmail,
                                 "fullName" to trimmedFullName,
-                                "createdAt" to System.currentTimeMillis()
+                                "createdAt" to
+                                        System.currentTimeMillis()
                             )
 
                             FirebaseFirestore.getInstance()
@@ -165,33 +198,68 @@ fun RegisterScreen(navController: NavHostController) {
                                 }
                                 .addOnFailureListener { e ->
                                     isLoading = false
-                                    status = "שגיאה בשמירת משתמש: ${e.message}"
+                                    status =
+                                        "שגיאה בשמירת משתמש: " +
+                                                "${e.message}"
                                 }
                         }
                         .addOnFailureListener { e ->
                             isLoading = false
 
-                            if (e is FirebaseAuthUserCollisionException) {
-                                emailError = "אימייל זה כבר קיים במערכת,\nיש לך חשבון קיים חזור/י לדף ההתחברות"
+                            if (
+                                e is FirebaseAuthUserCollisionException
+                            ) {
+                                emailError =
+                                    "אימייל זה כבר קיים במערכת,\n" +
+                                            "יש לך חשבון קיים חזור/י " +
+                                            "לדף ההתחברות"
                             } else {
-                                status = "שגיאה בהרשמה: ${e.message}"
+                                status =
+                                    "שגיאה בהרשמה: ${e.message}"
                             }
                         }
                 }
             ) {
-                Text(if (isLoading) "נרשם..." else "הרשמה")
+                Text(
+                    text =
+                        if (isLoading) {
+                            "נרשם..."
+                        } else {
+                            "הרשמה"
+                        },
+
+                    // Prevents the visible text from creating another
+                    // accessibility description inside the button.
+                    modifier = Modifier.clearAndSetSemantics { }
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            TextButton(onClick = { navController.navigate("auth") }) {
+            TextButton(
+                onClick = {
+                    navController.navigate("auth")
+                },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = Color(0xFF1E1796)
+                )
+            ) {
                 Text(
-                    buildAnnotatedString {
+                    text = buildAnnotatedString {
                         append("כבר יש לך חשבון? ")
-                        pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+
+                        pushStyle(
+                            SpanStyle(
+                                color = Color(0xFF1E1796),
+                                textDecoration =
+                                    TextDecoration.Underline
+                            )
+                        )
+
                         append("התחברות")
                         pop()
-                    }
+                    },
+                    color = Color(0xFF1E1796)
                 )
             }
 
