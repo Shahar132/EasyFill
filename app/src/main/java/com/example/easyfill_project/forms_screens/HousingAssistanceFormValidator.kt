@@ -108,6 +108,56 @@ object HousingAssistanceFormValidator {
         return relevantFieldsCount
     }
 
+
+    /**
+     * Counts all filled fields that are currently relevant.
+     */
+    fun countFilledRelevantFields(
+        formData: Map<String, String>
+    ): Int {
+        var filledFieldsCount = 0
+
+        HousingAssistancePdfSchema.sections.forEach { section ->
+
+            if (!isSectionRelevant(section, formData)) {
+                return@forEach
+            }
+
+            val selectedOptionFields =
+                section.fields.filter { field ->
+                    field.displayType ==
+                            PdfFieldDisplayType.SELECTED_OPTION
+                }
+
+            if (
+                selectedOptionFields.isNotEmpty() &&
+                selectedOptionFields.any { field ->
+                    isSelectedOption(
+                        formData[field.firebaseKey].orEmpty()
+                    )
+                }
+            ) {
+                // All assistance options count as one logical field.
+                filledFieldsCount++
+            }
+
+            filledFieldsCount +=
+                section.fields.count { field ->
+                    field.displayType ==
+                            PdfFieldDisplayType.TEXT &&
+                            isFieldRelevant(
+                                fieldId = field.firebaseKey,
+                                formData = formData
+                            ) &&
+                            formData[field.firebaseKey]
+                                .orEmpty()
+                                .isNotBlank()
+                }
+        }
+
+        return filledFieldsCount
+    }
+
     /**
      * Validates one form section and appends its issues in field order.
      */
@@ -314,4 +364,8 @@ object HousingAssistanceFormValidator {
                     ignoreCase = true
                 )
     }
+
+
+
+
 }

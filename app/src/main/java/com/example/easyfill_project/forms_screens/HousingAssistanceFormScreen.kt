@@ -168,11 +168,14 @@ fun HousingAssistanceFormScreen(
 
     val formId = "housing_assistance"
 
-    /*
- * ============================================================
- * HAND AND FACE MONITORING
- * ============================================================
- */
+    // Step indexes in the housing-assistance prototype.
+    val assistanceSelectionStep = 4
+    val rentAssistanceStep = 5
+    val summaryStep = 6
+
+
+ // HAND AND FACE MONITORING
+
 
     /*
      * Create one hand-motion controller for this form-screen instance.
@@ -598,6 +601,38 @@ fun HousingAssistanceFormScreen(
         mutableStateOf<List<FormIssue>>(emptyList())
     }
 
+    // Option A is selected when its saved value is not blank or false.
+    val isRentAssistanceSelected =
+        remember(formData["rentAssistance"]) {
+            val value =
+                formData["rentAssistance"].orEmpty()
+
+            value.isNotBlank() &&
+                    !value.equals(
+                        other = "false",
+                        ignoreCase = true
+                    )
+        }
+
+
+    // Contains only the steps that are relevant to the current user.
+    val visibleStepIndexes =
+        sections.indices.filter { stepIndex ->
+            stepIndex != rentAssistanceStep ||
+                    isRentAssistanceSelected
+        }
+
+    val visibleSections =
+        visibleStepIndexes.map { stepIndex ->
+            sections[stepIndex]
+        }
+
+    val visibleCurrentStep =
+        visibleStepIndexes
+            .indexOf(currentStep)
+            .coerceAtLeast(0)
+
+
     val validationMessagesByField = remember(validationIssues) {
         validationIssues.associate { issue ->
             issue.fieldId to issue.message
@@ -710,6 +745,39 @@ fun HousingAssistanceFormScreen(
             formId = formId,
             currentStep = step
         )
+    }
+
+    /*
+ * Saves the currently displayed step, including the initial step
+ * when the form is opened or restarted.
+ */
+    LaunchedEffect(currentStep) {
+        saveStep(currentStep)
+    }
+
+
+    /*
+ * Prevents opening the rent-assistance section when restoring
+ * a saved form in which option A is not selected.
+ */
+    LaunchedEffect(
+        dataLoaded,
+        currentStep,
+        isRentAssistanceSelected
+    ) {
+        if (
+            dataLoaded &&
+            currentStep == rentAssistanceStep &&
+            !isRentAssistanceSelected
+        ) {
+            FormBehaviorTrackingController.onStepChanged(
+                fromStep = currentStep,
+                toStep = summaryStep
+            )
+
+            saveStep(summaryStep)
+            currentStep = summaryStep
+        }
     }
 
     LaunchedEffect(formData, dataLoaded) {
@@ -861,8 +929,8 @@ fun HousingAssistanceFormScreen(
         ) {
 
             FormProgressBar(
-                currentStep = currentStep,
-                sections = sections
+                currentStep = visibleCurrentStep,
+                sections = visibleSections
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -964,7 +1032,17 @@ fun HousingAssistanceFormScreen(
                         onClick = {
                             saveFormData()
 
-                            val previousStep = currentStep - 1
+                            val previousStep =
+                                when {
+                                    currentStep == summaryStep &&
+                                            !isRentAssistanceSelected -> {
+                                        assistanceSelectionStep
+                                    }
+
+                                    else -> {
+                                        currentStep - 1
+                                    }
+                                }
 
                             FormBehaviorTrackingController.onStepChanged(
                                 fromStep = currentStep,
@@ -991,8 +1069,20 @@ fun HousingAssistanceFormScreen(
                     onClick = {
                         saveFormData()
 
-                        if (currentStep < sections.size - 1) {
-                            val nextStep = currentStep + 1
+                        if (currentStep < sections.lastIndex) {
+
+                            val nextStep =
+                                when {
+                                    currentStep ==
+                                            assistanceSelectionStep &&
+                                            !isRentAssistanceSelected -> {
+                                        summaryStep
+                                    }
+
+                                    else -> {
+                                        currentStep + 1
+                                    }
+                                }
 
                             FormBehaviorTrackingController.onStepChanged(
                                 fromStep = currentStep,
