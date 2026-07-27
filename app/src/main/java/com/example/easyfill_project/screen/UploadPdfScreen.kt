@@ -1023,20 +1023,20 @@ fun UploadPdfScreen(
                     horizontalArrangement =
                         Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector =
-                            Icons.Default.ArrowBack,
-                        contentDescription = "מעבר"
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
                     Text(
                         text =
                             "המשך לבחירת טופס ללא העלאה",
                         style =
                             MaterialTheme.typography.bodyLarge
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Icon(
+                        imageVector =
+                            Icons.Default.ArrowBack,
+                        contentDescription = "מעבר"
+                    )
+
                 }
             }
 
