@@ -433,15 +433,15 @@ fun calculateFieldsProgress(
 fun roundedPercent(
     progress: Float
 ): Int {
-    val rawPercent =
-        (
-                progress.coerceIn(
-                    minimumValue = 0f,
-                    maximumValue = 1f
-                ) * 100
-                ).toInt()
+    val exactPercent =
+        progress.coerceIn(
+            minimumValue = 0f,
+            maximumValue = 1f
+        ) * 100f
 
-    return ((rawPercent + 2) / 5) * 5
+    return kotlin.math.floor(
+        exactPercent.toDouble()
+    ).toInt()
 }
 
 fun getStatusByProgress(
