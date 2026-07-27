@@ -109,6 +109,9 @@ import kotlinx.coroutines.launch
 import com.example.easyfill_project.chatbot.personalization.PersonalizationCatalog
 import com.example.easyfill_project.distress_scoring.DistressConfirmationManager
 
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.List
+
 
 
 import androidx.compose.runtime.LaunchedEffect
@@ -471,6 +474,89 @@ fun AppWithDrawer(
                                 innerNavController.navigate("home")
 
                                 // Close drawer after click
+                                scope.launch {
+                                    drawerState.close()
+                                }
+                            }
+                        )
+                        // Shortcut to the forms selection screen
+                        NavigationDrawerItem(
+                            label = {
+                                Text("בחירת טפסים")
+                            },
+                            selected = currentRoute == "demoFormOptions",
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.List,
+                                    contentDescription = "בחירת טפסים"
+                                )
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                // Selected
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primary,
+                                selectedTextColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor =
+                                    MaterialTheme.colorScheme.surface,
+                                unselectedTextColor =
+                                    MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor =
+                                    MaterialTheme.colorScheme.onSurface
+                            ),
+                            onClick = {
+                                innerNavController.navigate(
+                                    "demoFormOptions"
+                                ) {
+                                    launchSingleTop = true
+                                }
+
+                                scope.launch {
+                                    drawerState.close()
+                                }
+                            }
+                        )
+
+// Shortcut to the forms progress screen
+                        NavigationDrawerItem(
+                            label = {
+                                Text("ההתקדמות שלי")
+                            },
+                            selected = currentRoute == "myFormsProgress",
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "ההתקדמות שלי"
+                                )
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                // Selected
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primary,
+                                selectedTextColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+                                selectedIconColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+
+                                // Unselected
+                                unselectedContainerColor =
+                                    MaterialTheme.colorScheme.surface,
+                                unselectedTextColor =
+                                    MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor =
+                                    MaterialTheme.colorScheme.onSurface
+                            ),
+                            onClick = {
+                                innerNavController.navigate(
+                                    "myFormsProgress"
+                                ) {
+                                    launchSingleTop = true
+                                }
+
                                 scope.launch {
                                     drawerState.close()
                                 }
