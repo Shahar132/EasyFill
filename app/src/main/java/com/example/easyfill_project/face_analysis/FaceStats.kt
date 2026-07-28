@@ -2,9 +2,6 @@ package com.example.easyfill_project.face_analysis
 
 import kotlin.math.abs
 
-/**
- * Shared facial statistics helpers.
- */
 internal object FaceStats {
 
     const val MIN_RAW_VALUE = 0f
@@ -13,12 +10,6 @@ internal object FaceStats {
     private const val MODIFIED_Z_SCALE =
         0.6745f
 
-    /*
-     * Broad technical limits for normalized eyebrow geometry.
-     *
-     * These limits reject invalid values only.
-     * They are not distress-detection thresholds.
-     */
     private const val MIN_GEOMETRY_RATIO =
         0f
 
@@ -31,9 +22,6 @@ internal object FaceStats {
     private const val MIN_INTER_EYE_DISTANCE =
         0.03f
 
-    /**
-     * Raw MediaPipe blendshape features.
-     */
     val blendshapeFeatures =
         listOf(
             FaceBaselineFeature.EYE_BLINK_LEFT,
@@ -54,10 +42,6 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_OUTER_UP_RIGHT
         )
 
-    /**
-     * Normalized geometry features calculated
-     * from MediaPipe face landmarks.
-     */
     val geometryFeatures =
         listOf(
             FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
@@ -66,19 +50,10 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY
         )
 
-    /**
-     * Every raw feature required by the personal baseline.
-     */
     val rawFeatures =
         blendshapeFeatures +
                 geometryFeatures
 
-    /**
-     * Returns one raw value from a facial frame.
-     *
-     * Float.NaN is returned when a geometry value
-     * is unavailable. The frame will then fail validation.
-     */
     fun rawValue(
         frame: FaceFrameData,
         feature: FaceBaselineFeature
@@ -145,10 +120,6 @@ internal object FaceStats {
         }
     }
 
-    /**
-     * Returns true when one frame contains valid
-     * blendshape values and reliable eyebrow geometry.
-     */
     fun isValidFrame(
         frame: FaceFrameData
     ): Boolean {
@@ -203,19 +174,12 @@ internal object FaceStats {
                 normalizationDistanceIsValid
     }
 
-    /**
-     * Returns true when a normalized geometry
-     * ratio is finite and technically plausible.
-     */
     private fun Float.isValidGeometryRatio(): Boolean {
         return isFinite() &&
                 this in MIN_GEOMETRY_RATIO..
                 MAX_GEOMETRY_RATIO
     }
 
-    /**
-     * Calculates the median of a non-empty list.
-     */
     fun median(
         values: List<Float>
     ): Float {
@@ -239,9 +203,6 @@ internal object FaceStats {
         }
     }
 
-    /**
-     * Calculates Median Absolute Deviation.
-     */
     fun mad(
         values: List<Float>,
         median: Float
@@ -258,12 +219,6 @@ internal object FaceStats {
         return median(deviations)
     }
 
-    /**
-     * Returns a minimum variation value for each feature.
-     *
-     * This prevents very small baseline MAD values from
-     * producing unrealistically large Modified Z-scores.
-     */
     private fun minimumMadFor(
         feature: FaceBaselineFeature
     ): Float {
@@ -292,12 +247,6 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_OUTER_UP_RIGHT ->
                 0.025f
 
-            /*
-             * Geometry values are normalized ratios.
-             *
-             * These are initial engineering values and
-             * should be tuned using live test logs.
-             */
             FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
             FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT ->
                 0.015f
@@ -308,14 +257,55 @@ internal object FaceStats {
             FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY ->
                 0.010f
 
-            else ->
-                0.010f
+            FaceBaselineFeature.BLINK_RATE ->
+                2.0f
+
+            FaceBaselineFeature.AVERAGE_BLINK_DURATION ->
+                60f
+
+            FaceBaselineFeature.LONG_EYE_CLOSURE_DURATION ->
+                250f
+
+            FaceBaselineFeature.LONG_EYE_CLOSURE_COUNT ->
+                1f
+
+            FaceBaselineFeature.SQUINT_INTENSITY,
+            FaceBaselineFeature.EYE_WIDE_INTENSITY,
+            FaceBaselineFeature.BROW_FURROW_INTENSITY,
+            FaceBaselineFeature.BROW_INNER_UP_INTENSITY,
+            FaceBaselineFeature.OUTER_BROW_RAISE_INTENSITY ->
+                0.25f
+
+            FaceBaselineFeature.SQUINT_DURATION,
+            FaceBaselineFeature.EYE_WIDE_DURATION,
+            FaceBaselineFeature.BROW_FURROW_DURATION,
+            FaceBaselineFeature.BROW_INNER_UP_DURATION,
+            FaceBaselineFeature.OUTER_BROW_RAISE_DURATION,
+            FaceBaselineFeature.LOW_ACTIVITY_DURATION,
+            FaceBaselineFeature.EXPRESSION_HOLD_DURATION ->
+                500f
+
+            FaceBaselineFeature.SQUINT_PERCENTAGE,
+            FaceBaselineFeature.BROW_FURROW_PERCENTAGE,
+            FaceBaselineFeature.LOW_ACTIVITY_PERCENTAGE ->
+                5f
+
+            FaceBaselineFeature.SQUINT_ASYMMETRY,
+            FaceBaselineFeature.EYE_WIDE_ASYMMETRY,
+            FaceBaselineFeature.BROW_FURROW_ASYMMETRY,
+            FaceBaselineFeature.OUTER_BROW_RAISE_ASYMMETRY ->
+                0.20f
+
+            FaceBaselineFeature.EYE_WIDE_EVENT_COUNT,
+            FaceBaselineFeature.BROW_INNER_UP_EVENT_COUNT,
+            FaceBaselineFeature.FACIAL_CHANGE_COUNT ->
+                1f
+
+            FaceBaselineFeature.FACIAL_ACTIVITY_LEVEL ->
+                0.005f
         }
     }
 
-    /**
-     * Returns the effective MAD used for comparison.
-     */
     fun effectiveMad(
         feature: FaceBaselineFeature,
         metric: BaselineMetric
@@ -326,10 +316,6 @@ internal object FaceStats {
         )
     }
 
-    /**
-     * Calculates the Modified Z-score relative
-     * to the user's personal baseline.
-     */
     fun modifiedZ(
         feature: FaceBaselineFeature,
         currentValue: Float,
@@ -343,10 +329,6 @@ internal object FaceStats {
                 )
     }
 
-    /**
-     * Converts a positive Modified Z deviation
-     * into a continuous score from 0 to 4.
-     */
     fun positiveZToScore(
         modifiedZ: Float
     ): Float {
@@ -403,9 +385,6 @@ internal object FaceStats {
         )
     }
 
-    /**
-     * Performs linear interpolation between two ranges.
-     */
     fun interpolate(
         value: Float,
         inputStart: Float,

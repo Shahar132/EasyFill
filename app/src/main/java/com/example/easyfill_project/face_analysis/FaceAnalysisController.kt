@@ -13,33 +13,13 @@ import android.util.Log
  * 5. Returns the calculated facial distress result and score.
  * 6. Saves newly created or learned baseline values to Firebase.
  */
-
-//in simple words when we call faceAnalysisController.start(),
-//Does this user already have a facial baseline?
-//A facial baseline represents the user’s usual facial behavior, such as their normal eye and eyebrow measurements.
-//If a saved baseline exists: Loading baseline → create FaceDistressAnalyzer → begin analyzing live frames
-//If no saved baseline exists: Collect camera frames  startCalibration() → create a personal baseline→ save it to Firebase→ begin live analysis
-//Open face analysis, Load saved baseline from Firebase ,Receive facial data from each camera frame
-//Compare recent facial data with the baseline,Produce distress score
-
-//Frame 1 → analyze → no baseline update
-//Frame 2 → analyze → no baseline update
-//Frame 3 → analyze → no complete result yet
-//Frame 4 → analyze → distress result
-//Frame 5 → analyze → no baseline update
-//...
-//Only occasionally, when the analyzer has enough reliable evidence
-// that the user's normal facial behavior should be adjusted, it returns an updated baseline.
-//It is not replaced by every new frame.
-//It stays mostly stable and is updated only occasionally when the analyzer explicitly decides an update is appropriate.
-
 class FaceAnalysisController(
 
     // Repository responsible for reading and writing the baseline in Firebase.
     private val repository: FaceBaselineRepository =
         FaceBaselineRepository(),
 
-    // Called whenever the current phase or status of the analysis changes.
+    // Called whenever the current phase or status changes.
     private val onStateChanged:
         (FaceAnalysisState) -> Unit = {},
 
@@ -47,8 +27,7 @@ class FaceAnalysisController(
     private val onResult:
         (FaceDistressResult) -> Unit = {},
 
-    // Called with the final facial distress level.
-    // The expected score is between 0 and 4.
+    // Called with the facial distress score between 0 and 4.
     private val onScoreReady:
         (Int) -> Unit = {}
 ) {
@@ -62,36 +41,33 @@ class FaceAnalysisController(
     private var isActive =
         false
 
-    // Stores the current stage of the face-analysis process.
+    // Stores the current stage of facial analysis.
     @Volatile
     private var phase =
         FaceAnalysisPhase.IDLE
 
-    // Performs the actual comparison between current facial behavior
-    // and the user's saved baseline.
+    // Compares current facial behavior with the personal baseline.
     private var analyzer:
             FaceDistressAnalyzer? = null
 
-    // Prevents the calibration UI from being updated for every camera frame.
-    // The UI is updated only once per second.
-    private var lastCalibrationStateUpdateTimestampMs =
-        0L
-
-    // Prevents multiple updated baselines from being saved at the same time.
+    // Prevents multiple derived-baseline saves at the same time.
     private var derivedSaveInProgress =
+        false
+
+    // Timestamp of the first valid frame in the warm-up period.
+    private var analysisWarmupStartTimestampMs: Long? =
+        null
+
+    // Number of valid facial frames collected during warm-up.
+    private var analysisWarmupValidFrameCount =
+        0
+
+    // Indicates whether the camera warm-up has completed.
+    private var analysisWarmupCompleted =
         false
 
     /**
      * Starts the facial-analysis flow.
-     *
-     * The controller first checks Firebase for a saved baseline.
-     *
-     * If a baseline exists:
-     * - It is loaded.
-     * - Face analysis begins immediately.
-     *
-     * If no baseline exists:
-     * - A new personal calibration begins.
      */
     fun start() {
 
@@ -101,6 +77,11 @@ class FaceAnalysisController(
         }
 
         isActive = true
+
+        analyzer = null
+        derivedSaveInProgress = false
+
+        resetAnalysisWarmup()
 
         phase =
             FaceAnalysisPhase.LOADING_BASELINE
@@ -116,16 +97,13 @@ class FaceAnalysisController(
 
             onSuccess = { savedBaseline ->
 
-                // Ignore Firebase results if the controller was stopped
-                // while the request was still running.
+                // Ignore the result if the controller stopped while loading.
                 if (!isActive) {
                     return@getBaseline
                 }
 
                 if (savedBaseline == null) {
 
-                    // No saved baseline exists.
-                    // Start a new calibration for this user.
                     startCalibration(
                         message =
                             "No saved baseline found. Collecting a new baseline"
@@ -133,7 +111,7 @@ class FaceAnalysisController(
 
                 } else {
 
-                    // Store the baseline inside the baseline manager.
+                    // Store the saved baseline in memory.
                     baselineManager.useSavedBaseline(
                         savedBaseline
                     )
@@ -143,6 +121,12 @@ class FaceAnalysisController(
                         FaceDistressAnalyzer(
                             savedBaseline
                         )
+
+                    /*
+                     * Restart the warm-up because the camera may still
+                     * be stabilizing when the baseline finishes loading.
+                     */
+                    resetAnalysisWarmup()
 
                     phase =
                         FaceAnalysisPhase.ANALYZING
@@ -154,6 +138,11 @@ class FaceAnalysisController(
                             "Saved facial baseline loaded",
                         baseline =
                             savedBaseline
+                    )
+
+                    Log.d(
+                        TAG,
+                        "Saved baseline loaded | waiting for camera warm-up"
                     )
                 }
             },
@@ -170,8 +159,6 @@ class FaceAnalysisController(
                     exception
                 )
 
-                // The Firebase request failed, but the feature can still work.
-                // A new local baseline will be created instead.
                 startCalibration(
                     message =
                         "Firebase load failed. Collecting a local baseline"
@@ -181,10 +168,7 @@ class FaceAnalysisController(
     }
 
     /**
-     * Receives facial measurements extracted from one camera frame.
-     *
-     * This method should be called by the camera/image analyzer
-     * whenever a face is successfully detected.
+     * Receives facial measurements from one detected camera frame.
      */
     @Synchronized
     fun onFrameData(
@@ -197,14 +181,11 @@ class FaceAnalysisController(
 
         when (phase) {
 
-            // During calibration, frames are used to create the baseline.
             FaceAnalysisPhase.CALIBRATING ->
                 handleCalibrationFrame(
                     frameData
                 )
 
-            // During and immediately after baseline saving,
-            // frames are used for distress analysis.
             FaceAnalysisPhase.SAVING_BASELINE,
             FaceAnalysisPhase.ANALYZING ->
                 handleAnalysisFrame(
@@ -217,10 +198,7 @@ class FaceAnalysisController(
     }
 
     /**
-     * Called when the camera frame does not contain a detected face.
-     *
-     * The analyzer may clear its recent history after the face
-     * has been missing for a certain period.
+     * Called when no face is detected in the current camera frame.
      */
     @Synchronized
     fun onFaceMissing(
@@ -231,20 +209,53 @@ class FaceAnalysisController(
             return
         }
 
+        /*
+         * If the face disappears before warm-up is completed,
+         * restart the warm-up from the next valid facial frame.
+         */
+        if (!analysisWarmupCompleted) {
+
+            if (
+                analysisWarmupStartTimestampMs != null ||
+                analysisWarmupValidFrameCount > 0
+            ) {
+
+                analysisWarmupStartTimestampMs = null
+                analysisWarmupValidFrameCount = 0
+
+                Log.d(
+                    TAG,
+                    "Camera warm-up restarted because the face was missing"
+                )
+            }
+
+            onScoreReady(0)
+
+            return
+        }
+
         val historyReset =
             analyzer
                 ?.onFaceMissing(timestampMs)
                 ?: false
 
-        // If the previous facial-analysis history was reset,
-        // return the facial score to zero.
+        /*
+         * Clear the facial score when the analyzer clears
+         * its recent facial history.
+         */
         if (historyReset) {
+
+            Log.d(
+                TAG,
+                "Facial history reset after missing face"
+            )
+
             onScoreReady(0)
         }
     }
 
     /**
-     * Stops facial analysis and releases the current analyzer state.
+     * Stops facial analysis and clears its active state.
      */
     @Synchronized
     fun stop() {
@@ -257,10 +268,13 @@ class FaceAnalysisController(
         analyzer?.reset()
         analyzer = null
 
-        derivedSaveInProgress =
-            false
+        derivedSaveInProgress = false
 
-        // A stopped analyzer should not leave an old distress score active.
+        analysisWarmupStartTimestampMs = null
+        analysisWarmupValidFrameCount = 0
+        analysisWarmupCompleted = false
+
+        // Do not leave an old facial distress score active.
         onScoreReady(0)
 
         emitState(
@@ -269,10 +283,15 @@ class FaceAnalysisController(
             message =
                 "Face analysis stopped"
         )
+
+        Log.d(
+            TAG,
+            "Face analysis stopped and facial score cleared"
+        )
     }
 
     /**
-     * Starts the personal facial-baseline calibration.
+     * Starts a new personal facial-baseline calibration.
      */
     private fun startCalibration(
         message: String
@@ -281,6 +300,13 @@ class FaceAnalysisController(
         baselineManager.startCalibration()
 
         analyzer = null
+        derivedSaveInProgress = false
+
+        analysisWarmupStartTimestampMs = null
+        analysisWarmupValidFrameCount = 0
+        analysisWarmupCompleted = false
+
+        onScoreReady(0)
 
         phase =
             FaceAnalysisPhase.CALIBRATING
@@ -294,7 +320,7 @@ class FaceAnalysisController(
     }
 
     /**
-     * Adds a camera frame to the baseline-calibration process.
+     * Adds one facial frame to the baseline-calibration process.
      */
     private fun handleCalibrationFrame(
         frameData: FaceFrameData
@@ -305,44 +331,25 @@ class FaceAnalysisController(
                 frameData
             )
 
-        // Update the UI only once every second instead of on every frame.
-        if (
-            frameData.timestampMs -
-            lastCalibrationStateUpdateTimestampMs >=
-            CALIBRATION_UI_UPDATE_INTERVAL_MS
-        ) {
-
-            lastCalibrationStateUpdateTimestampMs =
-                frameData.timestampMs
-
-            emitState(
-                phase =
-                    FaceAnalysisPhase.CALIBRATING,
-                message =
-                    "Collecting personal facial baseline",
-                collectedFrames =
-                    baselineManager
-                        .getCollectedFrameCount(),
-                validWindows =
-                    baselineManager
-                        .getValidWindowCount()
-            )
-        }
-
-        // Continue collecting frames until calibration is complete.
+        /*
+         * No periodic UI update is sent here.
+         *
+         * The calibration continues internally until a valid
+         * personal baseline is completed.
+         */
         if (!completed) {
             return
         }
 
         val baseline =
-            baselineManager
-                .getCurrentBaseline()
+            baselineManager.getCurrentBaseline()
 
-        // Calibration completed but no usable baseline was produced.
         if (baseline == null) {
 
             phase =
                 FaceAnalysisPhase.ERROR
+
+            onScoreReady(0)
 
             emitState(
                 phase =
@@ -355,18 +362,27 @@ class FaceAnalysisController(
         }
 
         val frameCount =
-            baselineManager
-                .getCollectedFrameCount()
+            baselineManager.getCollectedFrameCount()
 
         val validWindowCount =
-            baselineManager
-                .getValidWindowCount()
+            baselineManager.getValidWindowCount()
 
-        // Begin analysis immediately using the new local baseline.
         analyzer =
             FaceDistressAnalyzer(
                 baseline
             )
+
+        /*
+         * A new baseline is created only after the camera has already
+         * collected facial frames for at least ten seconds.
+         *
+         * Therefore, another warm-up is unnecessary in this case.
+         */
+        analysisWarmupStartTimestampMs = null
+        analysisWarmupValidFrameCount = 0
+        analysisWarmupCompleted = true
+
+        onScoreReady(0)
 
         phase =
             FaceAnalysisPhase.SAVING_BASELINE
@@ -384,9 +400,9 @@ class FaceAnalysisController(
                 validWindowCount
         )
 
-        // Save the newly created personal baseline in Firebase.
         repository.saveRawBaseline(
-            baseline = baseline,
+            baseline =
+                baseline,
             collectedFrameCount =
                 frameCount,
             validWindowCount =
@@ -427,7 +443,10 @@ class FaceAnalysisController(
                     exception
                 )
 
-                // Continue using the baseline locally even if saving failed.
+                /*
+                 * Continue using the new baseline locally,
+                 * even if saving it in Firebase failed.
+                 */
                 phase =
                     FaceAnalysisPhase.ANALYZING
 
@@ -448,7 +467,7 @@ class FaceAnalysisController(
     }
 
     /**
-     * Sends a camera frame to the facial-distress analyzer.
+     * Sends one facial frame to the distress analyzer.
      */
     private fun handleAnalysisFrame(
         frameData: FaceFrameData
@@ -458,17 +477,92 @@ class FaceAnalysisController(
             analyzer
                 ?: return
 
-        // addFrame may return null until enough frame data
-        // has been collected for a reliable result.
+        /*
+         * When a saved baseline is loaded, collect stable facial data
+         * before beginning distress analysis.
+         *
+         * Both conditions must be met:
+         * 1. At least two seconds have passed.
+         * 2. At least twenty valid facial frames were collected.
+         */
+        if (!analysisWarmupCompleted) {
+
+            if (!isValidWarmupFrame(frameData)) {
+
+                Log.v(
+                    TAG,
+                    "Ignoring invalid facial frame during camera warm-up"
+                )
+
+                return
+            }
+
+            val warmupStart =
+                analysisWarmupStartTimestampMs
+                    ?: frameData.timestampMs.also { timestamp ->
+
+                        analysisWarmupStartTimestampMs =
+                            timestamp
+
+                        Log.d(
+                            TAG,
+                            "Camera warm-up started | " +
+                                    "minimumDuration=${ANALYSIS_WARMUP_DURATION_MS}ms | " +
+                                    "minimumValidFrames=$MINIMUM_WARMUP_VALID_FRAMES"
+                        )
+                    }
+
+            analysisWarmupValidFrameCount += 1
+
+            val warmupElapsed =
+                frameData.timestampMs -
+                        warmupStart
+
+            val enoughTimePassed =
+                warmupElapsed >=
+                        ANALYSIS_WARMUP_DURATION_MS
+
+            val enoughValidFrames =
+                analysisWarmupValidFrameCount >=
+                        MINIMUM_WARMUP_VALID_FRAMES
+
+            if (
+                !enoughTimePassed ||
+                !enoughValidFrames
+            ) {
+                return
+            }
+
+            analysisWarmupCompleted = true
+
+            Log.d(
+                TAG,
+                "Camera warm-up completed | " +
+                        "elapsed=${warmupElapsed}ms | " +
+                        "validFrames=$analysisWarmupValidFrameCount"
+            )
+        }
+
+        /*
+         * addFrame may return null until enough reliable frames
+         * have been collected for a complete analysis result.
+         */
         val result =
             currentAnalyzer.addFrame(
                 frameData
             ) ?: return
 
-        // Send the complete result to the UI or logging layer.
+        Log.d(
+            FACE_RESULT_TAG,
+            "Facial result | " +
+                    "level=${result.level} | " +
+                    "result=$result"
+        )
+
+        // Send the complete result to the observing component.
         onResult(result)
 
-        // Send only the final distress level to the global scoring system.
+        // Send the facial level to the global distress system.
         onScoreReady(
             result.level.coerceIn(
                 minimumValue = 0,
@@ -476,30 +570,25 @@ class FaceAnalysisController(
             )
         )
 
-        // Do not save another learned baseline while a save is active.
+        // Do not start another derived-baseline save while one is active.
         if (derivedSaveInProgress) {
             return
         }
 
-        // The analyzer may gradually learn new stable values
-        // and request that the baseline be updated.
         val updatedBaseline =
             currentAnalyzer
                 .consumePendingBaselineUpdate()
                 ?: return
 
-        derivedSaveInProgress =
-            true
+        derivedSaveInProgress = true
 
         repository.saveDerivedBaseline(
-
             baseline =
                 updatedBaseline,
 
             onSuccess = {
 
-                derivedSaveInProgress =
-                    false
+                derivedSaveInProgress = false
 
                 if (isActive) {
 
@@ -511,19 +600,16 @@ class FaceAnalysisController(
                         baseline =
                             updatedBaseline,
                         collectedFrames =
-                            baselineManager
-                                .getCollectedFrameCount(),
+                            baselineManager.getCollectedFrameCount(),
                         validWindows =
-                            baselineManager
-                                .getValidWindowCount()
+                            baselineManager.getValidWindowCount()
                     )
                 }
             },
 
             onFailure = { exception ->
 
-                derivedSaveInProgress =
-                    false
+                derivedSaveInProgress = false
 
                 Log.e(
                     TAG,
@@ -535,8 +621,38 @@ class FaceAnalysisController(
     }
 
     /**
-     * Creates a FaceAnalysisState object and sends it
-     * to the screen or component observing the controller.
+     * Checks whether a facial frame is reliable enough
+     * to participate in the camera warm-up period.
+     */
+    private fun isValidWarmupFrame(
+        frameData: FaceFrameData
+    ): Boolean {
+
+        val geometry =
+            frameData.browGeometry
+                ?: return false
+
+        return FaceStats.isValidFrame(frameData) &&
+                geometry.isReliable &&
+                geometry.interEyeDistance.isFinite() &&
+                geometry.interEyeDistance > 0f
+    }
+
+    /**
+     * Starts a new camera stabilization period.
+     */
+    private fun resetAnalysisWarmup() {
+
+        analysisWarmupStartTimestampMs = null
+        analysisWarmupValidFrameCount = 0
+        analysisWarmupCompleted = false
+
+        // A warm-up period must never leave an old score active.
+        onScoreReady(0)
+    }
+
+    /**
+     * Creates and emits the current facial-analysis state.
      */
     private fun emitState(
         phase: FaceAnalysisPhase,
@@ -551,8 +667,10 @@ class FaceAnalysisController(
 
         onStateChanged(
             FaceAnalysisState(
-                phase = phase,
-                message = message,
+                phase =
+                    phase,
+                message =
+                    message,
                 baselineReady =
                     baseline != null,
                 rawMetricCount =
@@ -578,8 +696,12 @@ class FaceAnalysisController(
         private const val TAG =
             "FACE_ANALYSIS"
 
-        // Calibration-state updates are sent to the UI once per second.
-        private const val CALIBRATION_UI_UPDATE_INTERVAL_MS =
-            1_000L
+        private const val FACE_RESULT_TAG = "FACE_RESULT_DEBUG"
+
+        // Minimum camera stabilization time.
+        private const val ANALYSIS_WARMUP_DURATION_MS = 2_000L
+
+        // Minimum number of valid facial frames required during warm-up.
+        private const val MINIMUM_WARMUP_VALID_FRAMES = 20
     }
 }

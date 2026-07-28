@@ -4,20 +4,6 @@ import android.util.Log
 import java.util.ArrayDeque
 import kotlin.math.abs
 
-/**
- * Analyzes the user's facial behavior and produces a stable distress score.
- *
- * Main steps:
- * 1. Receives valid FaceFrameData samples from the camera pipeline.
- * 2. Groups frames into 500ms windows.
- * 3. Compares each facial feature with the user's personal baseline.
- * 4. Tracks eye, eyebrow, blink and facial-activity patterns over time.
- * 5. Combines the measurements into a smoothed distress score from 0 to 4.
- * 6. Learns derived baseline metrics only from reliable, low-distress periods.
- * 7. Provides occasional baseline updates for the controller to save.
- *
- * This class does not open the camera or communicate directly with Firebase.
- */
 class FaceDistressAnalyzer(
     baseline: FaceBaseline
 ) {
@@ -73,10 +59,6 @@ class FaceDistressAnalyzer(
         }
     }
 
-    /**
-     * Returns a result once a complete
-     * 500 ms window is available.
-     */
     @Synchronized
     fun addFrame(
         frameData: FaceFrameData
@@ -164,10 +146,6 @@ class FaceDistressAnalyzer(
         return result
     }
 
-    /**
-     * Clears recent analysis after
-     * a long period without a detected face.
-     */
     @Synchronized
     fun onFaceMissing(
         timestampMs: Long
@@ -191,9 +169,6 @@ class FaceDistressAnalyzer(
         return true
     }
 
-    /**
-     * Clears all transient and learned session data.
-     */
     @Synchronized
     fun reset() {
         resetTransientState()
@@ -209,10 +184,6 @@ class FaceDistressAnalyzer(
         smoothedScore = 0f
     }
 
-    /**
-     * Returns one learned baseline update
-     * and clears the pending value.
-     */
     @Synchronized
     fun consumePendingBaselineUpdate():
             FaceBaseline? {
@@ -225,9 +196,6 @@ class FaceDistressAnalyzer(
         return update
     }
 
-    /**
-     * Creates one 500 ms window result.
-     */
     private fun buildWindowResult(
         startTimestampMs: Long
     ): FaceWindowResult? {
@@ -300,9 +268,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Combines eye, eyebrow and activity measurements.
-     */
     private fun buildDistressResult(
         currentWindow: FaceWindowResult
     ): FaceDistressResult {
@@ -322,9 +287,6 @@ class FaceDistressAnalyzer(
                 FaceBaselineFeature.EYE_WIDE_RIGHT
             )
 
-        /*
-         * Raw MediaPipe eyebrow scores.
-         */
         val rawBrowFurrowScore =
             persistentScore(
                 FaceBaselineFeature.BROW_DOWN_LEFT,
@@ -348,30 +310,18 @@ class FaceDistressAnalyzer(
                 rawOuterBrowRaiseScore
             )
 
-        /*
-         * A brow raise should increase the normalized
-         * distance between the eyebrows and the eyes.
-         */
         val browRaiseGeometryScore =
             persistentScore(
                 FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
                 FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT
             )
 
-        /*
-         * Brow lowering should decrease the normalized
-         * distance between the eyebrows and the eyes.
-         */
         val browLoweringGeometryScore =
             persistentNegativeScore(
                 FaceBaselineFeature.BROW_EYE_DISTANCE_LEFT,
                 FaceBaselineFeature.BROW_EYE_DISTANCE_RIGHT
             )
 
-        /*
-         * Brow furrowing can also reduce the normalized
-         * distance between the inner eyebrow areas.
-         */
         val innerBrowCompressionScore =
             persistentNegativeScore(
                 FaceBaselineFeature.INNER_BROW_DISTANCE
@@ -385,10 +335,6 @@ class FaceDistressAnalyzer(
                 )
             )
 
-        /*
-         * Strong geometry asymmetry often indicates
-         * a camera-angle change or unreliable pose.
-         */
         val geometryAsymmetryScore =
             persistentScore(
                 FaceBaselineFeature.BROW_GEOMETRY_ASYMMETRY
@@ -568,12 +514,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Uses the median of the last three windows.
-     *
-     * Bilateral features are averaged so that
-     * noise from one side cannot dominate.
-     */
     private fun persistentScore(
         vararg features: FaceBaselineFeature
     ): Float {
@@ -610,13 +550,6 @@ class FaceDistressAnalyzer(
         return FaceStats.median(scores)
     }
 
-    /**
-     * Detects decreases relative to the personal baseline.
-     *
-     * FaceWindowFeatureResult normally stores a score for
-     * positive deviations. This method reverses the Z-score
-     * so decreases can also be measured.
-     */
     private fun persistentNegativeScore(
         vararg features: FaceBaselineFeature
     ): Float {
@@ -660,13 +593,6 @@ class FaceDistressAnalyzer(
         return FaceStats.median(scores)
     }
 
-    /**
-     * Keeps a brow Blendshape score only when normalized
-     * landmark geometry supports the same movement.
-     *
-     * Unsupported Blendshape changes are not removed
-     * completely, but they are strongly reduced.
-     */
     private fun confirmBrowSignal(
         blendshapeScore: Float,
         geometryScore: Float,
@@ -718,9 +644,6 @@ class FaceDistressAnalyzer(
             )
     }
 
-    /**
-     * Combines the two strongest scores.
-     */
     private fun combineStrongest(
         scores: List<Float>
     ): Float {
@@ -747,9 +670,6 @@ class FaceDistressAnalyzer(
             )
     }
 
-    /**
-     * Tracks bilateral blink events.
-     */
     private fun updateBlinkTracking(
         frameData: FaceFrameData
     ) {
@@ -844,9 +764,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Removes blink events outside the history window.
-     */
     private fun pruneBlinkEvents(
         currentTimestampMs: Long
     ) {
@@ -860,9 +777,6 @@ class FaceDistressAnalyzer(
         }
     }
 
-    /**
-     * Calculates derived facial metrics.
-     */
     private fun buildDerivedMetrics(
         currentTimestampMs: Long
     ): Map<FaceBaselineFeature, Float> {
@@ -881,36 +795,57 @@ class FaceDistressAnalyzer(
             observationStartTimestampMs
                 ?: currentTimestampMs
 
-        val observationDurationMs =
+        val actualObservationDurationMs =
             (
                     currentTimestampMs -
                             observationStart
-                    ).coerceIn(
-                    minimumValue =
-                        MIN_RATE_OBSERVATION_MS,
-                    maximumValue =
-                        BLINK_HISTORY_MS
+                    ).coerceAtLeast(0L)
+
+        val rateObservationDurationMs =
+            actualObservationDurationMs
+                .coerceAtMost(
+                    BLINK_HISTORY_MS
                 )
 
         val blinkEventList =
             blinkEvents.toList()
 
+        val blinkObservationReady =
+            actualObservationDurationMs >=
+                    MIN_BLINK_PATTERN_OBSERVATION_MS
+
+        val blinkRateIsReady =
+            blinkObservationReady &&
+                    blinkEventList.size >=
+                    MIN_BLINK_EVENTS_FOR_RATE
+
+        val averageBlinkDurationIsReady =
+            blinkObservationReady &&
+                    blinkEventList.size >=
+                    MIN_BLINK_EVENTS_FOR_AVERAGE_DURATION
+
         val blinkRate =
-            blinkEventList.size *
-                    60_000f /
-                    observationDurationMs.toFloat()
+            if (blinkRateIsReady) {
+                blinkEventList.size *
+                        60_000f /
+                        rateObservationDurationMs
+                            .coerceAtLeast(1L)
+                            .toFloat()
+            } else {
+                0f
+            }
 
         val averageBlinkDuration =
-            blinkEventList
-                .map { event ->
-                    event.durationMs.toFloat()
-                }
-                .takeIf { values ->
-                    values.isNotEmpty()
-                }
-                ?.average()
-                ?.toFloat()
-                ?: 0f
+            if (averageBlinkDurationIsReady) {
+                blinkEventList
+                    .map { event ->
+                        event.durationMs.toFloat()
+                    }
+                    .average()
+                    .toFloat()
+            } else {
+                0f
+            }
 
         val currentClosureDuration =
             currentBlinkStartTimestampMs
@@ -922,28 +857,35 @@ class FaceDistressAnalyzer(
                 }
                 ?: 0L
 
-        val completedLongClosures =
-            blinkEventList.filter { event ->
-                event.durationMs >=
-                        LONG_EYE_CLOSURE_MS
+        /*
+  * Only the currently active eye closure contributes
+  * to the live closure-duration distress score.
+  *
+  * Completed closures are counted separately and do not
+  * keep the live score elevated after the eyes reopen.
+  */
+        val activeLongClosureDuration =
+            if (
+                currentClosureDuration >=
+                LONG_EYE_CLOSURE_MS
+            ) {
+                currentClosureDuration
+            } else {
+                0L
             }
 
-        val longestClosure =
-            maxOf(
-                currentClosureDuration,
-                completedLongClosures
-                    .maxOfOrNull { event ->
-                        event.durationMs
-                    }
-                    ?: 0L
-            )
+        val recentCompletedLongClosures =
+            blinkEventList.count { event ->
+                event.durationMs >=
+                        LONG_EYE_CLOSURE_MS &&
+                        currentTimestampMs -
+                        event.endTimestampMs <=
+                        LONG_CLOSURE_COUNT_HISTORY_MS
+            }
 
         val longClosureCount =
-            completedLongClosures.size +
-                    if (
-                        currentClosureDuration >=
-                        LONG_EYE_CLOSURE_MS
-                    ) {
+            recentCompletedLongClosures +
+                    if (activeLongClosureDuration > 0L) {
                         1
                     } else {
                         0
@@ -1031,94 +973,124 @@ class FaceDistressAnalyzer(
                 windows = windows
             )
 
-        return linkedMapOf(
-            FaceBaselineFeature.BLINK_RATE
-                    to blinkRate,
+        val metrics =
+            linkedMapOf<FaceBaselineFeature, Float>()
 
-            FaceBaselineFeature.AVERAGE_BLINK_DURATION
-                    to averageBlinkDuration,
+        if (blinkRateIsReady) {
+            metrics[
+                FaceBaselineFeature.BLINK_RATE
+            ] = blinkRate
+        }
 
+        if (averageBlinkDurationIsReady) {
+            metrics[
+                FaceBaselineFeature.AVERAGE_BLINK_DURATION
+            ] = averageBlinkDuration
+        }
+
+        metrics[
             FaceBaselineFeature.LONG_EYE_CLOSURE_DURATION
-                    to longestClosure.toFloat(),
+        ] = activeLongClosureDuration.toFloat()
 
+        metrics[
             FaceBaselineFeature.LONG_EYE_CLOSURE_COUNT
-                    to longClosureCount.toFloat(),
+        ] = longClosureCount.toFloat()
 
+        metrics[
             FaceBaselineFeature.SQUINT_INTENSITY
-                    to squint.intensity,
+        ] = squint.intensity
 
+        metrics[
             FaceBaselineFeature.SQUINT_DURATION
-                    to squint.currentDurationMs,
+        ] = squint.currentDurationMs
 
+        metrics[
             FaceBaselineFeature.SQUINT_PERCENTAGE
-                    to squint.percentage,
+        ] = squint.percentage
 
+        metrics[
             FaceBaselineFeature.SQUINT_ASYMMETRY
-                    to squint.asymmetry,
+        ] = squint.asymmetry
 
+        metrics[
             FaceBaselineFeature.EYE_WIDE_INTENSITY
-                    to wideEye.intensity,
+        ] = wideEye.intensity
 
+        metrics[
             FaceBaselineFeature.EYE_WIDE_DURATION
-                    to wideEye.currentDurationMs,
+        ] = wideEye.currentDurationMs
 
+        metrics[
             FaceBaselineFeature.EYE_WIDE_EVENT_COUNT
-                    to wideEye.eventCount,
+        ] = wideEye.eventCount
 
+        metrics[
             FaceBaselineFeature.EYE_WIDE_ASYMMETRY
-                    to wideEye.asymmetry,
+        ] = wideEye.asymmetry
 
+        metrics[
             FaceBaselineFeature.BROW_FURROW_INTENSITY
-                    to browFurrow.intensity,
+        ] = browFurrow.intensity
 
+        metrics[
             FaceBaselineFeature.BROW_FURROW_DURATION
-                    to browFurrow.currentDurationMs,
+        ] = browFurrow.currentDurationMs
 
+        metrics[
             FaceBaselineFeature.BROW_FURROW_PERCENTAGE
-                    to browFurrow.percentage,
+        ] = browFurrow.percentage
 
+        metrics[
             FaceBaselineFeature.BROW_FURROW_ASYMMETRY
-                    to browFurrow.asymmetry,
+        ] = browFurrow.asymmetry
 
+        metrics[
             FaceBaselineFeature.BROW_INNER_UP_INTENSITY
-                    to innerBrow.intensity,
+        ] = innerBrow.intensity
 
+        metrics[
             FaceBaselineFeature.BROW_INNER_UP_DURATION
-                    to innerBrow.currentDurationMs,
+        ] = innerBrow.currentDurationMs
 
+        metrics[
             FaceBaselineFeature.BROW_INNER_UP_EVENT_COUNT
-                    to innerBrow.eventCount,
+        ] = innerBrow.eventCount
 
+        metrics[
             FaceBaselineFeature.OUTER_BROW_RAISE_INTENSITY
-                    to outerBrow.intensity,
+        ] = outerBrow.intensity
 
+        metrics[
             FaceBaselineFeature.OUTER_BROW_RAISE_DURATION
-                    to outerBrow.currentDurationMs,
+        ] = outerBrow.currentDurationMs
 
+        metrics[
             FaceBaselineFeature.OUTER_BROW_RAISE_ASYMMETRY
-                    to outerBrow.asymmetry,
+        ] = outerBrow.asymmetry
 
+        metrics[
             FaceBaselineFeature.FACIAL_ACTIVITY_LEVEL
-                    to averageActivity,
+        ] = averageActivity
 
+        metrics[
             FaceBaselineFeature.LOW_ACTIVITY_DURATION
-                    to lowActivityDuration,
+        ] = lowActivityDuration
 
+        metrics[
             FaceBaselineFeature.LOW_ACTIVITY_PERCENTAGE
-                    to lowActivityPercentage,
+        ] = lowActivityPercentage
 
+        metrics[
             FaceBaselineFeature.EXPRESSION_HOLD_DURATION
-                    to expressionHoldDuration,
+        ] = expressionHoldDuration
 
+        metrics[
             FaceBaselineFeature.FACIAL_CHANGE_COUNT
-                    to facialChangeCount
-        )
+        ] = facialChangeCount
+
+        return metrics
     }
 
-    /**
-     * Calculates intensity, duration, percentage,
-     * asymmetry and event count for one expression.
-     */
     private fun expressionStats(
         windows: List<FaceWindowResult>,
         leftFeature: FaceBaselineFeature,
@@ -1203,9 +1175,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Calculates blink-pattern score.
-     */
     private fun calculateBlinkPatternScore(
         derivedMetrics:
         Map<FaceBaselineFeature, Float>
@@ -1281,9 +1250,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Calculates low-activity score.
-     */
     private fun calculateLowActivityScore(
         derivedMetrics:
         Map<FaceBaselineFeature, Float>
@@ -1370,9 +1336,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Compares a derived value to its learned baseline.
-     */
     private fun compareDerivedPositive(
         feature: FaceBaselineFeature,
         currentValue: Float
@@ -1391,9 +1354,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Calculates the personalized low-activity threshold.
-     */
     private fun calculateLowActivityThreshold():
             Float? {
 
@@ -1415,10 +1375,6 @@ class FaceDistressAnalyzer(
                 ).coerceAtLeast(0f)
     }
 
-    /**
-     * Calculates how long an expression vector
-     * has remained relatively unchanged.
-     */
     private fun calculateExpressionHoldDuration(
         windows: List<FaceWindowResult>
     ): Float {
@@ -1467,9 +1423,6 @@ class FaceDistressAnalyzer(
                 WINDOW_DURATION_MS.toFloat()
     }
 
-    /**
-     * Counts meaningful changes in the expression vector.
-     */
     private fun calculateFacialChangeCount(
         windows: List<FaceWindowResult>
     ): Float {
@@ -1495,13 +1448,6 @@ class FaceDistressAnalyzer(
             .toFloat()
     }
 
-    /**
-     * Measures expression-vector change using only
-     * MediaPipe Blendshapes.
-     *
-     * Geometry features are excluded because changes
-     * in camera pose must not increase facial activity.
-     */
     private fun windowVectorChange(
         first: FaceWindowResult,
         second: FaceWindowResult
@@ -1517,9 +1463,6 @@ class FaceDistressAnalyzer(
             .toFloat()
     }
 
-    /**
-     * Calculates activity using only Blendshape changes.
-     */
     private fun calculateWindowActivity(
         frames: List<FaceFrameData>
     ): Float {
@@ -1556,9 +1499,6 @@ class FaceDistressAnalyzer(
             .toFloat()
     }
 
-    /**
-     * Calculates current consecutive duration.
-     */
     private fun currentConsecutiveDuration(
         flags: List<Boolean>
     ): Float {
@@ -1577,9 +1517,6 @@ class FaceDistressAnalyzer(
                 WINDOW_DURATION_MS.toFloat()
     }
 
-    /**
-     * Calculates the percentage of true values.
-     */
     private fun percentageOfTrue(
         flags: List<Boolean>
     ): Float {
@@ -1593,9 +1530,6 @@ class FaceDistressAnalyzer(
                 flags.size.toFloat()
     }
 
-    /**
-     * Counts false-to-true transitions.
-     */
     private fun countEvents(
         flags: List<Boolean>
     ): Int {
@@ -1620,10 +1554,6 @@ class FaceDistressAnalyzer(
         return eventCount
     }
 
-    /**
-     * Learns derived metrics only from
-     * reliable and low-distress windows.
-     */
     private fun learnDerivedBaselineIfClean(
         result: FaceDistressResult
     ) {
@@ -1787,9 +1717,6 @@ class FaceDistressAnalyzer(
         cleanDerivedSamples.clear()
     }
 
-    /**
-     * Converts the continuous score into level 0-4.
-     */
     private fun scoreToLevel(
         score: Float
     ): Int {
@@ -1811,9 +1738,6 @@ class FaceDistressAnalyzer(
         }
     }
 
-    /**
-     * Prints one geometry-confirmation result per window.
-     */
     private fun logBrowConfirmation(
         rawFurrowScore: Float,
         furrowGeometryScore: Float,
@@ -1835,9 +1759,6 @@ class FaceDistressAnalyzer(
         )
     }
 
-    /**
-     * Clears recent window and event state.
-     */
     private fun resetTransientState() {
         currentWindowFrames.clear()
         currentWindowStartTimestampMs = null
@@ -1846,6 +1767,8 @@ class FaceDistressAnalyzer(
 
         currentBlinkStartTimestampMs = null
         blinkEvents.clear()
+
+        observationStartTimestampMs = null
 
         smoothedScore = 0f
     }
@@ -1931,8 +1854,14 @@ class FaceDistressAnalyzer(
         private const val BLINK_HISTORY_MS =
             60_000L
 
-        private const val MIN_RATE_OBSERVATION_MS =
-            5_000L
+        private const val MIN_BLINK_PATTERN_OBSERVATION_MS =
+            10_000L
+
+        private const val MIN_BLINK_EVENTS_FOR_RATE =
+            2
+
+        private const val MIN_BLINK_EVENTS_FOR_AVERAGE_DURATION =
+            3
 
         private const val EXPRESSION_ACTIVE_SCORE =
             1f
@@ -1946,10 +1875,6 @@ class FaceDistressAnalyzer(
         private const val LOW_ACTIVITY_BASELINE_DEVIATIONS =
             2f
 
-        /*
-         * Initial engineering thresholds for geometry confirmation.
-         * These values should be tuned using live logs.
-         */
         private const val GEOMETRY_CONFIRMATION_SCORE =
             0.35f
 
@@ -2009,5 +1934,15 @@ class FaceDistressAnalyzer(
 
         private const val MAX_BASELINE_SAMPLE_COUNT =
             10_000
+
+        /*
+        * Completed long closures are counted only for a short
+        * recent period. They must not influence the live duration
+        * score for the entire 60-second blink-rate history.
+        */
+        private const val LONG_CLOSURE_COUNT_HISTORY_MS =
+            10_000L
     }
+
+
 }
