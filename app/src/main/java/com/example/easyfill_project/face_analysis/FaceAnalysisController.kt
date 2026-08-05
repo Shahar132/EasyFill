@@ -1,6 +1,8 @@
 package com.example.easyfill_project.face_analysis
 
+import android.content.Context
 import android.util.Log
+import java.io.File
 
 /**
  * Main controller of the facial-analysis flow.
@@ -14,6 +16,8 @@ import android.util.Log
  * 6. Saves newly created or learned baseline values to Firebase.
  */
 class FaceAnalysisController(
+
+    context: Context,
 
     // Repository responsible for reading and writing the baseline in Firebase.
     private val repository: FaceBaselineRepository =
@@ -35,6 +39,15 @@ class FaceAnalysisController(
     // Creates and stores the personal facial baseline.
     private val baselineManager =
         FaceBaselineManager()
+
+    /*
+     * Saves facial-analysis results only while
+     * a controlled evaluation session is active.
+     */
+    private val evaluationLogger =
+        FaceEvaluationLogger(
+            context.applicationContext
+        )
 
     // Indicates whether the controller is currently running.
     @Volatile
@@ -65,6 +78,46 @@ class FaceAnalysisController(
     // Indicates whether the camera warm-up has completed.
     private var analysisWarmupCompleted =
         false
+
+    /**
+     * Starts one controlled facial evaluation session.
+     */
+    fun startFaceEvaluationSession(
+        participantId: String,
+        scenario: String,
+        expectedContributor: FaceDistressContributor,
+        expectedLevel: Int
+    ): File {
+
+        return evaluationLogger.startSession(
+            participantId =
+                participantId,
+
+            scenario =
+                scenario,
+
+            expectedContributor =
+                expectedContributor,
+
+            expectedLevel =
+                expectedLevel
+        )
+    }
+
+    /**
+     * Stops the currently active facial evaluation session.
+     */
+    fun stopFaceEvaluationSession() {
+
+        evaluationLogger.stopSession()
+    }
+
+    /**
+     * Indicates whether facial evaluation is currently active.
+     */
+    val isFaceEvaluationSessionActive: Boolean
+        get() =
+            evaluationLogger.isSessionActive
 
     /**
      * Starts the facial-analysis flow.
@@ -261,6 +314,8 @@ class FaceAnalysisController(
     fun stop() {
 
         isActive = false
+
+        evaluationLogger.stopSession()
 
         phase =
             FaceAnalysisPhase.IDLE
@@ -557,6 +612,19 @@ class FaceAnalysisController(
             "Facial result | " +
                     "level=${result.level} | " +
                     "result=$result"
+        )
+
+        /*
+         * The logger ignores this call when no controlled
+         * face-evaluation session is active.
+         */
+        evaluationLogger.appendResult(
+            result =
+                result,
+
+            baseline =
+                currentAnalyzer
+                    .getBaselineUsedForLastResult()
         )
 
         // Send the complete result to the observing component.

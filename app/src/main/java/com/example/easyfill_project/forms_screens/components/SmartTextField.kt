@@ -53,6 +53,7 @@ import com.example.easyfill_project.speechtotext.SpeechToTextManager
 import com.example.easyfill_project.texttospeech.TextToSpeechManager
 import com.example.easyfill_project.voiceanalysis.SpeechRateScorer
 import com.example.easyfill_project.voiceanalysis.VoiceRmsScorer
+import com.example.easyfill_project.voiceanalysis.VoiceEvaluationLogger
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
@@ -110,6 +111,16 @@ fun SmartTextField(
 
     var showRecorderDialog by remember {
         mutableStateOf(false)
+    }
+
+    /*
+     * Timestamp used only by the controlled voice-evaluation logger.
+     *
+     * It is set when the microphone button is pressed while a voice
+     * evaluation session is active.
+     */
+    var voiceEvaluationRecordingStartedAtMs by remember {
+        mutableStateOf<Long?>(null)
     }
 
     var isFocused by remember {
@@ -321,7 +332,7 @@ fun SmartTextField(
                 if (displayedValidationMessage != null) {
                     {
                         Text(displayedValidationMessage,
-                        color = MaterialTheme.colorScheme.error)
+                            color = MaterialTheme.colorScheme.error)
                     }
                 } else {
                     null
@@ -422,6 +433,22 @@ fun SmartTextField(
                             showRecorderDialog = true
 
                             /*
+                             * A controlled voice-evaluation session is optional.
+                             *
+                             * Normal speech-to-text continues to work when no
+                             * evaluation session is active.
+                             */
+                            voiceEvaluationRecordingStartedAtMs =
+                                if (
+                                    VoiceEvaluationLogger
+                                        .isSessionActive()
+                                ) {
+                                    System.currentTimeMillis()
+                                } else {
+                                    null
+                                }
+
+                            /*
                              * Stop the normal field-idle loop while
                              * the user is using voice recording.
                              */
@@ -493,6 +520,13 @@ fun SmartTextField(
 
                                     onAnalysisResult = { analysis ->
 
+                                        /*
+                                         * Capture the timestamp before starting
+                                         * asynchronous Firestore work.
+                                         */
+                                        val evaluationRecordingStartedAtMs =
+                                            voiceEvaluationRecordingStartedAtMs
+
                                         Log.d(
                                             "STT_ANALYSIS",
                                             analysis.toString()
@@ -519,6 +553,24 @@ fun SmartTextField(
                                                         "duration=${analysis.durationSeconds}, " +
                                                         "textBlank=${analysis.finalText.isBlank()}"
                                             )
+
+                                            VoiceEvaluationLogger
+                                                .appendUnavailableRecording(
+                                                    fieldId =
+                                                        fieldId,
+
+                                                    recordingStartedAtMs =
+                                                        evaluationRecordingStartedAtMs,
+
+                                                    analysis =
+                                                        analysis,
+
+                                                    failureReason =
+                                                        "UNRELIABLE_DURATION_OR_NO_RECOGNIZED_WORDS"
+                                                )
+
+                                            voiceEvaluationRecordingStartedAtMs =
+                                                null
 
                                             /*
                                              * Voice processing completed, but the recording was not
@@ -565,6 +617,24 @@ fun SmartTextField(
                                                 "Voice modality unavailable because no user is signed in."
                                             )
 
+                                            VoiceEvaluationLogger
+                                                .appendUnavailableRecording(
+                                                    fieldId =
+                                                        fieldId,
+
+                                                    recordingStartedAtMs =
+                                                        evaluationRecordingStartedAtMs,
+
+                                                    analysis =
+                                                        analysis,
+
+                                                    failureReason =
+                                                        "NO_AUTHENTICATED_USER"
+                                                )
+
+                                            voiceEvaluationRecordingStartedAtMs =
+                                                null
+
                                             /*
                                              * Voice cannot be compared with a personal baseline,
                                              * but face and hand may still be available.
@@ -601,6 +671,24 @@ fun SmartTextField(
                                                         "VOICE_ANALYSIS",
                                                         "Voice modality unavailable because the baseline document does not exist."
                                                     )
+
+                                                    VoiceEvaluationLogger
+                                                        .appendUnavailableRecording(
+                                                            fieldId =
+                                                                fieldId,
+
+                                                            recordingStartedAtMs =
+                                                                evaluationRecordingStartedAtMs,
+
+                                                            analysis =
+                                                                analysis,
+
+                                                            failureReason =
+                                                                "BASELINE_DOCUMENT_MISSING"
+                                                        )
+
+                                                    voiceEvaluationRecordingStartedAtMs =
+                                                        null
 
                                                     /*
                                                      * The voice component completed without a usable score.
@@ -640,6 +728,24 @@ fun SmartTextField(
                                                         "Voice modality unavailable because the baseline is missing required values."
                                                     )
 
+                                                    VoiceEvaluationLogger
+                                                        .appendUnavailableRecording(
+                                                            fieldId =
+                                                                fieldId,
+
+                                                            recordingStartedAtMs =
+                                                                evaluationRecordingStartedAtMs,
+
+                                                            analysis =
+                                                                analysis,
+
+                                                            failureReason =
+                                                                "BASELINE_REQUIRED_VALUES_MISSING"
+                                                        )
+
+                                                    voiceEvaluationRecordingStartedAtMs =
+                                                        null
+
                                                     DistressScoringManager
                                                         .submitVoiceRecordingVoiceScore(
                                                             score = null
@@ -647,6 +753,82 @@ fun SmartTextField(
 
                                                     return@addOnSuccessListener
                                                 }
+
+                                                /*
+                                                 * Keep a full baseline snapshot for the evaluation file.
+                                                 *
+                                                 * Only speechRateWordsPerSecond and rmsVariation affect
+                                                 * the current production score. The other values are saved
+                                                 * for later analysis without changing the algorithm.
+                                                 */
+                                                val baselineSnapshot =
+                                                    VoiceEvaluationLogger
+                                                        .BaselineSnapshot(
+                                                            validSpeechSeconds =
+                                                                document.getDouble(
+                                                                    "validSpeechSeconds"
+                                                                ),
+
+                                                            analysisDurationSeconds =
+                                                                document.getDouble(
+                                                                    "analysisDurationSeconds"
+                                                                ),
+
+                                                            speechRateWordsPerSecond =
+                                                                baselineSpeechRate,
+
+                                                            analysisSpeechRateWordsPerSecond =
+                                                                document.getDouble(
+                                                                    "analysisSpeechRateWordsPerSecond"
+                                                                ),
+
+                                                            averageRms =
+                                                                document.getDouble(
+                                                                    "averageRms"
+                                                                ),
+
+                                                            maxRms =
+                                                                document.getDouble(
+                                                                    "maxRms"
+                                                                ),
+
+                                                            rmsVariation =
+                                                                baselineRmsVariation,
+
+                                                            pauseCount =
+                                                                document.getLong(
+                                                                    "pauseCount"
+                                                                ),
+
+                                                            pauseDurationsMs =
+                                                                (
+                                                                        document.get(
+                                                                            "pauseDurationsMs"
+                                                                        ) as? List<*>
+                                                                        )
+                                                                    ?.mapNotNull { value ->
+                                                                        (
+                                                                                value as? Number
+                                                                                )
+                                                                            ?.toLong()
+                                                                    }
+                                                                    ?: emptyList(),
+
+                                                            averagePauseMs =
+                                                                document.getDouble(
+                                                                    "averagePauseMs"
+                                                                ),
+
+                                                            hesitationCount =
+                                                                document.getLong(
+                                                                    "hesitationCount"
+                                                                ),
+
+                                                            createdAt =
+                                                                document.getLong(
+                                                                    "createdAt"
+                                                                )
+                                                        )
 
                                                 val speechRateScore =
                                                     SpeechRateScorer
@@ -690,6 +872,33 @@ fun SmartTextField(
                                                                     rmsScore
                                                             ).coerceIn(0, 4)
 
+                                                VoiceEvaluationLogger
+                                                    .appendScoredRecording(
+                                                        fieldId =
+                                                            fieldId,
+
+                                                        recordingStartedAtMs =
+                                                            evaluationRecordingStartedAtMs,
+
+                                                        analysis =
+                                                            analysis,
+
+                                                        baseline =
+                                                            baselineSnapshot,
+
+                                                        speechRateScore =
+                                                            speechRateScore,
+
+                                                        rmsScore =
+                                                            rmsScore,
+
+                                                        voiceScore =
+                                                            voiceScore
+                                                    )
+
+                                                voiceEvaluationRecordingStartedAtMs =
+                                                    null
+
                                                 /*
                                                  * CHANGE B:
                                                  *
@@ -731,6 +940,24 @@ fun SmartTextField(
                                                     error
                                                 )
 
+                                                VoiceEvaluationLogger
+                                                    .appendUnavailableRecording(
+                                                        fieldId =
+                                                            fieldId,
+
+                                                        recordingStartedAtMs =
+                                                            evaluationRecordingStartedAtMs,
+
+                                                        analysis =
+                                                            analysis,
+
+                                                        failureReason =
+                                                            "BASELINE_LOAD_FAILED"
+                                                    )
+
+                                                voiceEvaluationRecordingStartedAtMs =
+                                                    null
+
                                                 /*
                                                  * Firestore failure prevents voice scoring only.
                                                  *
@@ -749,6 +976,24 @@ fun SmartTextField(
                                             "VOICE_ANALYSIS",
                                             "Speech recognition failed. Voice modality will be unavailable."
                                         )
+
+                                        VoiceEvaluationLogger
+                                            .appendUnavailableRecording(
+                                                fieldId =
+                                                    fieldId,
+
+                                                recordingStartedAtMs =
+                                                    voiceEvaluationRecordingStartedAtMs,
+
+                                                analysis =
+                                                    null,
+
+                                                failureReason =
+                                                    "SPEECH_RECOGNITION_FAILURE"
+                                            )
+
+                                        voiceEvaluationRecordingStartedAtMs =
+                                            null
 
                                         /*
                                          * Mark voice processing as completed but unavailable.

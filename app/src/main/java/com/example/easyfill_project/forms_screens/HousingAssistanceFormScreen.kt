@@ -43,6 +43,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.easyfill_project.face_analysis.FaceMonitoringSession
 import com.example.easyfill_project.distress_scoring.DistressScoringManager
 import com.example.easyfill_project.face_analysis.FaceRecordingScoreAggregator
+import com.example.easyfill_project.face_analysis.FaceDistressContributor
+import com.example.easyfill_project.voiceanalysis.VoiceEvaluationLogger
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -104,9 +106,9 @@ fun HousingAssistanceFormScreen(
 
 
 
-/*
- * Reports that the user opened the current pending chatbot suggestion.
- */
+    /*
+     * Reports that the user opened the current pending chatbot suggestion.
+     */
     onPendingSuggestionOpened: () -> Unit = {},
 
 // Sends an undo request back to AppNavigation.
@@ -174,7 +176,7 @@ fun HousingAssistanceFormScreen(
     val summaryStep = 6
 
 
- // HAND AND FACE MONITORING
+    // HAND AND FACE MONITORING
 
 
     /*
@@ -191,6 +193,112 @@ fun HousingAssistanceFormScreen(
      * Coroutine scope used by MotionTrackingController.
      */
     val motionScope = rememberCoroutineScope()
+
+    /*
+     * Temporary state used only by the hand-algorithm
+     * evaluation panel.
+     */
+    var participantId by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    var handEvaluationActive by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var expectedHandLevel by rememberSaveable {
+        mutableIntStateOf(0)
+    }
+
+    /*
+     * Temporary state used only by the face-algorithm
+     * evaluation panel.
+     */
+    var faceEvaluationActive by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var expectedFaceLevel by rememberSaveable {
+        mutableIntStateOf(0)
+    }
+
+    var selectedFaceContributor by remember {
+        mutableStateOf(
+            FaceDistressContributor.NONE
+        )
+    }
+
+    var faceBaselineReady by remember {
+        mutableStateOf(false)
+    }
+
+    val faceEvaluationScenarios =
+        remember {
+            listOf(
+                FaceDistressContributor.NONE to
+                        "פנים רגילות",
+
+                FaceDistressContributor.EYE_SQUINT to
+                        "כיווץ עיניים",
+
+                FaceDistressContributor.EYE_WIDE to
+                        "פתיחת עיניים רחבה",
+
+                FaceDistressContributor.BLINK_PATTERN to
+                        "מצמוץ או עצימה ארוכה",
+
+                FaceDistressContributor.BROW_FURROW to
+                        "כיווץ גבות",
+
+                FaceDistressContributor.BROW_RAISE to
+                        "הרמת גבות",
+
+                FaceDistressContributor.LOW_FACIAL_ACTIVITY to
+                        "פעילות פנים נמוכה"
+            )
+        }
+
+
+    /*
+     * Temporary state used only by the voice-algorithm
+     * evaluation panel.
+     */
+    var voiceEvaluationActive by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var expectedVoiceLevel by rememberSaveable {
+        mutableIntStateOf(0)
+    }
+
+    var selectedVoiceScenario by rememberSaveable {
+        mutableStateOf(
+            "normal_voice"
+        )
+    }
+
+    val voiceEvaluationScenarios =
+        remember {
+            listOf(
+                "normal_voice" to
+                        "דיבור רגיל",
+
+                "faster_speech" to
+                        "דיבור מהיר מהרגיל",
+
+                "slower_speech" to
+                        "דיבור איטי מהרגיל",
+
+                "variable_loudness" to
+                        "שינויים בעוצמת הקול",
+
+                "faster_and_variable_loudness" to
+                        "דיבור מהיר ועוצמה משתנה",
+
+                "slower_and_variable_loudness" to
+                        "דיבור איטי ועוצמה משתנה"
+            )
+        }
 
     /*
  * Collects reliable face scores only while a voice
@@ -333,6 +441,10 @@ fun HousingAssistanceFormScreen(
              * - reporting an error
              */
             onAnalysisStateChanged = { state ->
+
+                faceBaselineReady =
+                    state.baselineReady
+
                 Log.d(
                     "FACE_FORM_SESSION",
                     "phase=${state.phase}, " +
@@ -469,12 +581,12 @@ fun HousingAssistanceFormScreen(
         faceRecordingAggregator
     ) {
 
-                /*
-            * Start the form-behavior session.
-            *
-            * This loads the existing baseline and starts collecting
-            * new field samples for the current form entry.
-            */
+        /*
+    * Start the form-behavior session.
+    *
+    * This loads the existing baseline and starts collecting
+    * new field samples for the current form entry.
+    */
         FormBehaviorTrackingController.startFormSession()
 
         /*
@@ -499,6 +611,28 @@ fun HousingAssistanceFormScreen(
                 DistressScoringManager
                     .cancelVoiceRecordingSession()
             }
+
+            /*
+             * Close controlled evaluation files before
+             * stopping the live analyzers.
+             */
+            motionController
+                .stopHandEvaluationSession()
+
+            faceMonitoringSession
+                .stopFaceEvaluationSession()
+
+            VoiceEvaluationLogger
+                .stopSession()
+
+            handEvaluationActive =
+                false
+
+            faceEvaluationActive =
+                false
+
+            voiceEvaluationActive =
+                false
 
             /*
              * Stop hand tracking.
@@ -927,6 +1061,929 @@ fun HousingAssistanceFormScreen(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
         ) {
+
+            /*
+             * Temporary panel for collecting labeled hand
+             * evaluation data. It does not change the hand
+             * algorithm.
+             */
+            Card(
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                shape =
+                    RoundedCornerShape(18.dp),
+
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor =
+                            MaterialTheme.colorScheme.surface
+                    ),
+
+                border =
+                    BorderStroke(
+                        width = 1.dp,
+                        color =
+                            MaterialTheme.colorScheme.onSurface
+                    )
+            ) {
+                Column(
+                    modifier =
+                        Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text =
+                            "בדיקת אלגוריתם הידיים",
+
+                        style =
+                            MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(10.dp)
+                    )
+
+                    OutlinedTextField(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        value =
+                            participantId,
+
+                        onValueChange = { newValue ->
+                            participantId =
+                                newValue.take(10)
+                        },
+
+                        enabled =
+                            !handEvaluationActive &&
+                                    !faceEvaluationActive &&
+                                    !voiceEvaluationActive,
+
+                        singleLine =
+                            true,
+
+                        label = {
+                            Text(
+                                text =
+                                    "מזהה משתתף"
+                            )
+                        },
+
+                        placeholder = {
+                            Text(
+                                text =
+                                    "למשל P01"
+                            )
+                        }
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(10.dp)
+                    )
+
+                    Text(
+                        text =
+                            "בחר רמה צפויה: $expectedHandLevel"
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        horizontalArrangement =
+                            Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (level in 0..4) {
+                            OutlinedButton(
+                                modifier =
+                                    Modifier.weight(1f),
+
+                                enabled =
+                                    !handEvaluationActive &&
+                                            !faceEvaluationActive &&
+                                            !voiceEvaluationActive,
+
+                                onClick = {
+                                    expectedHandLevel =
+                                        level
+                                }
+                            ) {
+                                Text(
+                                    text =
+                                        level.toString()
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Button(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        enabled =
+                            !handEvaluationActive &&
+                                    !faceEvaluationActive &&
+                                    !voiceEvaluationActive &&
+                                    participantId.isNotBlank(),
+
+                        onClick = {
+                            val isTremorExpected =
+                                expectedHandLevel > 0
+
+                            val scenarioName =
+                                if (isTremorExpected) {
+                                    "intentional_tremor_level_$expectedHandLevel"
+                                } else {
+                                    "normal_holding"
+                                }
+
+                            motionController
+                                .startHandEvaluationSession(
+                                    participantId =
+                                        participantId.trim(),
+
+                                    scenario =
+                                        scenarioName,
+
+                                    expectedTremor =
+                                        isTremorExpected,
+
+                                    expectedLevel =
+                                        expectedHandLevel
+                                )
+
+                            handEvaluationActive =
+                                true
+                        }
+                    ) {
+                        Text(
+                            text =
+                                "התחל בדיקה"
+                        )
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    OutlinedButton(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        enabled =
+                            handEvaluationActive,
+
+                        onClick = {
+                            motionController
+                                .stopHandEvaluationSession()
+
+                            handEvaluationActive =
+                                false
+                        }
+                    ) {
+                        Text(
+                            text =
+                                "סיים ושמור בדיקה"
+                        )
+                    }
+
+                    if (handEvaluationActive) {
+                        Spacer(
+                            modifier =
+                                Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "הבדיקה פעילה — משתתף: ${participantId.trim()}, רמה צפויה: $expectedHandLevel",
+
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+            /*
+             * Temporary panel for collecting labeled face
+             * evaluation data. It does not change the face
+             * algorithm.
+             */
+            Card(
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                shape =
+                    RoundedCornerShape(18.dp),
+
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor =
+                            MaterialTheme.colorScheme.surface
+                    ),
+
+                border =
+                    BorderStroke(
+                        width = 1.dp,
+                        color =
+                            MaterialTheme.colorScheme.onSurface
+                    )
+            ) {
+                Column(
+                    modifier =
+                        Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text =
+                            "בדיקת אלגוריתם הפנים",
+
+                        style =
+                            MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(10.dp)
+                    )
+
+                    Text(
+                        text =
+                            if (participantId.isBlank()) {
+                                "הכנס מזהה משתתף בכרטיס הידיים"
+                            } else {
+                                "מזהה משתתף: ${participantId.trim()}"
+                            },
+
+                        style =
+                            MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Text(
+                        text =
+                            "בחר תרחיש פנים"
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    FlowRow(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp),
+
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
+                        faceEvaluationScenarios
+                            .forEach { option ->
+
+                                val contributor =
+                                    option.first
+
+                                val label =
+                                    option.second
+
+                                FilterChip(
+                                    selected =
+                                        selectedFaceContributor ==
+                                                contributor,
+
+                                    enabled =
+                                        !faceEvaluationActive &&
+                                                !handEvaluationActive &&
+                                                !voiceEvaluationActive,
+
+                                    onClick = {
+
+                                        selectedFaceContributor =
+                                            contributor
+
+                                        expectedFaceLevel =
+                                            if (
+                                                contributor ==
+                                                FaceDistressContributor.NONE
+                                            ) {
+                                                0
+                                            } else {
+                                                expectedFaceLevel
+                                                    .coerceAtLeast(1)
+                                            }
+                                    },
+
+                                    label = {
+                                        Text(
+                                            text =
+                                                label
+                                        )
+                                    }
+                                )
+                            }
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Text(
+                        text =
+                            "בחר רמה צפויה: $expectedFaceLevel"
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        horizontalArrangement =
+                            Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (level in 0..4) {
+
+                            val levelEnabled =
+                                !faceEvaluationActive &&
+                                        !handEvaluationActive &&
+                                        !voiceEvaluationActive &&
+                                        (
+                                                level == 0 ||
+                                                        selectedFaceContributor !=
+                                                        FaceDistressContributor.NONE
+                                                )
+
+                            OutlinedButton(
+                                modifier =
+                                    Modifier.weight(1f),
+
+                                enabled =
+                                    levelEnabled,
+
+                                onClick = {
+
+                                    expectedFaceLevel =
+                                        level
+
+                                    if (level == 0) {
+                                        selectedFaceContributor =
+                                            FaceDistressContributor.NONE
+                                    }
+                                }
+                            ) {
+                                Text(
+                                    text =
+                                        level.toString()
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Button(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        enabled =
+                            !faceEvaluationActive &&
+                                    !handEvaluationActive &&
+                                    !voiceEvaluationActive &&
+                                    participantId.isNotBlank() &&
+                                    hasCameraPermission &&
+                                    faceBaselineReady &&
+                                    (
+                                            expectedFaceLevel == 0 ||
+                                                    selectedFaceContributor !=
+                                                    FaceDistressContributor.NONE
+                                            ),
+
+                        onClick = {
+
+                            val scenarioName =
+                                if (
+                                    selectedFaceContributor ==
+                                    FaceDistressContributor.NONE
+                                ) {
+                                    "normal_face"
+                                } else {
+                                    selectedFaceContributor
+                                        .name
+                                        .lowercase()
+                                }
+
+                            runCatching {
+                                faceMonitoringSession
+                                    .startFaceEvaluationSession(
+                                        participantId =
+                                            participantId.trim(),
+
+                                        scenario =
+                                            scenarioName,
+
+                                        expectedContributor =
+                                            selectedFaceContributor,
+
+                                        expectedLevel =
+                                            expectedFaceLevel
+                                    )
+                            }
+                                .onSuccess { outputFile ->
+
+                                    faceEvaluationActive =
+                                        true
+
+                                    Log.d(
+                                        "FACE_EVALUATION_UI",
+                                        "Face evaluation started | " +
+                                                "file=${outputFile.absolutePath}"
+                                    )
+                                }
+                                .onFailure { exception ->
+
+                                    Log.e(
+                                        "FACE_EVALUATION_UI",
+                                        "Could not start face evaluation",
+                                        exception
+                                    )
+                                }
+                        }
+                    ) {
+                        Text(
+                            text =
+                                "התחל בדיקת פנים"
+                        )
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    OutlinedButton(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        enabled =
+                            faceEvaluationActive,
+
+                        onClick = {
+
+                            faceMonitoringSession
+                                .stopFaceEvaluationSession()
+
+                            faceEvaluationActive =
+                                false
+                        }
+                    ) {
+                        Text(
+                            text =
+                                "סיים ושמור בדיקת פנים"
+                        )
+                    }
+
+                    if (faceEvaluationActive) {
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "הבדיקה פעילה — משתתף: ${participantId.trim()}, " +
+                                        "תרחיש: ${selectedFaceContributor.name}, " +
+                                        "רמה צפויה: $expectedFaceLevel",
+
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    if (!hasCameraPermission) {
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "נדרשת הרשאת מצלמה כדי לבצע את הבדיקה",
+
+                            style =
+                                MaterialTheme.typography.bodySmall,
+
+                            color =
+                                MaterialTheme.colorScheme.error
+                        )
+                    } else if (!faceBaselineReady) {
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "ממתין לסיום יצירת או טעינת baseline הפנים",
+
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+
+            /*
+             * Temporary panel for collecting labeled voice
+             * evaluation data. It does not change the voice algorithm.
+             *
+             * Start this session first, then use the microphone button
+             * inside any SmartTextField. One completed recording creates
+             * one JSONL row.
+             */
+            Card(
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                shape =
+                    RoundedCornerShape(18.dp),
+
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor =
+                            MaterialTheme.colorScheme.surface
+                    ),
+
+                border =
+                    BorderStroke(
+                        width = 1.dp,
+                        color =
+                            MaterialTheme.colorScheme.onSurface
+                    )
+            ) {
+                Column(
+                    modifier =
+                        Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text =
+                            "בדיקת אלגוריתם הקול",
+
+                        style =
+                            MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(10.dp)
+                    )
+
+                    Text(
+                        text =
+                            if (participantId.isBlank()) {
+                                "הכנס מזהה משתתף בכרטיס הידיים"
+                            } else {
+                                "מזהה משתתף: ${participantId.trim()}"
+                            },
+
+                        style =
+                            MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Text(
+                        text =
+                            "בחר תרחיש קול"
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    FlowRow(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp),
+
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
+                        voiceEvaluationScenarios
+                            .forEach { option ->
+
+                                val scenario =
+                                    option.first
+
+                                val label =
+                                    option.second
+
+                                FilterChip(
+                                    selected =
+                                        selectedVoiceScenario ==
+                                                scenario,
+
+                                    enabled =
+                                        !voiceEvaluationActive &&
+                                                !handEvaluationActive &&
+                                                !faceEvaluationActive,
+
+                                    onClick = {
+
+                                        selectedVoiceScenario =
+                                            scenario
+
+                                        expectedVoiceLevel =
+                                            if (
+                                                scenario ==
+                                                "normal_voice"
+                                            ) {
+                                                0
+                                            } else {
+                                                expectedVoiceLevel
+                                                    .coerceAtLeast(1)
+                                            }
+                                    },
+
+                                    label = {
+                                        Text(
+                                            text =
+                                                label
+                                        )
+                                    }
+                                )
+                            }
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Text(
+                        text =
+                            "בחר רמה צפויה: $expectedVoiceLevel"
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        horizontalArrangement =
+                            Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (level in 0..4) {
+
+                            val levelEnabled =
+                                !voiceEvaluationActive &&
+                                        !handEvaluationActive &&
+                                        !faceEvaluationActive &&
+                                        (
+                                                (
+                                                        level == 0 &&
+                                                                selectedVoiceScenario ==
+                                                                "normal_voice"
+                                                        ) ||
+                                                        (
+                                                                level > 0 &&
+                                                                        selectedVoiceScenario !=
+                                                                        "normal_voice"
+                                                                )
+                                                )
+
+                            OutlinedButton(
+                                modifier =
+                                    Modifier.weight(1f),
+
+                                enabled =
+                                    levelEnabled,
+
+                                onClick = {
+                                    expectedVoiceLevel =
+                                        level
+                                }
+                            ) {
+                                Text(
+                                    text =
+                                        level.toString()
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Button(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        enabled =
+                            !voiceEvaluationActive &&
+                                    !handEvaluationActive &&
+                                    !faceEvaluationActive &&
+                                    participantId.isNotBlank() &&
+                                    (
+                                            (
+                                                    selectedVoiceScenario ==
+                                                            "normal_voice" &&
+                                                            expectedVoiceLevel == 0
+                                                    ) ||
+                                                    (
+                                                            selectedVoiceScenario !=
+                                                                    "normal_voice" &&
+                                                                    expectedVoiceLevel in 1..4
+                                                            )
+                                            ),
+
+                        onClick = {
+
+                            runCatching {
+                                VoiceEvaluationLogger
+                                    .startSession(
+                                        context =
+                                            context,
+
+                                        participantId =
+                                            participantId.trim(),
+
+                                        scenario =
+                                            selectedVoiceScenario,
+
+                                        expectedLevel =
+                                            expectedVoiceLevel
+                                    )
+                            }
+                                .onSuccess { outputFile ->
+
+                                    voiceEvaluationActive =
+                                        true
+
+                                    Log.d(
+                                        "VOICE_EVALUATION_UI",
+                                        "Voice evaluation started | " +
+                                                "file=${outputFile.absolutePath}"
+                                    )
+                                }
+                                .onFailure { exception ->
+
+                                    Log.e(
+                                        "VOICE_EVALUATION_UI",
+                                        "Could not start voice evaluation",
+                                        exception
+                                    )
+                                }
+                        }
+                    ) {
+                        Text(
+                            text =
+                                "התחל בדיקת קול"
+                        )
+                    }
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    OutlinedButton(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+
+                        enabled =
+                            voiceEvaluationActive &&
+                                    distressMode !=
+                                    DistressMode.VOICE_RECORDING,
+
+                        onClick = {
+
+                            VoiceEvaluationLogger
+                                .stopSession()
+
+                            voiceEvaluationActive =
+                                false
+                        }
+                    ) {
+                        Text(
+                            text =
+                                "סיים ושמור בדיקת קול"
+                        )
+                    }
+
+                    if (voiceEvaluationActive) {
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "הבדיקה פעילה — לחץ על המיקרופון באחד משדות הטופס, " +
+                                        "דבר לפחות 10 שניות ועצור את ההקלטה. " +
+                                        "כל הקלטה שהושלמה נשמרת כשורה אחת.",
+
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(6.dp)
+                        )
+
+                        Text(
+                            text =
+                                "תרחיש: $selectedVoiceScenario, " +
+                                        "רמה צפויה: $expectedVoiceLevel",
+
+                            style =
+                                MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    if (
+                        voiceEvaluationActive &&
+                        distressMode ==
+                        DistressMode.VOICE_RECORDING
+                    ) {
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                "הקלטה או עיבוד פעילים — יש להמתין לסיום לפני סגירת קובץ הבדיקה",
+
+                            style =
+                                MaterialTheme.typography.bodySmall,
+
+                            color =
+                                MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
 
             FormProgressBar(
                 currentStep = visibleCurrentStep,

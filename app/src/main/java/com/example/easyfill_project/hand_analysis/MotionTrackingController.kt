@@ -1,553 +1,3 @@
-//package com.example.easyfill_project.hand_analysis
-//
-//import android.content.Context
-//import android.util.Log
-//import com.example.easyfill_project.distress_scoring.DistressScoringManager
-//import kotlinx.coroutines.CoroutineScope
-//import kotlinx.coroutines.Job
-//import kotlinx.coroutines.delay
-//import kotlinx.coroutines.isActive
-//import kotlinx.coroutines.launch
-//
-//
-//private const val EXCEED_RATIO_THRESHOLD = 0.10f // 10%
-//private const val ACC_VARIATION_FACTOR = 1.5f
-//private const val GYRO_VARIATION_FACTOR = 1.5f
-//
-//private const val GYRO_EXCEED_RATIO_THRESHOLD = 0.10f // 10%
-//
-//
-//class MotionTrackingController(
-//    context: Context
-//) {
-//
-//    private val distressManager =
-//        DistressScoringManager
-//
-//    private val motionManager =
-//        MotionSensorManager(context)
-//
-//    private val baselineRepository =
-//        MotionBaselineRepository()
-//
-//    /*
-//     * Main motion-tracking job.
-//     *
-//     * This job:
-//     *
-//     * 1. Creates the user's motion baseline.
-//     * 2. Repeatedly creates five-second motion windows.
-//     * 3. Calculates one hand score for every window.
-//     */
-//    private var job: Job? = null
-//
-//    /*
-//     * Separate job used to listen for voice-recording
-//     * start and stop events.
-//     *
-//     * The main job continues collecting sensor windows,
-//     * while this job controls which hand scores belong
-//     * to a voice-recording session.
-//     */
-//    private var recordingLifecycleJob: Job? = null
-//
-//    /*
-//     * Stores one hand score for every completed
-//     * five-second motion window during the current
-//     * voice recording.
-//     *
-//     * Example:
-//     *
-//     * First recording window  -> 2
-//     * Second recording window -> 1
-//     * Third recording window  -> 3
-//     *
-//     * The list becomes:
-//     *
-//     * [2, 1, 3]
-//     *
-//     * MotionTrackingController owns this list because
-//     * this class is responsible for hand-motion analysis.
-//     */
-//    private val voiceRecordingHandScores =
-//        mutableListOf<Int>()
-//
-//    /*
-//     * True only while motion windows should be stored
-//     * as part of the current voice recording.
-//     *
-//     * false:
-//     * Normal form-filling hand windows are published.
-//     *
-//     * true:
-//     * Hand scores are stored locally and later averaged.
-//     */
-//    private var isCollectingVoiceRecordingHandScores =
-//        false
-//
-//
-//    fun startTracking(
-//        scope: CoroutineScope
-//    ) {
-//
-//        /*
-//         * Cancel an existing tracking job before starting
-//         * a new one.
-//         */
-//        job?.cancel()
-//
-//        /*
-//         * Cancel an existing recording lifecycle listener
-//         * before creating a new listener.
-//         */
-//        recordingLifecycleJob?.cancel()
-//
-//        /*
-//         * Listen for voice-recording start and stop events.
-//         */
-//        recordingLifecycleJob =
-//            scope.launch {
-//
-//                /*
-//                 * Listen for the beginning of a new recording.
-//                 */
-//                launch {
-//
-//                    distressManager
-//                        .voiceRecordingStarted
-//                        .collect {
-//
-//                            /*
-//                             * Remove hand scores left from
-//                             * the previous recording.
-//                             */
-//                            voiceRecordingHandScores.clear()
-//
-//                            /*
-//                             * From now on, every completed
-//                             * five-second hand score belongs
-//                             * to this recording.
-//                             */
-//                            isCollectingVoiceRecordingHandScores =
-//                                true
-//
-//                            Log.d(
-//                                "VOICE_HAND_SESSION",
-//                                """
-//                                Started collecting hand windows
-//                                for a new voice recording.
-//                                """.trimIndent()
-//                            )
-//                        }
-//                }
-//
-//                /*
-//                 * Listen for the end of the current recording.
-//                 */
-//                launch {
-//
-//                    distressManager
-//                        .voiceRecordingStopped
-//                        .collect {
-//
-//                            /*
-//                             * Stop adding new motion-window
-//                             * scores to this recording.
-//                             */
-//                            isCollectingVoiceRecordingHandScores =
-//                                false
-//
-//                            /*
-//                          * Calculate one final hand result for the recording.
-//                          *
-//                          * When at least one complete five-second hand window exists:
-//                          * calculate the precise Double average.
-//                          *
-//                          * When no complete window exists:
-//                          * return null.
-//                          *
-//                          * null means that hand information was unavailable.
-//                          *
-//                          * This is different from 0.0:
-//                          *
-//                          * 0.0 means that hand analysis was available and reliably
-//                          * detected no unusual hand movement.
-//                          */
-//                            val handAverage: Double? =
-//                                voiceRecordingHandScores
-//                                    .takeIf { scores ->
-//                                        scores.isNotEmpty()
-//                                    }
-//                                    ?.average()
-//
-//                            Log.d(
-//                                "VOICE_HAND_SESSION",
-//                                """
-//                                Recording hand session completed.
-//                                windowScores=$voiceRecordingHandScores
-//                                completedWindowCount=${voiceRecordingHandScores.size}
-//                                handAvailable=${handAverage != null}
-//                                handAverage=$handAverage
-//                                """.trimIndent()
-//                                                        )
-//
-//                            /*
-//                             * Send only one final hand average
-//                             * to DistressScoringManager.
-//                             *
-//                             * The manager may already have the
-//                             * voice score, or it may still be
-//                             * waiting for it.
-//                             */
-//                            distressManager
-//                                .submitVoiceRecordingHandAverage(
-//                                    average = handAverage
-//                                )
-//
-//                            /*
-//                             * The completed recording scores are
-//                             * no longer needed.
-//                             */
-//                            voiceRecordingHandScores.clear()
-//                        }
-//                }
-//            }
-//
-//        /*
-//         * Start normal motion tracking.
-//         */
-//        job =
-//            scope.launch {
-//
-//                Log.d(
-//                    "MOTION_FLOW",
-//                    "Starting 10 sec baseline"
-//                )
-//
-//                motionManager.start()
-//
-//                delay(10_000)
-//
-//                val baselineResult =
-//                    motionManager.stopAndAnalyze()
-//
-//                baselineRepository.saveBaseline(
-//                    baselineResult
-//                )
-//
-//                Log.d(
-//                    "MOTION_FLOW",
-//                    "Baseline result: $baselineResult"
-//                )
-//
-//                Log.d(
-//                    "MOTION_FLOW",
-//                    "Baseline acceleration P95: " +
-//                            "${baselineResult.accelerationP95}"
-//                )
-//
-//                /*
-//                 * Continuously create five-second motion windows.
-//                 */
-//                while (isActive) {
-//
-//                    motionManager.start()
-//
-//                    delay(5_000)
-//
-//                    val currentResult =
-//                        motionManager.stopAndAnalyze()
-//
-//                    Log.d(
-//                        "MOTION_CURRENT",
-//                        currentResult.toString()
-//                    )
-//
-//                    analyzeCurrentAgainstBaseline(
-//                        baseline = baselineResult,
-//                        current = currentResult
-//                    )
-//                }
-//            }
-//    }
-//
-//
-//
-//
-//    private fun analyzeCurrentAgainstBaseline(
-//        baseline: MotionAnalysisResult,
-//        current: MotionAnalysisResult
-//    ) {
-//
-//        /*
-//         * Count how many acceleration samples exceeded
-//         * the personal baseline P95 value.
-//         */
-//        val exceedCount =
-//            current.accelerationValues.count { value ->
-//                value > baseline.accelerationP95
-//            }
-//
-//        /*
-//         * Calculate the percentage of acceleration samples
-//         * that exceeded the personal baseline P95.
-//         */
-//        val exceedRatio =
-//            if (current.accelerationValues.isNotEmpty()) {
-//                exceedCount.toFloat() /
-//                        current.accelerationValues.size
-//            } else {
-//                0f
-//            }
-//
-//        /*
-//         * Count how many gyroscope samples exceeded
-//         * the personal baseline P95 value.
-//         */
-//        val gyroExceedCount =
-//            current.gyroscopeValues.count { value ->
-//                value > baseline.gyroscopeP95
-//            }
-//
-//        /*
-//         * Calculate the percentage of gyroscope samples
-//         * that exceeded the personal baseline P95.
-//         */
-//        val gyroExceedRatio =
-//            if (current.gyroscopeValues.isNotEmpty()) {
-//                gyroExceedCount.toFloat() /
-//                        current.gyroscopeValues.size
-//            } else {
-//                0f
-//            }
-//
-//        /*
-//         * Check whether the gyroscope variation exceeded
-//         * the personal baseline threshold.
-//         */
-//        val gyroVariationHigh =
-//            current.gyroscopeVariation >
-//                    baseline.gyroscopeVariation *
-//                    GYRO_VARIATION_FACTOR
-//
-//        /*
-//         * Check whether enough gyroscope samples exceeded
-//         * the personal baseline P95 value.
-//         */
-//        val gyroP95High =
-//            gyroExceedRatio >
-//                    GYRO_EXCEED_RATIO_THRESHOLD
-//
-//        /*
-//         * At least one gyroscope rule must indicate movement
-//         * before acceleration rules may contribute points.
-//         *
-//         * This helps distinguish real movement from holding
-//         * the phone at a different stable angle.
-//         */
-//        val hasGyroscopeMovement =
-//            gyroVariationHigh || gyroP95High
-//
-//        /*
-//         * Store the result of each scoring rule separately.
-//         *
-//         * These variables are used for diagnostic logging.
-//         * They preserve the existing score behavior.
-//         */
-//        val accelerationExceedRule =
-//            exceedRatio >
-//                    EXCEED_RATIO_THRESHOLD &&
-//                    hasGyroscopeMovement
-//
-//        val accelerationVariationRule =
-//            current.accelerationVariation >
-//                    baseline.accelerationVariation *
-//                    ACC_VARIATION_FACTOR &&
-//                    hasGyroscopeMovement
-//
-//        val gyroscopeVariationRule =
-//            gyroVariationHigh
-//
-//        val gyroscopeExceedRule =
-//            gyroP95High
-//
-//        var score = 0
-//
-//        /*
-//         * Rule 1:
-//         *
-//         * Enough acceleration samples exceeded the baseline
-//         * P95 while gyroscope movement was also detected.
-//         */
-//        if (accelerationExceedRule) {
-//            score += 1
-//        }
-//
-//        /*
-//         * Rule 2:
-//         *
-//         * Acceleration variation exceeded the personal
-//         * threshold while gyroscope movement was detected.
-//         */
-//        if (accelerationVariationRule) {
-//            score += 1
-//        }
-//
-//        /*
-//         * Rule 3:
-//         *
-//         * Gyroscope variation exceeded the personal threshold.
-//         */
-//        if (gyroscopeVariationRule) {
-//            score += 1
-//        }
-//
-//        /*
-//         * Rule 4:
-//         *
-//         * Enough gyroscope samples exceeded the baseline P95.
-//         */
-//        if (gyroscopeExceedRule) {
-//            score += 1
-//        }
-//
-//        /*
-//         * Diagnostic log that shows exactly which rules
-//         * contributed to the final hand score.
-//         */
-//        Log.d(
-//            "MOTION_SCORE",
-//            "score=$score, " +
-//                    "accelerationExceedRule=$accelerationExceedRule, " +
-//                    "accelerationVariationRule=$accelerationVariationRule, " +
-//                    "gyroscopeVariationRule=$gyroscopeVariationRule, " +
-//                    "gyroscopeExceedRule=$gyroscopeExceedRule, " +
-//                    "hasGyroscopeMovement=$hasGyroscopeMovement, " +
-//                    "accExceedCount=$exceedCount, " +
-//                    "accExceedRatio=$exceedRatio, " +
-//                    "accExceedThreshold=$EXCEED_RATIO_THRESHOLD, " +
-//                    "gyroExceedCount=$gyroExceedCount, " +
-//                    "gyroExceedRatio=$gyroExceedRatio, " +
-//                    "gyroExceedThreshold=$GYRO_EXCEED_RATIO_THRESHOLD, " +
-//                    "baselineAccP95=${baseline.accelerationP95}, " +
-//                    "baselineGyroP95=${baseline.gyroscopeP95}, " +
-//                    "currentAccVar=${current.accelerationVariation}, " +
-//                    "accVarThreshold=" +
-//                    "${baseline.accelerationVariation * ACC_VARIATION_FACTOR}, " +
-//                    "currentGyroVar=${current.gyroscopeVariation}, " +
-//                    "gyroVarThreshold=" +
-//                    "${baseline.gyroscopeVariation * GYRO_VARIATION_FACTOR}"
-//        )
-//
-//        /*
-//         * During voice recording:
-//         *
-//         * Store this five-second hand score locally.
-//         *
-//         * Do not:
-//         *
-//         * - update the manager's normal hand score
-//         * - calculate a normal form-filling total
-//         * - publish a completed form-filling window
-//         */
-//        if (isCollectingVoiceRecordingHandScores) {
-//
-//            val safeScore =
-//                score.coerceIn(0, 4)
-//
-//            voiceRecordingHandScores.add(
-//                safeScore
-//            )
-//
-//            Log.d(
-//                "VOICE_HAND_SESSION",
-//                """
-//            Added recording hand window.
-//            score=$safeScore
-//            collectedScores=$voiceRecordingHandScores
-//            """.trimIndent()
-//            )
-//
-//        } else {
-//
-//            /*
-//             * During normal form filling:
-//             *
-//             * Update the current hand score and publish
-//             * one completed five-second measurement window.
-//             *
-//             * These completed windows are later used by
-//             * the consecutive-window confirmation logic.
-//             */
-//            distressManager.updateHandScore(
-//                score
-//            )
-//
-//            distressManager
-//                .completeMeasurementWindow()
-//
-//            distressManager.printStatus()
-//
-//            if (
-//                distressManager
-//                    .isDistressDetected()
-//            ) {
-//                Log.d(
-//                    "DISTRESS",
-//                    "Distress detected"
-//                )
-//            }
-//        }
-//    }
-//
-//
-//    fun stopTracking() {
-//
-//        /*
-//         * Stop the main sensor-analysis coroutine.
-//         */
-//        job?.cancel()
-//        job = null
-//
-//        /*
-//         * Stop listening for recording lifecycle events.
-//         */
-//        recordingLifecycleJob?.cancel()
-//        recordingLifecycleJob = null
-//
-//        /*
-//         * Remove any unfinished recording hand scores.
-//         */
-//        voiceRecordingHandScores.clear()
-//
-//        isCollectingVoiceRecordingHandScores =
-//            false
-//
-//        /*
-//   * Stop the motion sensors and return the last unfinished
-//   * sensor analysis, which is intentionally ignored here.
-//   */
-//        motionManager.stopAndAnalyze()
-//
-//        /*
-//         * Hand tracking is no longer active.
-//         *
-//         * Mark hand information as unavailable so the most recent
-//         * form hand score is not reused after this screen closes.
-//         */
-//        distressManager.clearFormHandScore()
-//
-//        Log.d(
-//            "MOTION_FLOW",
-//            "Motion tracking stopped"
-//        )
-//    }
-//}
-
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package com.example.easyfill_project.hand_analysis
 
 import android.content.Context
@@ -752,6 +202,12 @@ class MotionTrackingController(
     private val baselineRepository =
         MotionBaselineRepository()
 
+    private val evaluationLogger =
+        HandEvaluationLogger(
+            context =
+                context.applicationContext
+        )
+
 
     private var trackingJob: Job? = null
     private var recordingLifecycleJob: Job? = null
@@ -769,6 +225,32 @@ class MotionTrackingController(
      */
     private var isCollectingVoiceRecordingHandScores =
         false
+
+
+    /*
+     * Starts one controlled hand-evaluation session.
+     *
+     * This only labels and saves future completed windows. It
+     * does not change the hand-analysis algorithm.
+     */
+    fun startHandEvaluationSession(
+        participantId: String,
+        scenario: String,
+        expectedTremor: Boolean,
+        expectedLevel: Int
+    ) {
+        evaluationLogger.startSession(
+            participantId = participantId,
+            scenario = scenario,
+            expectedTremor = expectedTremor,
+            expectedLevel = expectedLevel
+        )
+    }
+
+
+    fun stopHandEvaluationSession() {
+        evaluationLogger.stopSession()
+    }
 
 
     fun startTracking(
@@ -2024,7 +1506,7 @@ class MotionTrackingController(
     /*
      * Analyzes one completed five-second live window.
      */
-    private fun analyzeCurrentWindow(
+    private suspend fun analyzeCurrentWindow(
         profile: MotionBaselineProfile,
         current: MotionAnalysisResult
     ) {
@@ -2037,6 +1519,12 @@ class MotionTrackingController(
                 duration=${current.durationSeconds}
                 """.trimIndent()
             )
+
+            evaluationLogger
+                .appendUnreliableWindow(
+                    durationSeconds =
+                        current.durationSeconds
+                )
 
             /*
              * Unavailable data is not considered calm.
@@ -2068,9 +1556,212 @@ class MotionTrackingController(
                 evaluation
         )
 
+        val spectrum =
+            evaluation.spectrum
+
+        val temporal =
+            evaluation.temporal
+
+        val severity =
+            evaluation.severity
+
+        /*
+         * These four personal limits are calculated here for
+         * logging as well, so they remain available even when
+         * tremor was not confirmed and severity stayed at 0.
+         *
+         * This does not change the algorithm's decision.
+         */
+        val loggedUpperAccelerationP95 =
+            personalUpperNormal(
+                mean =
+                    profile.accelerationP95Mean,
+
+                m2 =
+                    profile.accelerationP95M2,
+
+                sampleCount =
+                    profile.totalWindowCount
+            )
+
+        val loggedUpperAccelerationVariation =
+            personalUpperNormal(
+                mean =
+                    profile.accelerationVariationMean,
+
+                m2 =
+                    profile.accelerationVariationM2,
+
+                sampleCount =
+                    profile.totalWindowCount
+            )
+
+        val loggedUpperGyroscopeP95 =
+            personalUpperNormal(
+                mean =
+                    profile.gyroscopeP95Mean,
+
+                m2 =
+                    profile.gyroscopeP95M2,
+
+                sampleCount =
+                    profile.totalWindowCount
+            )
+
+        val loggedUpperGyroscopeVariation =
+            personalUpperNormal(
+                mean =
+                    profile.gyroscopeVariationMean,
+
+                m2 =
+                    profile.gyroscopeVariationM2,
+
+                sampleCount =
+                    profile.totalWindowCount
+            )
+
+        evaluationLogger.appendWindow(
+            record =
+                HandEvaluationRecord(
+                    durationSeconds =
+                        current.durationSeconds,
+
+                    isReliable =
+                        current.isReliable,
+
+                    accelerationP95 =
+                        current.accelerationP95.toDouble(),
+
+                    accelerationVariation =
+                        current.accelerationVariation.toDouble(),
+
+                    gyroscopeP95 =
+                        current.gyroscopeP95.toDouble(),
+
+                    gyroscopeVariation =
+                        current.gyroscopeVariation.toDouble(),
+
+                    peakFrequencyHz =
+                        spectrum.peakFrequencyHz,
+
+                    concentrationRatio =
+                        spectrum.concentrationRatio,
+
+                    narrowbandRatio =
+                        spectrum.narrowbandRatio,
+
+                    rhythmicEnergyShare =
+                        spectrum.rhythmicEnergyShare,
+
+                    bandAveragePower =
+                        spectrum.bandAveragePower,
+
+                    peakNeighborhoodPower =
+                        spectrum.peakNeighborhoodPower,
+
+                    wholePeakInBand =
+                        evaluation.wholePeakInBand,
+
+                    wholeConcentrated =
+                        evaluation.wholeConcentrated,
+
+                    wholeNarrowband =
+                        evaluation.wholeNarrowband,
+
+                    wholeRhythmic =
+                        evaluation.wholeRhythmic,
+
+                    wholePowerHigh =
+                        evaluation.wholePowerHigh,
+
+                    personalRhythmicThreshold =
+                        evaluation.wholeRhythmicThreshold,
+
+                    candidateWindowCount =
+                        temporal.candidateWindowCount,
+
+                    hasTemporalCoverage =
+                        temporal.hasTemporalCoverage,
+
+                    frequencyStable =
+                        temporal.frequencyStable,
+
+                    powerStable =
+                        temporal.powerStable,
+
+                    isBurstDominated =
+                        temporal.isBurstDominated,
+
+                    candidateFrequencySpreadHz =
+                        temporal.candidateFrequencySpreadHz,
+
+                    candidatePowerRatio =
+                        temporal.candidatePowerRatio,
+
+                    candidatePowerCoefficientOfVariation =
+                        temporal
+                            .candidatePowerCoefficientOfVariation,
+
+                    temporalPeakFrequenciesHz =
+                        temporal.windowPeakFrequenciesHz,
+
+                    temporalConcentrations =
+                        temporal.windowConcentrations,
+
+                    temporalNarrowbandRatios =
+                        temporal.windowNarrowbandRatios,
+
+                    temporalRhythmicShares =
+                        temporal.windowRhythmicShares,
+
+                    temporalBandPowers =
+                        temporal.windowBandPowers,
+
+                    temporalPeakNeighborhoodPowers =
+                        temporal
+                            .windowPeakNeighborhoodPowers,
+
+                    upperAccelerationP95 =
+                        loggedUpperAccelerationP95,
+
+                    upperAccelerationVariation =
+                        loggedUpperAccelerationVariation,
+
+                    upperGyroscopeP95 =
+                        loggedUpperGyroscopeP95,
+
+                    upperGyroscopeVariation =
+                        loggedUpperGyroscopeVariation,
+
+                    upperBandPower =
+                        evaluation.upperBandPower,
+
+                    upperPeakPower =
+                        evaluation.upperPeakPower,
+
+                    accelerationLevel =
+                        severity.accelerationLevel,
+
+                    gyroscopeLevel =
+                        severity.gyroscopeLevel,
+
+                    spectralLevel =
+                        severity.spectralLevel,
+
+                    tremorConfirmed =
+                        evaluation.tremorConfirmed,
+
+                    severityIndex =
+                        severity.severityIndex,
+
+                    score =
+                        severity.score
+                )
+        )
+
         publishCompletedHandWindow(
             score =
-                evaluation.severity.score
+                severity.score
         )
     }
 
@@ -3605,6 +3296,8 @@ class MotionTrackingController(
 
         distressManager
             .clearFormHandScore()
+
+        evaluationLogger.stopSession()
 
         Log.d(
             "MOTION_FLOW",

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.LifecycleOwner
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import java.io.File
 
 /**
  * Owns CameraX, MediaPipe and the facial-analysis pipeline.
@@ -22,9 +23,17 @@ class FaceMonitoringSession(
 
     private val analysisController =
         FaceAnalysisController(
-            onStateChanged = onAnalysisStateChanged,
-            onResult = onDistressResult,
-            onScoreReady = onScoreReady
+            context =
+                context,
+
+            onStateChanged =
+                onAnalysisStateChanged,
+
+            onResult =
+                onDistressResult,
+
+            onScoreReady =
+                onScoreReady
         )
 
     private val faceLandmarkerHelper =
@@ -48,7 +57,6 @@ class FaceMonitoringSession(
                             frameData
                         )
                     }
-
 
                     override fun onResult(
                         result: FaceLandmarkerResult,
@@ -109,6 +117,46 @@ class FaceMonitoringSession(
         )
 
     private var started = false
+
+    /**
+     * Starts one controlled facial evaluation session.
+     */
+    fun startFaceEvaluationSession(
+        participantId: String,
+        scenario: String,
+        expectedContributor: FaceDistressContributor,
+        expectedLevel: Int
+    ): File {
+
+        return analysisController
+            .startFaceEvaluationSession(
+                participantId =
+                    participantId,
+
+                scenario =
+                    scenario,
+
+                expectedContributor =
+                    expectedContributor,
+
+                expectedLevel =
+                    expectedLevel
+            )
+    }
+
+    /**
+     * Stops the active facial evaluation session.
+     */
+    fun stopFaceEvaluationSession() {
+
+        analysisController
+            .stopFaceEvaluationSession()
+    }
+
+    val isFaceEvaluationSessionActive: Boolean
+        get() =
+            analysisController
+                .isFaceEvaluationSessionActive
 
     fun start(): Boolean {
 

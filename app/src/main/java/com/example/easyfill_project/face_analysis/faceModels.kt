@@ -262,7 +262,11 @@ data class FaceDistressResult(
     val isReliable: Boolean,
     val windowStartTimestampMs: Long,
     val windowEndTimestampMs: Long,
-    val derivedMetrics: Map<FaceBaselineFeature, Float>
+    val derivedMetrics: Map<FaceBaselineFeature, Float>,
+
+    // Raw feature comparison results from the current 500 ms window.
+    val rawFeatureResults:
+    Map<FaceBaselineFeature, FaceWindowFeatureResult>
 )
 
 /**

@@ -10,6 +10,13 @@ class FaceDistressAnalyzer(
 
     private var activeBaseline = baseline
 
+    /*
+     * Baseline snapshot used to calculate the most recently
+     * completed facial-analysis result.
+     */
+    private var lastResultBaseline =
+        baseline
+
     private val currentWindowFrames =
         mutableListOf<FaceFrameData>()
 
@@ -136,6 +143,14 @@ class FaceDistressAnalyzer(
             recentWindows.removeFirst()
         }
 
+        /*
+         * Keep the exact baseline used for this result.
+         * The active baseline may be learned and updated
+         * immediately after the result is calculated.
+         */
+        lastResultBaseline =
+            activeBaseline
+
         val result =
             buildDistressResult(
                 currentWindow = completedWindow
@@ -182,6 +197,17 @@ class FaceDistressAnalyzer(
         cleanSnapshotCount = 0
         pendingBaselineUpdate = null
         smoothedScore = 0f
+    }
+
+    /**
+     * Returns the personal baseline that was used
+     * for the most recently completed result.
+     */
+    @Synchronized
+    fun getBaselineUsedForLastResult():
+            FaceBaseline {
+
+        return lastResultBaseline
     }
 
     @Synchronized
@@ -510,7 +536,9 @@ class FaceDistressAnalyzer(
             windowEndTimestampMs =
                 currentWindow.endTimestampMs,
             derivedMetrics =
-                derivedMetrics
+                derivedMetrics,
+            rawFeatureResults =
+                currentWindow.featureResults
         )
     }
 
