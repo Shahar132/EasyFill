@@ -46,7 +46,7 @@ EasyFill enables users to upload previously completed PDF documents and automati
 <p align="center">
   <img src="form-uploaded-to-extract.png"
        alt="Document Upload Screen"
-       width="260">
+       width="460">
 </p>
 
 <p align="center">
