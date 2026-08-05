@@ -69,7 +69,7 @@ The user selects a previously completed PDF document from the device. After vali
 <em>Figure 3. The selected document has been uploaded and is ready for extraction.</em>
 </p>
 
-Once the document is uploaded, it is securely transmitted through the Google Cloud Run middleware to Azure AI Document Intelligence for document analysis.
+The user is uploading the file , once the document is uploaded, it is securely transmitted through the Google Cloud Run middleware to Azure AI Document Intelligence for document analysis.
 
 ---
 
