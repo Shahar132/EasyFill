@@ -105,6 +105,25 @@ After extraction is completed, the structured information is securely stored in 
 
 ---
 
+## Automatic Form Completion
+
+One of EasyFill's primary objectives is to reduce repetitive data entry during bureaucratic processes. After a document has been successfully processed and its information has been extracted, mapped, and securely stored, the application automatically populates matching fields whenever the user opens a compatible form. This significantly reduces the time required to complete forms while minimizing cognitive workload and repetitive typing.
+
+<p align="center">
+  <img src="automatic-fill.jpeg"
+       alt="Automatic Form Completion"
+       width="260">
+</p>
+
+<p align="center">
+  <em>Figure 6. Automatic completion of form fields using previously extracted information.</em>
+</p>
+
+The application retrieves the user's previously stored structured information and automatically matches it to the corresponding fields in the selected form. Users can review all populated values, modify them if necessary, or enter additional information before continuing the submission process. This functionality improves efficiency, reduces repetitive manual input, and helps users complete bureaucratic forms more quickly and accurately.
+
+---
+
+
 ## Testing
 
 The multimodal distress-detection evaluation is maintained in a dedicated repository separate from the Android application.
