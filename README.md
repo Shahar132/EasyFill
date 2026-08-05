@@ -33,6 +33,45 @@ https://github.com/Shahar132/EasyFill-Testing
 
 ---
 
+
+## The Problem
+
+People coping with PTSD are often required to complete complex bureaucratic procedures with organizations such as the Israeli Ministry of Defense and the National Insurance Institute to obtain recognition, submit requests, and exercise their rights.
+
+These procedures may require sustained concentration, repeated data entry, interpretation of complex instructions, document collection, and completion of long forms. The resulting cognitive and emotional burden may cause users to pause or abandon the process.
+
+User research conducted during the project highlighted several recurring difficulties:
+
+- Re-entering information that had already appeared in previous documents.
+- Difficulty understanding complex wording and form instructions.
+- Too many actions or choices appearing on one screen.
+- Difficulty maintaining concentration during long processes.
+- Emotional overload, pressure, or physical signs of distress.
+- A need for clearer guidance and greater control over the interface.
+
+---
+
+## The Solution
+
+EasyFill addresses these challenges through five connected capabilities:
+
+1. **Structured document information extraction**  
+   Previously completed PDF documents are analyzed and converted into reusable structured data.
+
+2. **Automatic form completion**  
+   Extracted information is mapped to the application's data model and reused to complete future forms.
+
+3. **Multimodal distress detection**  
+   Voice features, facial indicators, hand movements, and form-interaction behavior are analyzed to detect deviations from the user's personal baseline.
+
+4. **Digital assistance**  
+   When sustained distress is detected, the digital assistant offers optional guidance and interface adaptations.
+
+5. **Accessibility and personalization**  
+   Users can adjust colors, text size, audio guidance, music, and other interface settings.
+
+---
+
 # Features
 
 ## Intelligent Document Processing
