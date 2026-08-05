@@ -299,3 +299,31 @@ The testing repository contains the complete evaluation environment used during 
 The notebook automatically loads the included CSV datasets, performs the preprocessing and evaluation steps, and reproduces the distress-detection analysis used during the development of EasyFill.
 
 > *Note:* GitHub renders Jupyter Notebook (.ipynb) files directly in the browser, allowing the notebook to be viewed without additional tools. To execute the notebook, inspect outputs interactively, or reproduce the experimental evaluation, it should be opened locally using *Jupyter Notebook* or *JupyterLab*. Opening the notebook in environments such as Android Studio may display the notebook as its underlying JSON file rather than as an interactive notebook.
+
+---
+
+# Important Source Code
+
+The following files contain the primary implementation of EasyFill's core functionality.
+
+## Automatic Form Completion
+
+- **Housing Assistance Form and Autofill Logic**  
+  [`HousingAssistanceFormScreen.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/forms_screens/HousingAssistanceFormScreen.kt)
+
+  Implements the main housing-assistance form workflow, including retrieval of extracted data from Firestore, field mapping, automatic form completion, user updates, form validation, progress saving, and integration with the digital assistant.
+
+## Multimodal Distress Detection
+
+- **Distress Scoring Manager**  
+  [`DistressScoringManager.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/distress_scoring/DistressScoringManager.kt)
+
+  Coordinates the multimodal distress-detection process. It combines the available voice, face, hand-motion, and form-interaction channels into a single distress score.
+
+- **Distress Confirmation Manager**  
+  [`DistressConfirmationManager.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/distress_scoring/DistressConfirmationManager.kt)
+
+  Implements the confirmation mechanism that reduces false alerts by verifying that elevated distress persists across consecutive analysis windows before notifying the digital assistant.
+
+---
+
