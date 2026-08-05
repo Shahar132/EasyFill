@@ -192,7 +192,43 @@ EasyFill includes several built-in accessibility features designed to reduce cog
 The accessibility adaptations are available both manually through the application's settings and automatically through recommendations provided by the digital assistant when sustained distress is detected. This combination allows users to maintain full control over the interface while receiving timely assistance whenever additional support may be beneficial.
 
 
+
 ---
+
+## System Architecture
+
+<!-- Add the complete architecture diagram directly below this comment -->
+<p align="center">
+  <img src="architecture easyfill.png" alt="EasyFill system architecture" width="900">
+</p>
+
+**Figure: EasyFill system architecture**
+
+The system consists of the following main layers:
+
+1. **Android client application**  
+   Manages the user interface, form completion, accessibility settings, sensors, speech interaction, and digital assistant.
+
+2. **Firebase services**  
+   Handle authentication, user data, structured extracted information, application settings, and form progress.
+
+3. **Google Cloud Run middleware**  
+   Acts as a secure backend layer between the Android application and Azure AI Document Intelligence. It receives documents, sends processing requests, receives the extracted output, and returns controlled results to the application.
+
+4. **Azure AI Document Intelligence**  
+   Processes uploaded documents and extracts text, document layout, tables, key-value relationships, and form elements.
+
+5. **Mapping and normalization layer**  
+   Converts the general Azure output into the internal EasyFill data model using Regex rules, field aliases, mapping logic, and normalization.
+
+6. **Multimodal distress-detection layer**  
+   Collects available indicators, generates separate channel scores, calculates a weighted overall score, and confirms sustained distress.
+
+7. **Digital-assistant decision layer**  
+   Receives the distress status, application mode, current screen, available actions, and recent recommendation history before selecting an appropriate message or adaptation.
+
+---
+
 
 ## Testing
 
