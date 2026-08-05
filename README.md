@@ -123,6 +123,94 @@ The application retrieves the user's previously stored structured information an
 
 ---
 
+## Multimodal Distress Detection
+
+EasyFill continuously analyzes multiple information channels during the form-filling process to identify possible signs of user distress. The system combines voice features, facial expressions, hand movements captured through the device's motion sensors, and user interaction patterns. Each available channel is compared with the user's personalized baseline, and the resulting scores are combined through a weighted fusion algorithm.
+
+To reduce false alerts, the application applies a confirmation mechanism that verifies whether the detected distress persists across consecutive analysis windows before notifying the user.
+
+---
+
+## Digital Assistant
+
+Once sustained distress has been confirmed, EasyFill does not immediately modify the interface. Instead, the digital assistant presents a contextual notification, allowing the user to decide whether to view the recommendation or continue the current task without interruption.
+
+<p align="center">
+  <img src="show-digital-assitance.jpeg"
+       alt="Digital Assistant Notification"
+       width="260">
+</p>
+
+<p align="center">
+  <em>Figure 7. The digital assistant displays a contextual notification after sustained distress is detected.</em>
+</p>
+
+The notification remains available until the user interacts with it. If the user's distress level changes, the assistant automatically updates the displayed message to reflect the current situation.
+
+---
+
+### Personalized Recommendations
+
+After opening the notification, the assistant presents calming guidance together with one or more personalized accessibility recommendations based on the detected distress level.
+
+<p align="center">
+  <img src="show-suggestion.jpeg"
+       alt="Digital Assistant Recommendation"
+       width="260">
+</p>
+
+<p align="center">
+  <em>Figure 8. Personalized recommendations presented by the digital assistant.</em>
+</p>
+
+The assistant suggests optional actions that may help reduce cognitive load without interrupting the user's workflow. The user remains in full control and may choose whether to apply any recommendation.
+
+---
+
+### Higher Distress Level
+
+When a higher level of sustained distress is detected, the assistant adapts both the message and the proposed recommendations according to the current situation.
+
+<p align="center">
+  <img src="show-suggestion-higher-level.jpeg"
+       alt="Higher Distress Recommendation"
+       width="260">
+</p>
+
+<p align="center">
+  <em>Figure 9. Recommendations displayed for a higher detected distress level.</em>
+</p>
+
+The recommendation strategy is context-aware and adjusts the guidance according to the severity of the detected distress while avoiding repetitive notifications.
+
+---
+
+### Accessibility Adaptation
+
+When the user decides to apply one of the proposed recommendations, the requested accessibility adaptation is immediately performed.
+
+<p align="center">
+  <img src="example-implemnt-interface-chage.jpeg"
+       alt="Accessibility Adaptation"
+       width="260">
+</p>
+
+<p align="center">
+  <em>Figure 10. Applying an accessibility adaptation suggested by the digital assistant.</em>
+</p>
+
+The application immediately updates the interface according to the selected recommendation, such as changing the interface colors, increasing the text size, or applying another accessibility setting. After the adaptation is completed, the user receives a confirmation message and can either restore the previous configuration or navigate directly to the application's settings for additional manual customization.
+
+---
+
+## Accessibility
+
+EasyFill includes several built-in accessibility features designed to reduce cognitive load and improve usability during lengthy bureaucratic processes. Users can personalize the interface by adjusting text size, interface colors, contrast, speech interaction, and additional accessibility settings according to their individual preferences.
+
+The accessibility adaptations are available both manually through the application's settings and automatically through recommendations provided by the digital assistant when sustained distress is detected. This combination allows users to maintain full control over the interface while receiving timely assistance whenever additional support may be beneficial.
+
+
+---
 
 ## Testing
 
