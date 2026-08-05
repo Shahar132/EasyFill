@@ -44,7 +44,7 @@ EasyFill enables users to upload previously completed PDF documents and automati
 ### Step 1 – Selecting a Document
 
 <p align="center">
-  <img src="images/form-uploaad-screen.jpg"
+  <img src="form-uploaded-to-extract.png"
        alt="Document Upload Screen"
        width="260">
 </p>
@@ -60,7 +60,7 @@ The user selects a previously completed PDF document from the device. After vali
 ### Step 2 – Uploading the Document
 
 <p align="center">
-  <img src="images/form-uploaded-to-extract.png"
+  <img src="form-upload-screen.jpg"
        alt="Document Uploaded"
        width="260">
 </p>
@@ -76,7 +76,7 @@ Once the document is uploaded, it is securely transmitted through the Google Clo
 ### Step 3 – Processing the Document
 
 <p align="center">
-  <img src="images/form-upload-loading.jpg"
+  <img src="form-upload-loading.jpg"
        alt="Document Processing"
        width="260">
 </p>
@@ -92,7 +92,7 @@ Azure AI Document Intelligence extracts Hebrew text, identifies tables, key-valu
 ### Step 4 – Extraction Completed Successfully
 
 <p align="center">
-  <img src="images/form-uploaad-extract-suceedd.jpg"
+  <img src="form-uploaad-extract-suceedd.jpg"
        alt="Extraction Completed Successfully"
        width="260">
 </p>
