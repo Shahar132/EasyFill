@@ -154,7 +154,7 @@ The notification remains available until the user interacts with it. If the user
 After opening the notification, the assistant presents calming guidance together with one or more personalized accessibility recommendations based on the detected distress level.
 
 <p align="center">
-  <img src="show-suggestion.jpeg"
+  <img src="personlized-recommandation.jpeg"
        alt="Digital Assistant Recommendation"
        width="260">
 </p>
@@ -164,24 +164,6 @@ After opening the notification, the assistant presents calming guidance together
 </p>
 
 The assistant suggests optional actions that may help reduce cognitive load without interrupting the user's workflow. The user remains in full control and may choose whether to apply any recommendation.
-
----
-
-### Higher Distress Level
-
-When a higher level of sustained distress is detected, the assistant adapts both the message and the proposed recommendations according to the current situation.
-
-<p align="center">
-  <img src="show-suggestion-higher-level.jpeg"
-       alt="Higher Distress Recommendation"
-       width="260">
-</p>
-
-<p align="center">
-  <em>Figure 9. Recommendations displayed for a higher detected distress level.</em>
-</p>
-
-The recommendation strategy is context-aware and adjusts the guidance according to the severity of the detected distress while avoiding repetitive notifications.
 
 ---
 
