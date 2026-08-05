@@ -194,8 +194,11 @@ Each available channel produces a score. The final score depends on the current 
 ### Digital Assistant
 The digital assistant does not require the user to formulate free-text commands. It receives the current distress status and application context, then selects an appropriate recommendation from predefined actions.
 ---
+
 ## Application Logic
+
 The general application flow is:
+
 ```text
 User authentication
         ↓
@@ -218,6 +221,7 @@ Confirmation checks whether distress remains elevated
 The digital assistant displays a non-intrusive alert
         ↓
 The user may open, dismiss, apply, undo, or manually modify an adaptation
+```
 
 ---
 
@@ -227,27 +231,25 @@ The multimodal distress-detection evaluation is maintained in a dedicated reposi
 
 ### EasyFill – Distress Detection Evaluation Repository
 
-Repository:
-
-https://github.com/Shahar132/EasyFill-Testing
+**Repository:** [EasyFill – Distress Detection Evaluation](https://github.com/Shahar132/EasyFill-Testing)
 
 The testing repository contains the complete evaluation environment used during the development of EasyFill's distress-detection component, including:
 
-- Jupyter Notebook used to execute the complete evaluation pipeline.
-- Python implementation of the distress-detection evaluation.
+- A Jupyter Notebook used to execute the complete evaluation pipeline.
+- Python code implementing the distress-detection evaluation.
 - CSV datasets collected during the experimental evaluation.
-- Feature processing and scoring logic.
+- Feature-processing and scoring logic.
 - Performance evaluation of the multimodal distress-detection algorithm.
-- Analysis used to validate the distress scoring approach.
+- Analysis used to validate the distress-scoring approach.
 
 ### Running the Evaluation
 
 1. Clone the testing repository.
-2. Open the project using **Jupyter Notebook** or **JupyterLab**.
+2. Open it using **Jupyter Notebook** or **JupyterLab**.
 3. Install the required Python dependencies.
-4. Open the provided notebook (`.ipynb`).
+4. Open the provided `.ipynb` notebook.
 5. Execute the notebook cells sequentially from top to bottom.
 
-The notebook automatically loads the included CSV datasets, performs the preprocessing and evaluation steps, and reproduces the distress-detection analysis used during the development of EasyFill.
+The notebook loads the included CSV datasets, performs the preprocessing and evaluation steps, and reproduces the distress-detection analysis used during the development of EasyFill.
 
-> **Note:** GitHub renders Jupyter Notebook (`.ipynb`) files directly in the browser, allowing the notebook to be viewed without additional tools. To execute the notebook, inspect outputs interactively, or reproduce the experimental evaluation, it should be opened locally using **Jupyter Notebook** or **JupyterLab**. Opening the notebook in environments such as Android Studio may display the notebook as its underlying JSON file rather than as an interactive notebook.
+> **Note:** GitHub renders Jupyter Notebook files directly in the browser. To execute the notebook, inspect interactive outputs, or reproduce the evaluation, open it locally using **Jupyter Notebook** or **JupyterLab**. Android Studio may display an `.ipynb` notebook as its underlying JSON structure rather than as an interactive notebook.outputs interactively, or reproduce the experimental evaluation, it should be opened locally using **Jupyter Notebook** or **JupyterLab**. Opening the notebook in environments such as Android Studio may display the notebook as its underlying JSON file rather than as an interactive notebook.
