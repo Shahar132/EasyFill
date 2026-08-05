@@ -834,7 +834,18 @@ fun HousingAssistanceFormScreen(
                                     .filterValues { !it.isNullOrBlank() }
                                     .mapValues { it.value.orEmpty() }
 
-                                formData = azureData + savedData
+                                // Prevent blank saved values from overriding Azure values.
+                                val nonBlankSavedData =
+                                    savedData.filterValues { it.isNotBlank() }
+
+                                val finalData =
+                                    nonBlankSavedData + azureData
+
+                                            Log.d("AUTOFILL_DEBUG", "azureData=$azureData")
+                                Log.d("AUTOFILL_DEBUG", "savedData=$savedData")
+                                Log.d("AUTOFILL_DEBUG", "finalData=$finalData")
+
+                                formData = finalData
                                 dataLoaded = true
                             }
                         }
