@@ -24,7 +24,7 @@ https://github.com/Shahar132/EasyFill-Testing
 ---
 
 <p align="center">
-<img src="easyfill-main-screen.jpeg" width="220">
+<img src="easyfill-main-app.jpeg" width="220">
 </p>
 
 <p align="center">
