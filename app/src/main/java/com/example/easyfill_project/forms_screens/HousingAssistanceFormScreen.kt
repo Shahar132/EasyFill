@@ -102,11 +102,9 @@ fun HousingAssistanceFormScreen(
     onCalmingMessageClosed: () -> Unit = {},
 
 
-
-
-/*
- * Reports that the user opened the current pending chatbot suggestion.
- */
+    /*
+     * Reports that the user opened the current pending chatbot suggestion.
+     */
     onPendingSuggestionOpened: () -> Unit = {},
 
 // Sends an undo request back to AppNavigation.
@@ -174,7 +172,7 @@ fun HousingAssistanceFormScreen(
     val summaryStep = 6
 
 
- // HAND AND FACE MONITORING
+    // HAND AND FACE MONITORING
 
 
     /*
@@ -469,12 +467,12 @@ fun HousingAssistanceFormScreen(
         faceRecordingAggregator
     ) {
 
-                /*
-            * Start the form-behavior session.
-            *
-            * This loads the existing baseline and starts collecting
-            * new field samples for the current form entry.
-            */
+        /*
+    * Start the form-behavior session.
+    *
+    * This loads the existing baseline and starts collecting
+    * new field samples for the current form entry.
+    */
         FormBehaviorTrackingController.startFormSession()
 
         /*
@@ -841,7 +839,7 @@ fun HousingAssistanceFormScreen(
                                 val finalData =
                                     nonBlankSavedData + azureData
 
-                                            Log.d("AUTOFILL_DEBUG", "azureData=$azureData")
+                                Log.d("AUTOFILL_DEBUG", "azureData=$azureData")
                                 Log.d("AUTOFILL_DEBUG", "savedData=$savedData")
                                 Log.d("AUTOFILL_DEBUG", "finalData=$finalData")
 
@@ -865,57 +863,136 @@ fun HousingAssistanceFormScreen(
                                     val address = suggestions?.get("address") as? Map<*, *>
                                     val contact = suggestions?.get("contactDetails") as? Map<*, *>
                                     val income = suggestions?.get("incomeDetails") as? Map<*, *>
-                                    val assistance = suggestions?.get("assistanceSelection") as? Map<*, *>
+                                    val assistance =
+                                        suggestions?.get("assistanceSelection") as? Map<*, *>
 
-                                    putIfMissing("firstName", personal?.get("firstName")?.toString())
+                                    putIfMissing(
+                                        "firstName",
+                                        personal?.get("firstName")?.toString()
+                                    )
                                     putIfMissing("lastName", personal?.get("lastName")?.toString())
                                     putIfMissing("idNumber", personal?.get("idNumber")?.toString())
-                                    putIfMissing("maritalStatus", personal?.get("maritalStatus")?.toString())
-                                    putIfMissing("birthDate", personal?.get("birthDate")?.toString())
-                                    putIfMissing("birthCountry", personal?.get("birthCountry")?.toString())
-                                    putIfMissing("fatherName", personal?.get("fatherName")?.toString())
+                                    putIfMissing(
+                                        "maritalStatus",
+                                        personal?.get("maritalStatus")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "birthDate",
+                                        personal?.get("birthDate")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "birthCountry",
+                                        personal?.get("birthCountry")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "fatherName",
+                                        personal?.get("fatherName")?.toString()
+                                    )
 
                                     putIfMissing("street", address?.get("street")?.toString())
-                                    putIfMissing("houseNumber", address?.get("houseNumber")?.toString())
+                                    putIfMissing(
+                                        "houseNumber",
+                                        address?.get("houseNumber")?.toString()
+                                    )
                                     putIfMissing("city", address?.get("city")?.toString())
                                     putIfMissing("zipCode", address?.get("zipCode")?.toString())
                                     putIfMissing("entrance", address?.get("entrance")?.toString())
                                     putIfMissing("apartment", address?.get("apartment")?.toString())
 
-                                    putIfMissing("mailingStreet", address?.get("street")?.toString())
-                                    putIfMissing("mailingHouseNumber", address?.get("houseNumber")?.toString())
+                                    putIfMissing(
+                                        "mailingStreet",
+                                        address?.get("street")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "mailingHouseNumber",
+                                        address?.get("houseNumber")?.toString()
+                                    )
                                     putIfMissing("mailingCity", address?.get("city")?.toString())
-                                    putIfMissing("mailingZipCode", address?.get("zipCode")?.toString())
-                                    putIfMissing("mailingEntrance", address?.get("entrance")?.toString())
-                                    putIfMissing("mailingApartment", address?.get("apartment")?.toString())
+                                    putIfMissing(
+                                        "mailingZipCode",
+                                        address?.get("zipCode")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "mailingEntrance",
+                                        address?.get("entrance")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "mailingApartment",
+                                        address?.get("apartment")?.toString()
+                                    )
 
                                     putIfMissing("rentStreet", address?.get("street")?.toString())
-                                    putIfMissing("rentHouseNumber", address?.get("houseNumber")?.toString())
+                                    putIfMissing(
+                                        "rentHouseNumber",
+                                        address?.get("houseNumber")?.toString()
+                                    )
                                     putIfMissing("rentCity", address?.get("city")?.toString())
                                     putIfMissing("rentZipCode", address?.get("zipCode")?.toString())
-                                    putIfMissing("rentEntrance", address?.get("entrance")?.toString())
-                                    putIfMissing("rentApartment", address?.get("apartment")?.toString())
+                                    putIfMissing(
+                                        "rentEntrance",
+                                        address?.get("entrance")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "rentApartment",
+                                        address?.get("apartment")?.toString()
+                                    )
 
-                                    putIfMissing("roomsCount", address?.get("roomsCount")?.toString())
+                                    putIfMissing(
+                                        "roomsCount",
+                                        address?.get("roomsCount")?.toString()
+                                    )
                                     putIfMissing("floor", address?.get("floor")?.toString())
-                                    putIfMissing("hasElevator", address?.get("hasElevator")?.toString())
+                                    putIfMissing(
+                                        "hasElevator",
+                                        address?.get("hasElevator")?.toString()
+                                    )
 
                                     putIfMissing("phone", contact?.get("phone")?.toString())
                                     putIfMissing("email", contact?.get("email")?.toString())
 
                                     putIfMissing("workPlace", income?.get("workPlace")?.toString())
                                     putIfMissing("salaryNet", income?.get("salaryNet")?.toString())
-                                    putIfMissing("partnerWorkPlace", income?.get("partnerWorkPlace")?.toString())
-                                    putIfMissing("partnerSalaryNet", income?.get("partnerSalaryNet")?.toString())
-                                    putIfMissing("additionalIncomeDetails", income?.get("additionalIncomeDetails")?.toString())
+                                    putIfMissing(
+                                        "partnerWorkPlace",
+                                        income?.get("partnerWorkPlace")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "partnerSalaryNet",
+                                        income?.get("partnerSalaryNet")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "additionalIncomeDetails",
+                                        income?.get("additionalIncomeDetails")?.toString()
+                                    )
 
-                                    putIfMissing("rentAssistance", assistance?.get("סיוע בשכר דירה")?.toString())
-                                    putIfMissing("apartmentAdaptation", assistance?.get("התאמת דירה לנכות")?.toString())
-                                    putIfMissing("apartmentExchange", assistance?.get("החלפת דירה")?.toString())
-                                    putIfMissing("houseBuilding", assistance?.get("בניית בית")?.toString())
-                                    putIfMissing("firstApartmentPurchase", assistance?.get("רכישת דירה ראשונה")?.toString())
-                                    putIfMissing("apartmentRenovationLoan", assistance?.get("הלוואה לשיפוץ דירה")?.toString())
-                                    putIfMissing("firstMortgageAid", assistance?.get("הלוואה לסידור ראשון")?.toString())
+                                    putIfMissing(
+                                        "rentAssistance",
+                                        assistance?.get("סיוע בשכר דירה")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "apartmentAdaptation",
+                                        assistance?.get("התאמת דירה לנכות")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "apartmentExchange",
+                                        assistance?.get("החלפת דירה")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "houseBuilding",
+                                        assistance?.get("בניית בית")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "firstApartmentPurchase",
+                                        assistance?.get("רכישת דירה ראשונה")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "apartmentRenovationLoan",
+                                        assistance?.get("הלוואה לשיפוץ דירה")?.toString()
+                                    )
+                                    putIfMissing(
+                                        "firstMortgageAid",
+                                        assistance?.get("הלוואה לסידור ראשון")?.toString()
+                                    )
 
                                     finishOneFile()
                                 }

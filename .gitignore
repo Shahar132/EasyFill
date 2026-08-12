@@ -13,3 +13,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Cloud Run environment files
+.env
+.env.*
+!.env.example
+
+# Service account credentials
+service-account.json
+*.key
+*.pem
