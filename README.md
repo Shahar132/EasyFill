@@ -325,5 +325,22 @@ The following files contain the primary implementation of EasyFill's core functi
 
   Implements the confirmation mechanism that reduces false alerts by verifying that elevated distress persists across consecutive analysis windows before notifying the digital assistant.
 
+## Intelligent Document Processing (Cloud Run Backend)
+
+- **Cloud Run Azure Document Processing Service**  
+  [`index.js`](https://github.com/Shahar132/EasyFill/blob/master/cloud-run/process-pdf-azure/index.js)
+
+  Implements the Google Cloud Run backend responsible for receiving document-processing requests, communicating with Azure AI Document Intelligence, extracting structured information from uploaded PDF documents, applying field mapping and normalization rules, and storing autofill suggestions in Firebase.
+
+- **Backend Dependencies**  
+  [`package.json`](https://github.com/Shahar132/EasyFill/blob/master/cloud-run/process-pdf-azure/package.json)
+
+  Defines the Node.js dependencies required by the Cloud Run backend, including Azure AI Document Intelligence, Google Cloud Functions Framework, Firebase Admin SDK, and Google Cloud Storage.
+
+- **Backend Documentation**  
+  [`README.md`](https://github.com/Shahar132/EasyFill/blob/master/cloud-run/process-pdf-azure/README.md)
+
+  Provides an overview of the backend service, configuration requirements, and deployment notes.
+
 ---
 
