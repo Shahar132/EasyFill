@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+// Added imports for accessibility semantics:
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 //Shows current section progress
 //(step 3 מתוך 7)
@@ -41,11 +44,14 @@ fun FormProgressBar(
             else -> Color(0xFF9575CD) // purple
         }
 
-            LinearProgressIndicator(
+        LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(10.dp),
+                .height(10.dp) // <-- Removed the comma here!
+                .semantics {
+                    contentDescription = "פס התקדמות: שלב ${currentStep + 1} מתוך $totalSteps"
+                },
             color = progressColor,
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
@@ -53,9 +59,14 @@ fun FormProgressBar(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
+            //this shows text, Because the user is on step 1, that text outputs "פרטים אישיים".
             text = sections[currentStep],
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            // Add this modifier to give the screen reader a unique, descriptive label!
+            modifier = Modifier.semantics {
+                contentDescription = "נושא השלב: ${sections[currentStep]}"
+            }
         )
     }
 }

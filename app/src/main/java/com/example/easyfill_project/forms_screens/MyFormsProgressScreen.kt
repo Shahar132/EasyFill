@@ -18,6 +18,8 @@ import com.example.easyfill_project.forms_screens.FormStatus
 import com.example.easyfill_project.forms_screens.FormsRegistry
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 data class FormProgressItem(
     val form: FormDefinition,
@@ -250,7 +252,12 @@ fun FormProgressCard(
                 progress = {
                     formProgress.progress
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Tells TalkBack what this bar is measuring:
+                    .semantics {
+                        contentDescription = "התקדמות מילוי הטופס: ${formProgress.percentText}%"
+                    },
                 color = MaterialTheme.colorScheme.secondary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )

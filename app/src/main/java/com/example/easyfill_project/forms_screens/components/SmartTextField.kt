@@ -362,7 +362,8 @@ fun SmartTextField(
                         Icon(
                             imageVector =
                                 Icons.Default.VolumeUp,
-                            contentDescription = "השמעה",
+                            // Change this line to make it unique for each field:
+                            contentDescription = "השמעה עבור $label",
                             tint =
                                 MaterialTheme
                                     .colorScheme
@@ -806,8 +807,8 @@ fun SmartTextField(
                         Icon(
                             imageVector =
                                 Icons.Default.Mic,
-                            contentDescription =
-                                "הקלטה",
+                            // Change this line to make it unique for each field:
+                            contentDescription = "הקלטה עבור $label",
                             tint =
                                 if (isListening) {
                                     MaterialTheme
