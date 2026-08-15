@@ -389,9 +389,9 @@ fun FloatingChatOverlay(
         when (severityLevel) {
             0 -> Color.Transparent
             1 -> Color(0xFF4CAF50)
-            2 -> Color(0xFFE1CC13)
-            3 -> Color(0xFFFF5722)
-            else -> Color(0xFFB92014)
+            2 -> Color(0xFFCB7A11)
+            3 -> Color(0xFFBE3C09)
+            else -> Color(0xFF700606)
         }
 
     val alertText =
@@ -399,7 +399,7 @@ fun FloatingChatOverlay(
             0 -> ""
             1 -> "יש לי הצעה קטנה"
             2 -> "\u202Bאפשר לעזור?\u202C"
-            3 -> "\u202Bרוצה שאקל עליך\u202C"
+            3 -> "\u202Bאפשר להקל עליך?\u202C"
             else -> "יש אפשרויות סיוע"
         }
 
