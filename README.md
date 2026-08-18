@@ -312,10 +312,6 @@ The following files contain the primary implementation of EasyFill's core functi
   [`HousingAssistanceFormScreen.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/forms_screens/HousingAssistanceFormScreen.kt)  
   The main implementation of the housing-assistance form workflow. It retrieves structured information extracted from uploaded documents, maps it to the appropriate form fields, performs automatic form completion, supports user editing and validation, saves progress, and integrates with the digital support assistant.
 
-- **Azure Document Processing Backend**  
-  [`index.js`](https://github.com/Shahar132/EasyFill/blob/master/cloud-run/process-pdf-azure/index.js)  
-  Cloud Run backend service responsible for intelligent document processing. It receives uploaded documents, invokes Azure AI Document Intelligence to extract structured information, applies mapping and normalization rules, and stores the processed data for automatic form completion.
-
 ---
 
 ## Voice Distress Analysis
