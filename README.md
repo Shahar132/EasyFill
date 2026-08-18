@@ -309,22 +309,100 @@ The following files contain the primary implementation of EasyFill's core functi
 ## Automatic Form Completion
 
 - **Housing Assistance Form and Autofill Logic**  
-  [`HousingAssistanceFormScreen.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/forms_screens/HousingAssistanceFormScreen.kt)
+  [`HousingAssistanceFormScreen.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/forms_screens/HousingAssistanceFormScreen.kt)  
+  The main implementation of the housing-assistance form workflow. It retrieves structured information extracted from uploaded documents, maps it to the appropriate form fields, performs automatic form completion, supports user editing and validation, saves progress, and integrates with the digital support assistant.
 
-  Implements the main housing-assistance form workflow, including retrieval of extracted data from Firestore, field mapping, automatic form completion, user updates, form validation, progress saving, and integration with the digital assistant.
+- **Azure Document Processing Backend**  
+  [`index.js`](https://github.com/Shahar132/EasyFill/blob/master/cloud-run/process-pdf-azure/index.js)  
+  Cloud Run backend service responsible for intelligent document processing. It receives uploaded documents, invokes Azure AI Document Intelligence to extract structured information, applies mapping and normalization rules, and stores the processed data for automatic form completion.
 
-## Multimodal Distress Detection
+---
+
+## Voice Distress Analysis
+
+- **Voice Feature Extraction**  
+  [`SpeechAudioAnalyzer.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/voiceanalysis/SpeechAudioAnalyzer.kt)  
+  Analyzes recorded speech and extracts voice features including recording duration, word count, speech rate, RMS, RMS variation, pauses, and hesitation indicators. Voice recordings participate in distress scoring only after passing reliability validation.
+
+- **Speech Rate Distress Scoring**  
+  [`SpeechRateScorer.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/voiceanalysis/SpeechRateScorer.kt)  
+  Computes speech-rate deviation using both the user's personal baseline and the normative Hebrew speech rate (2.57 words/second). The final score combines 70% personal baseline and 30% normative reference, producing a distress score between 0 and 2.
+
+- **Voice RMS Variation Scoring**  
+  [`VoiceRmsScorer.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/voiceanalysis/VoiceRmsScorer.kt)  
+  Evaluates variation in voice intensity relative to the user's personal baseline. Deviations are converted into a score between 0 and 2, which is combined with the speech-rate score to produce the overall Voice Distress Score (0–4).
+
+---
+
+## Hand Motion & Tremor Analysis
+
+- **Motion Feature Extraction**  
+  [`MotionAnalyzer.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/handanalysis/MotionAnalyzer.kt)  
+  Processes accelerometer and gyroscope sensor streams and extracts motion features such as P95, variation, and additional movement statistics. It transforms continuous sensor measurements into quantitative features for subsequent tremor analysis.
+
+- **Frequency-Domain Tremor Analysis**  
+  [`TremorSpectrumAnalyzer.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/handanalysis/TremorSpectrumAnalyzer.kt)  
+  Performs frequency-domain analysis of hand movement using resampling and FFT. The algorithm searches for rhythmic activity within the tremor frequency band (6–13 Hz) and evaluates spectral characteristics such as concentration, rhythmic energy, and peak power to distinguish pathological tremor from normal movement.
+
+- **Tremor Validation & Severity Evaluation**  
+  [`HandTremorEvaluator.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/handanalysis/HandTremorEvaluator.kt)  
+  Combines motion features and spectral analysis, compares them with the user's personal baseline, verifies temporal persistence across multiple overlapping windows, and confirms whether a true tremor is present. Once confirmed, the algorithm computes tremor severity and produces a Hand Distress Score (0–4).
+
+---
+
+## Facial Distress Analysis
+
+- **Facial Distress Analyzer**  
+  [`FaceDistressAnalyzer.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/faceanalysis/FaceDistressAnalyzer.kt)  
+  Analyzes facial behavior over time by aggregating facial features into temporal windows and comparing them with the user's baseline using Median and MAD statistics. The algorithm evaluates eye, eyebrow, and facial activity, applies confirmation mechanisms, and produces a Face Distress Score (0–4).
+
+---
+
+## Multimodal Distress Fusion
 
 - **Distress Scoring Manager**  
-  [`DistressScoringManager.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/distress_scoring/DistressScoringManager.kt)
-
-  Coordinates the multimodal distress-detection process. It combines the available voice, face, hand-motion, and form-interaction channels into a single distress score.
+  [`DistressScoringManager.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/distress_scoring/DistressScoringManager.kt)  
+  Implements the multimodal distress fusion algorithm. It combines voice, facial, hand-motion, and form-interaction scores into a single overall distress score. When one or more modalities are unavailable, Dynamic Weight Normalization redistributes the remaining weights automatically.
 
 - **Distress Confirmation Manager**  
-  [`DistressConfirmationManager.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/distress_scoring/DistressConfirmationManager.kt)
+  [`DistressConfirmationManager.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/distress_scoring/DistressConfirmationManager.kt)  
+  Implements the distress confirmation mechanism that reduces false alerts by verifying that elevated distress persists over time before generating a confirmed distress event. It manages the confirmation workflow independently from the scoring process.
 
-  Implements the confirmation mechanism that reduces false alerts by verifying that elevated distress persists across consecutive analysis windows before notifying the digital assistant.
+---
 
+## Adaptive Digital Support
+
+- **Adaptive Support Suggestion Builder**  
+  [`BotSuggestionBuilder.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/logic/BotSuggestionBuilder.kt)  
+  Generates personalized support suggestions according to the detected distress level and the application's current state. Suggestions include text-to-speech, interface personalization, background music, font-size adjustments, and additional support options while preventing repeated recommendations during the same distress event.
+
+- **Support Action Handler**  
+  [`BotSupportActionHandler.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/logic/BotSupportActionHandler.kt)  
+  Executes the support action selected by the user, including text-to-speech playback, background music activation, interface color adjustments, and font-size changes.
+
+- **Digital Support Assistant UI**  
+  [`FloatingChatOverlay.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/ui/FloatingChatOverlay.kt)  
+  Implements the user interface of the digital support assistant. It manages distress alerts, adaptive support suggestions, action buttons, calming messages, success notifications, undo functionality, and navigation to personalization settings. The assistant is action-based rather than a free-text conversational chatbot.
+
+- **Level-Based Calming Messages**  
+  [`CalmingMessageCatalog.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/logic/CalmingMessageCatalog.kt)  
+  Stores supportive and calming messages for distress levels 1–4. As distress severity increases, the messages provide progressively stronger guidance and encourage the user to utilize available support features.
+
+- **Personalization Catalog**  
+  [`PersonalizationCatalog.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/personalization/PersonalizationCatalog.kt)  
+  Defines the personalization options available to the digital assistant, including background sounds, font sizes, and interface color themes. Each option contains the metadata required for presentation and execution.
+
+- **Support Action Definitions**  
+  [`BotAction.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/model/BotAction.kt)  
+  Defines the complete set of support actions available within the application, including text-to-speech, field reading, background music, interface customization, and support information.
+
+- **Digital Assistant Application State**  
+  [`BotAppState.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/model/BotAppState.kt)  
+  Maintains the current personalization state of the application, including selected background music, text-to-speech status, font size, and interface theme. This allows the assistant to avoid suggesting actions that are already active.
+
+- **Distress Snapshot Model**  
+  [`DistressSnapshot.kt`](https://github.com/Shahar132/EasyFill/blob/master/app/src/main/java/com/example/easyfill_project/chatbot/model/DistressSnapshot.kt)  
+  Represents a snapshot of the current multimodal distress state, including the overall distress score and the individual scores contributed by each analysis modality. It is used to transfer distress information between the scoring engine and the adaptive support interface.
 ## Intelligent Document Processing (Cloud Run Backend)
 
 - **Cloud Run Azure Document Processing Service**  
